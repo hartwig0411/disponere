@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import '../../models/journal_entry.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
-
   @override
   State<JournalScreen> createState() => _JournalScreenState();
 }
@@ -17,6 +16,116 @@ class _JournalScreenState extends State<JournalScreen> {
       tags: ['start'],
     ),
   ];
+
+  void _openNewEntrySheet() {
+    final contentController = TextEditingController();
+    final tagController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF16213E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Neuer Eintrag',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contentController,
+                autofocus: true,
+                maxLines: 4,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                decoration: InputDecoration(
+                  hintText: 'Was ist gerade wichtig?',
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tagController,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Tag (optional)',
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  prefixText: '# ',
+                  prefixStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4A90D9),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    final content = contentController.text.trim();
+                    if (content.isEmpty) return;
+                    final tags = tagController.text.trim().isEmpty
+                        ? <String>[]
+                        : [tagController.text.trim()];
+                    final entry = JournalEntry(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      timestamp: DateTime.now(),
+                      content: content,
+                      tags: tags,
+                    );
+                    setState(() {
+                      _entries.insert(0, entry);
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text(
+                    'Speichern',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +142,11 @@ class _JournalScreenState extends State<JournalScreen> {
             letterSpacing: 2,
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF4A90D9),
+        onPressed: _openNewEntrySheet,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(24),
@@ -56,7 +170,6 @@ class _JournalScreenState extends State<JournalScreen> {
 
 class _EntryCard extends StatelessWidget {
   final JournalEntry entry;
-
   const _EntryCard({required this.entry});
 
   @override
@@ -106,7 +219,6 @@ class _EntryCard extends StatelessWidget {
 
 class _TagChip extends StatelessWidget {
   final String label;
-
   const _TagChip({required this.label});
 
   @override
