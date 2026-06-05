@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
 
 class JournalScreen extends StatefulWidget {
@@ -8,14 +10,41 @@ class JournalScreen extends StatefulWidget {
 }
 
 class _JournalScreenState extends State<JournalScreen> {
-  final List<JournalEntry> _entries = [
-    JournalEntry(
-      id: '1',
-      timestamp: DateTime.now(),
-      content: 'Erster Eintrag in Disponere.',
-      tags: ['start'],
-    ),
-  ];
+  final List<JournalEntry> _entries = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEntries();
+  }
+
+  Future<void> _loadEntries() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList('entries') ?? [];
+    final loaded = raw.map((e) {
+      final map = jsonDecode(e) as Map<String, dynamic>;
+      return JournalEntry(
+        id: map['id'] as String,
+        timestamp: DateTime.parse(map['timestamp'] as String),
+        content: map['content'] as String,
+        tags: List<String>.from(map['tags'] as List),
+      );
+    }).toList();
+    setState(() {
+      _entries.addAll(loaded);
+    });
+  }
+
+  Future<void> _saveEntries() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = _entries.map((e) => jsonEncode({
+      'id': e.id,
+      'timestamp': e.timestamp.toIso8601String(),
+      'content': e.content,
+      'tags': e.tags,
+    })).toList();
+    await prefs.setStringList('entries', raw);
+  }
 
   void _openNewEntrySheet() {
     final contentController = TextEditingController();
@@ -108,6 +137,7 @@ class _JournalScreenState extends State<JournalScreen> {
                     setState(() {
                       _entries.insert(0, entry);
                     });
+                    _saveEntries();
                     Navigator.pop(context);
                   },
                   child: const Text(

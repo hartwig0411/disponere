@@ -1,3 +1,4 @@
+System.setProperty("user.home", "E:\\")
 allprojects {
     repositories {
         google()
