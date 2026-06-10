@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 
 class DrawingPoint {
   final Offset offset;
@@ -23,33 +24,53 @@ class _DrawingScreenState extends State<DrawingScreen> {
     ..strokeCap = StrokeCap.round
     ..style = PaintingStyle.stroke;
 
+  void _onPointerDown(PointerDownEvent event) {
+    if (event.kind != PointerDeviceKind.stylus) return;
+    setState(() {
+      _currentStroke = [DrawingPoint(event.localPosition, _paint)];
+      _strokes.add(_currentStroke);
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.kind != PointerDeviceKind.stylus) return;
+    setState(() {
+      _currentStroke.add(DrawingPoint(event.localPosition, _paint));
+    });
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    if (event.kind != PointerDeviceKind.stylus) return;
+    setState(() => _currentStroke = []);
+  }
+
+  void _confirm() {
+    // Platzhalter — wird in der nächsten Session durch OCR ersetzt
+    Navigator.pop(context, '[Handschrift-Eintrag]');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Handschrift-Test', style: TextStyle(color: Colors.white)),
+        title: const Text('Handschrift', style: TextStyle(color: Colors.white)),
         actions: [
           IconButton(
             icon: const Icon(Icons.clear, color: Colors.white),
             onPressed: () => setState(() => _strokes.clear()),
           ),
+          IconButton(
+            icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
+            onPressed: _strokes.isEmpty ? null : _confirm,
+          ),
         ],
       ),
-      body: GestureDetector(
-        onPanStart: (details) {
-          setState(() {
-            _currentStroke = [DrawingPoint(details.localPosition, _paint)];
-            _strokes.add(_currentStroke);
-          });
-        },
-        onPanUpdate: (details) {
-          setState(() {
-            _currentStroke.add(DrawingPoint(details.localPosition, _paint));
-          });
-        },
-        onPanEnd: (_) => setState(() => _currentStroke = []),
+      body: Listener(
+        onPointerDown: _onPointerDown,
+        onPointerMove: _onPointerMove,
+        onPointerUp: _onPointerUp,
         child: CustomPaint(
           painter: _DrawingPainter(_strokes),
           child: Container(),

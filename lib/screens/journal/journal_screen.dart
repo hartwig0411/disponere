@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
+import '../../screens/drawing/drawing_screen.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -46,7 +47,7 @@ class _JournalScreenState extends State<JournalScreen> {
     await prefs.setStringList('entries', raw);
   }
 
-  void _openNewEntrySheet() {
+void _openNewEntrySheet() {
     final contentController = TextEditingController();
     final tagController = TextEditingController();
 
@@ -78,21 +79,44 @@ class _JournalScreenState extends State<JournalScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: contentController,
-                autofocus: true,
-                maxLines: 4,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                decoration: InputDecoration(
-                  hintText: 'Was ist gerade wichtig?',
-                  hintStyle: const TextStyle(color: Colors.white30),
-                  filled: true,
-                  fillColor: Colors.white10,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: contentController,
+                      autofocus: true,
+                      maxLines: 4,
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      decoration: InputDecoration(
+                        hintText: 'Was ist gerade wichtig?',
+                        hintStyle: const TextStyle(color: Colors.white30),
+                        filled: true,
+                        fillColor: Colors.white10,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Color(0xFF4A90D9)),
+                    tooltip: 'Mit Stift schreiben',
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      final result = await Navigator.push<String>(
+                        this.context,
+                        MaterialPageRoute(
+                          builder: (_) => const DrawingScreen(),
+                        ),
+                      );
+                      if (result != null && result.isNotEmpty) {
+                        _addEntry(result, []);
+                      }
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextField(
@@ -128,16 +152,7 @@ class _JournalScreenState extends State<JournalScreen> {
                     final tags = tagController.text.trim().isEmpty
                         ? <String>[]
                         : [tagController.text.trim()];
-                    final entry = JournalEntry(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      timestamp: DateTime.now(),
-                      content: content,
-                      tags: tags,
-                    );
-                    setState(() {
-                      _entries.insert(0, entry);
-                    });
-                    _saveEntries();
+                    _addEntry(content, tags);
                     Navigator.pop(context);
                   },
                   child: const Text(
@@ -155,6 +170,19 @@ class _JournalScreenState extends State<JournalScreen> {
         );
       },
     );
+  }
+
+  void _addEntry(String content, List<String> tags) {
+    final entry = JournalEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      timestamp: DateTime.now(),
+      content: content,
+      tags: tags,
+    );
+    setState(() {
+      _entries.insert(0, entry);
+    });
+    _saveEntries();
   }
 
   @override
