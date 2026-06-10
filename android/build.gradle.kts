@@ -1,8 +1,21 @@
 System.setProperty("user.home", "E:\\")
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://developer.huawei.com/repo/") }
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.1.0")
+        classpath("com.huawei.agconnect:agcp:1.5.2.300")
+    }
+}
+
 allprojects {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://developer.huawei.com/repo/") }
     }
 }
 

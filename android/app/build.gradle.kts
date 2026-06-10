@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("com.huawei.agconnect")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -42,4 +43,8 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("com.huawei.agconnect:agconnect-core:1.5.2.300")
 }
