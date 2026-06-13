@@ -1,5 +1,12 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
+import 'package:huawei_ml_text/huawei_ml_text.dart';
+import 'package:path_provider/path_provider.dart';
 
 class DrawingPoint {
   final Offset offset;
@@ -17,6 +24,8 @@ class DrawingScreen extends StatefulWidget {
 class _DrawingScreenState extends State<DrawingScreen> {
   final List<List<DrawingPoint>> _strokes = [];
   List<DrawingPoint> _currentStroke = [];
+  final GlobalKey _canvasKey = GlobalKey();
+  bool _isProcessing = false;
 
   Paint get _paint => Paint()
     ..color = Colors.white
@@ -44,9 +53,47 @@ class _DrawingScreenState extends State<DrawingScreen> {
     setState(() => _currentStroke = []);
   }
 
-  void _confirm() {
-    // Platzhalter — wird in der nächsten Session durch OCR ersetzt
-    Navigator.pop(context, '[Handschrift-Eintrag]');
+  Future<void> _confirm() async {
+    setState(() => _isProcessing = true);
+
+    try {
+      // 1. Canvas als Bild rendern
+      final boundary = _canvasKey.currentContext!.findRenderObject()
+          as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('Canvas konnte nicht gerendert werden');
+
+      // 2. PNG in temporäre Datei schreiben
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/ocr_input.png');
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      // 3. Huawei ML Kit Text Recognition aufrufen
+      final analyzer = MLTextAnalyzer();
+      final setting = MLTextAnalyzerSetting.local(
+        path: file.path,
+        language: 'de',
+      );
+      final MLText result = await analyzer.asyncAnalyseFrame(setting);
+      await analyzer.destroy();
+
+      // 4. Erkannten Text extrahieren
+      final recognizedText = result.stringValue ?? '';
+      final text = recognizedText.trim().isEmpty
+          ? '[Handschrift nicht erkannt]'
+          : recognizedText.trim();
+
+      if (mounted) Navigator.pop(context, text);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('OCR fehlgeschlagen: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -59,21 +106,41 @@ class _DrawingScreenState extends State<DrawingScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.clear, color: Colors.white),
-            onPressed: () => setState(() => _strokes.clear()),
+            onPressed: _isProcessing
+                ? null
+                : () => setState(() => _strokes.clear()),
           ),
-          IconButton(
-            icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
-            onPressed: _strokes.isEmpty ? null : _confirm,
-          ),
+          if (_isProcessing)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF4A90D9),
+                    strokeWidth: 2.5,
+                  ),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
+              onPressed: _strokes.isEmpty ? null : _confirm,
+            ),
         ],
       ),
       body: Listener(
         onPointerDown: _onPointerDown,
         onPointerMove: _onPointerMove,
         onPointerUp: _onPointerUp,
-        child: CustomPaint(
-          painter: _DrawingPainter(_strokes),
-          child: Container(),
+        child: RepaintBoundary(
+          key: _canvasKey,
+          child: CustomPaint(
+            painter: _DrawingPainter(_strokes),
+            child: Container(),
+          ),
         ),
       ),
     );
