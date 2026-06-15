@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:huawei_ml_text/huawei_ml_text.dart';
@@ -53,22 +54,138 @@ class _DrawingScreenState extends State<DrawingScreen> {
     setState(() => _currentStroke = []);
   }
 
+  /// Rendert ein eigenes OCR-Bild: schwarze Striche auf weißem Grund.
+  /// Unabhängig von der dunklen Anzeige.
+  Future<Uint8List> _renderForOcr(Size size) async {
+    const double scale = 2.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(scale);
+
+    // weißer Hintergrund
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..color = Colors.white,
+    );
+
+    // schwarze Striche
+    final inkPaint = Paint()
+      ..color = Colors.black
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    for (final stroke in _strokes) {
+      for (int i = 0; i < stroke.length - 1; i++) {
+        canvas.drawLine(stroke[i].offset, stroke[i + 1].offset, inkPaint);
+      }
+    }
+
+    final picture = recorder.endRecording();
+    final ui.Image image = await picture.toImage(
+      (size.width * scale).round(),
+      (size.height * scale).round(),
+    );
+    final ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      throw Exception('OCR-Bild konnte nicht gerendert werden');
+    }
+    return byteData.buffer.asUint8List();
+  }
+
+  /// TEMPORÄR — Entscheidungs-Experiment:
+  /// Rendert Maschinentext schwarz auf weiß und schickt ihn durch dieselbe
+  /// OCR-Pipeline. Erkennt ML Kit das → Engine ok, Handschrift ist die Grenze.
+  Future<void> _testPrintedText() async {
+    setState(() => _isProcessing = true);
+    try {
+      const double scale = 2.0;
+      const Size size = Size(600, 200);
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      canvas.scale(scale);
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.white,
+      );
+      final tp = TextPainter(
+        text: const TextSpan(
+          text: 'Hallo Welt',
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 64,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(canvas, const Offset(40, 60));
+
+      final picture = recorder.endRecording();
+      final image = await picture.toImage(
+        (size.width * scale).round(),
+        (size.height * scale).round(),
+      );
+      final byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+      debugPrint('[OCR-TEST] PNG-Bytes: ${pngBytes.length}');
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/ocr_test_printed.png');
+      await file.writeAsBytes(pngBytes);
+
+      final analyzer = MLTextAnalyzer();
+      final setting = MLTextAnalyzerSetting.local(
+        path: file.path,
+        language: 'de',
+      );
+      final result = await analyzer.asyncAnalyseFrame(setting);
+      await analyzer.destroy();
+
+      debugPrint('[OCR-TEST] stringValue: "${result.stringValue}"');
+
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('OCR-TEST: "${result.stringValue}"')),
+        );
+      }
+    } catch (e, stack) {
+      debugPrint('[OCR-TEST] FEHLER: $e');
+      debugPrint('[OCR-TEST] Stack: $stack');
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('OCR-TEST fehlgeschlagen: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirm() async {
     setState(() => _isProcessing = true);
 
     try {
-      // 1. Canvas als Bild rendern
+      // 1. Größe des angezeigten Canvas ermitteln
       final boundary = _canvasKey.currentContext!.findRenderObject()
           as RenderRepaintBoundary;
-      final ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      final ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('Canvas konnte nicht gerendert werden');
+      final Size size = boundary.size;
+      debugPrint('[OCR] Canvas-Größe: $size, Striche: ${_strokes.length}, '
+          'Punkte gesamt: ${_strokes.fold<int>(0, (s, e) => s + e.length)}');
 
-      // 2. PNG in temporäre Datei schreiben
+      // 2. Eigenes OCR-Bild rendern (schwarz auf weiß) und speichern
+      final Uint8List pngBytes = await _renderForOcr(size);
+      debugPrint('[OCR] PNG-Bytes: ${pngBytes.length}');
+
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/ocr_input.png');
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+      await file.writeAsBytes(pngBytes);
+      debugPrint('[OCR] Datei: ${file.path}, '
+          'existiert: ${await file.exists()}, '
+          'Größe: ${await file.length()} Bytes');
 
       // 3. Huawei ML Kit Text Recognition aufrufen
       final analyzer = MLTextAnalyzer();
@@ -79,14 +196,19 @@ class _DrawingScreenState extends State<DrawingScreen> {
       final MLText result = await analyzer.asyncAnalyseFrame(setting);
       await analyzer.destroy();
 
+      debugPrint('[OCR] stringValue: "${result.stringValue}"');
+
       // 4. Erkannten Text extrahieren
       final recognizedText = result.stringValue ?? '';
       final text = recognizedText.trim().isEmpty
           ? '[Handschrift nicht erkannt]'
           : recognizedText.trim();
+      debugPrint('[OCR] Ergebnis an Journal: "$text"');
 
       if (mounted) Navigator.pop(context, text);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[OCR] FEHLER: $e');
+      debugPrint('[OCR] Stack: $stack');
       if (mounted) {
         setState(() => _isProcessing = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,6 +226,12 @@ class _DrawingScreenState extends State<DrawingScreen> {
         backgroundColor: const Color(0xFF1A1A2E),
         title: const Text('Handschrift', style: TextStyle(color: Colors.white)),
         actions: [
+          // TEMPORÄR — Entscheidungs-Experiment (Maschinentext durch OCR)
+          IconButton(
+            icon: const Icon(Icons.text_fields, color: Colors.orangeAccent),
+            tooltip: 'OCR-Test (Maschinentext)',
+            onPressed: _isProcessing ? null : _testPrintedText,
+          ),
           IconButton(
             icon: const Icon(Icons.clear, color: Colors.white),
             onPressed: _isProcessing
