@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
-import '../../screens/drawing/drawing_screen.dart';
+import '../../screens/text/native_text_entry_screen.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -109,7 +109,7 @@ void _openNewEntrySheet() {
                       final result = await Navigator.push<String>(
                         this.context,
                         MaterialPageRoute(
-                          builder: (_) => const DrawingScreen(),
+                          builder: (_) => const NativeTextEntryScreen(),
                         ),
                       );
                       if (result != null && result.isNotEmpty) {

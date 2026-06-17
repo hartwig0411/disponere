@@ -9,6 +9,9 @@ class MainActivity : FlutterActivity() {
         flutterEngine
             .platformViewsController
             .registry
-            .registerViewFactory("disponere/native-text", NativeTextFactory())
+            .registerViewFactory(
+                "disponere/native-text",
+                NativeTextFactory(flutterEngine.dartExecutor.binaryMessenger),
+            )
     }
 }
