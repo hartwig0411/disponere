@@ -4,6 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../utils/tag_parser.dart';
+
+/// Rückgabe des Stift-Eintrag-Screens: erkannter Text + zugehörige Tags.
+class NativeTextResult {
+  final String text;
+  final List<String> tags;
+  const NativeTextResult(this.text, this.tags);
+}
+
 class NativeTextEntryScreen extends StatefulWidget {
   const NativeTextEntryScreen({super.key});
 
@@ -14,11 +23,21 @@ class NativeTextEntryScreen extends StatefulWidget {
 class _NativeTextEntryScreenState extends State<NativeTextEntryScreen> {
   static const String _viewType = 'disponere/native-text';
   MethodChannel? _channel;
+  final TextEditingController _tagController = TextEditingController();
+
+  @override
+  void dispose() {
+    _tagController.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirm() async {
     final text = await _channel?.invokeMethod<String>('getText') ?? '';
     if (!mounted) return;
-    Navigator.pop(context, text.trim());
+    Navigator.pop(
+      context,
+      NativeTextResult(text.trim(), parseTags(_tagController.text)),
+    );
   }
 
   @override
@@ -42,7 +61,27 @@ class _NativeTextEntryScreenState extends State<NativeTextEntryScreen> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: defaultTargetPlatform == TargetPlatform.android
-            ? _buildNativeField()
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _buildNativeField()),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _tagController,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Tags mit #  ·  z.B. #MBS #ValSys',
+                      hintStyle: const TextStyle(color: Colors.white30),
+                      filled: true,
+                      fillColor: Colors.white10,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
+              )
             : const Center(child: Text('Nur auf Android')),
       ),
     );

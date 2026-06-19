@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
 import '../../screens/text/native_text_entry_screen.dart';
+import '../../utils/tag_parser.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -106,14 +107,14 @@ void _openNewEntrySheet() {
                     tooltip: 'Mit Stift schreiben',
                     onPressed: () async {
                       Navigator.pop(context);
-                      final result = await Navigator.push<String>(
+                      final result = await Navigator.push<NativeTextResult>(
                         this.context,
                         MaterialPageRoute(
                           builder: (_) => const NativeTextEntryScreen(),
                         ),
                       );
-                      if (result != null && result.isNotEmpty) {
-                        _addEntry(result, []);
+                      if (result != null && result.text.isNotEmpty) {
+                        _addEntry(result.text, result.tags);
                       }
                     },
                   ),
@@ -124,7 +125,7 @@ void _openNewEntrySheet() {
                 controller: tagController,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Tag (optional)',
+                  hintText: 'Tags, mehrere mit |  (z.B. MBS | ValSys)',
                   hintStyle: const TextStyle(color: Colors.white30),
                   prefixText: '# ',
                   prefixStyle: const TextStyle(color: Colors.white54),
@@ -150,10 +151,7 @@ void _openNewEntrySheet() {
                   onPressed: () {
                     final content = contentController.text.trim();
                     if (content.isEmpty) return;
-                    final tags = tagController.text.trim().isEmpty
-                        ? <String>[]
-                        : [tagController.text.trim()];
-                    _addEntry(content, tags);
+                    _addEntry(content, parseTags(tagController.text));
                     Navigator.pop(context);
                   },
                   child: const Text(
