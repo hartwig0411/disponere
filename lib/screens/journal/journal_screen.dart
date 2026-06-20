@@ -6,6 +6,7 @@ import '../../models/journal_entry.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
+import '../../widgets/tag_autocomplete_field.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -23,7 +24,7 @@ class _JournalScreenState extends State<JournalScreen> {
     _loadEntries();
   }
 
-Future<void> _loadEntries() async {
+  Future<void> _loadEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList('entries') ?? [];
     final loaded = raw.map((e) {
@@ -124,7 +125,8 @@ Future<void> _loadEntries() async {
                         final result = await Navigator.push<NativeTextResult>(
                           this.context,
                           MaterialPageRoute(
-                            builder: (_) => const NativeTextEntryScreen(),
+                            builder: (_) =>
+                                NativeTextEntryScreen(knownTags: _tagRegistry.allTags),
                           ),
                         );
                         if (result != null && result.text.isNotEmpty) {
@@ -136,19 +138,9 @@ Future<void> _loadEntries() async {
                 ],
               ),
               const SizedBox(height: 12),
-              TextField(
+              TagAutocompleteField(
                 controller: tagController,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Tags mit #  ·  z.B. #MBS #ValSys',
-                  hintStyle: const TextStyle(color: Colors.white30),
-                  filled: true,
-                  fillColor: Colors.white10,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+                knownTags: _tagRegistry.allTags,
               ),
               const SizedBox(height: 20),
               SizedBox(
@@ -189,7 +181,7 @@ Future<void> _loadEntries() async {
     );
   }
 
-void _addEntry(String content, List<String> tags) {
+  void _addEntry(String content, List<String> tags) {
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),

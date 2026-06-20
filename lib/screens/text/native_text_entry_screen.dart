@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../utils/tag_parser.dart';
+import '../../widgets/tag_autocomplete_field.dart';
 
 /// Rückgabe des Stift-Eintrag-Screens: erkannter Text + zugehörige Tags.
 class NativeTextResult {
@@ -14,7 +15,10 @@ class NativeTextResult {
 }
 
 class NativeTextEntryScreen extends StatefulWidget {
-  const NativeTextEntryScreen({super.key});
+  /// Bekannte Tags fürs Autocomplete (aus dem Tag-Register).
+  final List<String> knownTags;
+
+  const NativeTextEntryScreen({super.key, this.knownTags = const []});
 
   @override
   State<NativeTextEntryScreen> createState() => _NativeTextEntryScreenState();
@@ -66,19 +70,9 @@ class _NativeTextEntryScreenState extends State<NativeTextEntryScreen> {
                 children: [
                   Expanded(child: _buildNativeField()),
                   const SizedBox(height: 12),
-                  TextField(
+                  TagAutocompleteField(
                     controller: _tagController,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'Tags mit #  ·  z.B. #MBS #ValSys',
-                      hintStyle: const TextStyle(color: Colors.white30),
-                      filled: true,
-                      fillColor: Colors.white10,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    knownTags: widget.knownTags,
                   ),
                 ],
               )
