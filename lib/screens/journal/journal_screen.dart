@@ -49,9 +49,15 @@ class _JournalScreenState extends State<JournalScreen> {
     await prefs.setStringList('entries', raw);
   }
 
-void _openNewEntrySheet() {
-    final contentController = TextEditingController();
-    final tagController = TextEditingController();
+  /// Öffnet das Eingabe-Sheet.
+  /// [existing] == null → Neuer Eintrag.
+  /// [existing] != null → Bestehenden Eintrag bearbeiten (Inhalt + Tags).
+  void _openEntrySheet({JournalEntry? existing}) {
+    final isEditing = existing != null;
+    final contentController =
+        TextEditingController(text: existing?.content ?? '');
+    final tagController = TextEditingController(
+        text: existing != null ? formatTags(existing.tags) : '');
 
     showModalBottomSheet(
       context: context,
@@ -72,9 +78,9 @@ void _openNewEntrySheet() {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Neuer Eintrag',
-                style: TextStyle(
+              Text(
+                isEditing ? 'Eintrag bearbeiten' : 'Neuer Eintrag',
+                style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 14,
                   letterSpacing: 2,
@@ -101,23 +107,27 @@ void _openNewEntrySheet() {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Color(0xFF4A90D9)),
-                    tooltip: 'Mit Stift schreiben',
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      final result = await Navigator.push<NativeTextResult>(
-                        this.context,
-                        MaterialPageRoute(
-                          builder: (_) => const NativeTextEntryScreen(),
-                        ),
-                      );
-                      if (result != null && result.text.isNotEmpty) {
-                        _addEntry(result.text, result.tags);
-                      }
-                    },
-                  ),
+                  // Stift-Eingabe nur beim Neuanlegen: das native Feld kann
+                  // (noch) nicht vorbefüllt werden → Bearbeiten via Tastatur.
+                  if (!isEditing) ...[
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Color(0xFF4A90D9)),
+                      tooltip: 'Mit Stift schreiben',
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final result = await Navigator.push<NativeTextResult>(
+                          this.context,
+                          MaterialPageRoute(
+                            builder: (_) => const NativeTextEntryScreen(),
+                          ),
+                        );
+                        if (result != null && result.text.isNotEmpty) {
+                          _addEntry(result.text, result.tags);
+                        }
+                      },
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
@@ -125,10 +135,8 @@ void _openNewEntrySheet() {
                 controller: tagController,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Tags, mehrere mit |  (z.B. MBS | ValSys)',
+                  hintText: 'Tags mit #  ·  z.B. #MBS #ValSys',
                   hintStyle: const TextStyle(color: Colors.white30),
-                  prefixText: '# ',
-                  prefixStyle: const TextStyle(color: Colors.white54),
                   filled: true,
                   fillColor: Colors.white10,
                   border: OutlineInputBorder(
@@ -151,7 +159,12 @@ void _openNewEntrySheet() {
                   onPressed: () {
                     final content = contentController.text.trim();
                     if (content.isEmpty) return;
-                    _addEntry(content, parseTags(tagController.text));
+                    final tags = parseTags(tagController.text);
+                    if (existing != null) {
+                      _updateEntry(existing.id, content, tags);
+                    } else {
+                      _addEntry(content, tags);
+                    }
                     Navigator.pop(context);
                   },
                   child: const Text(
@@ -184,6 +197,18 @@ void _openNewEntrySheet() {
     _saveEntries();
   }
 
+  void _updateEntry(String id, String content, List<String> tags) {
+    final index = _entries.indexWhere((e) => e.id == id);
+    if (index == -1) return;
+    setState(() {
+      _entries[index] = _entries[index].copyWith(
+        content: content,
+        tags: tags,
+      );
+    });
+    _saveEntries();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -202,7 +227,7 @@ void _openNewEntrySheet() {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF4A90D9),
-        onPressed: _openNewEntrySheet,
+        onPressed: () => _openEntrySheet(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: ListView.builder(
@@ -210,7 +235,10 @@ void _openNewEntrySheet() {
         itemCount: _entries.length,
         itemBuilder: (context, index) {
           final entry = _entries[index];
-          return _EntryCard(entry: entry);
+          return _EntryCard(
+            entry: entry,
+            onTap: () => _openEntrySheet(existing: entry),
+          );
         },
       ),
     );
@@ -227,48 +255,57 @@ void _openNewEntrySheet() {
 
 class _EntryCard extends StatelessWidget {
   final JournalEntry entry;
-  const _EntryCard({required this.entry});
+  final VoidCallback onTap;
+  const _EntryCard({required this.entry, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Material(
         color: const Color(0xFF16213E),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}',
-            style: const TextStyle(
-              color: Colors.white30,
-              fontSize: 12,
-              letterSpacing: 1.5,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    color: Colors.white30,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  entry.content,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
+                if (entry.tags.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children:
+                        entry.tags.map((tag) => _TagChip(label: tag)).toList(),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            entry.content,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              height: 1.5,
-            ),
-          ),
-          if (entry.tags.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              children: entry.tags
-                  .map((tag) => _TagChip(label: tag))
-                  .toList(),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

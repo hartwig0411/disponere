@@ -9,3 +9,10 @@ List<String> parseTags(String raw) {
       .where((t) => t.isNotEmpty)
       .toList();
 }
+
+/// Gegenstück zu [parseTags]: Tag-Liste zurück ins '#'-Eingabeformat.
+/// ["MBS", "ValSys"] → "#MBS #ValSys". Round-trip-sicher fürs Tag-Feld
+/// beim Bearbeiten.
+String formatTags(List<String> tags) {
+  return tags.map((t) => '#$t').join(' ');
+}
