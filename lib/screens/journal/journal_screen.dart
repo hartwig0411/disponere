@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../utils/tag_parser.dart';
+import '../../utils/tag_registry.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -14,6 +15,7 @@ class JournalScreen extends StatefulWidget {
 
 class _JournalScreenState extends State<JournalScreen> {
   final List<JournalEntry> _entries = [];
+  final TagRegistry _tagRegistry = TagRegistry();
 
   @override
   void initState() {
@@ -21,7 +23,7 @@ class _JournalScreenState extends State<JournalScreen> {
     _loadEntries();
   }
 
-  Future<void> _loadEntries() async {
+Future<void> _loadEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList('entries') ?? [];
     final loaded = raw.map((e) {
@@ -36,6 +38,9 @@ class _JournalScreenState extends State<JournalScreen> {
     setState(() {
       _entries.addAll(loaded);
     });
+    // Tag-Register aus den geladenen Einträgen aufbauen.
+    // reversed = chronologisch (ältester zuerst) → erste Schreibweise gewinnt.
+    _tagRegistry.rebuildFrom(_entries.reversed.map((e) => e.tags));
   }
 
   Future<void> _saveEntries() async {
@@ -184,12 +189,13 @@ class _JournalScreenState extends State<JournalScreen> {
     );
   }
 
-  void _addEntry(String content, List<String> tags) {
+void _addEntry(String content, List<String> tags) {
+    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       timestamp: DateTime.now(),
       content: content,
-      tags: tags,
+      tags: canonicalTags,
     );
     setState(() {
       _entries.insert(0, entry);
@@ -200,10 +206,11 @@ class _JournalScreenState extends State<JournalScreen> {
   void _updateEntry(String id, String content, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
+    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     setState(() {
       _entries[index] = _entries[index].copyWith(
         content: content,
-        tags: tags,
+        tags: canonicalTags,
       );
     });
     _saveEntries();
