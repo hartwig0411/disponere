@@ -1,221 +1,174 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart';
-import 'package:huawei_ml_text/huawei_ml_text.dart';
-import 'package:path_provider/path_provider.dart';
 
-class DrawingPoint {
-  final Offset offset;
-  final Paint paint;
-  DrawingPoint(this.offset, this.paint);
+import '../../models/ink_data.dart';
+import '../../utils/tag_parser.dart';
+import '../../widgets/ink_painter.dart';
+import '../../widgets/tag_autocomplete_field.dart';
+
+/// Rückgabe des Tinten-Editors: die Striche (mit Canvas-Größe) + Tags.
+class InkResult {
+  final InkData ink;
+  final List<String> tags;
+  const InkResult(this.ink, this.tags);
 }
 
+/// Tinten-Modus: handschriftliche Eingabe als Strichdaten (Vektoren).
+/// Keine OCR/Umwandlung — die Handschrift bleibt erhalten und der Eintrag
+/// ist editier- und weiterschreibbar.
+///
+/// Mit [initialInk] werden vorhandene Striche zum Weiterschreiben geladen.
 class DrawingScreen extends StatefulWidget {
-  const DrawingScreen({super.key});
+  final InkData? initialInk;
+  final List<String> initialTags;
+  final List<String> knownTags;
+
+  const DrawingScreen({
+    super.key,
+    this.initialInk,
+    this.initialTags = const [],
+    this.knownTags = const [],
+  });
 
   @override
   State<DrawingScreen> createState() => _DrawingScreenState();
 }
 
 class _DrawingScreenState extends State<DrawingScreen> {
-  final List<List<DrawingPoint>> _strokes = [];
-  List<DrawingPoint> _currentStroke = [];
+  final List<List<Offset>> _strokes = [];
   final GlobalKey _canvasKey = GlobalKey();
-  bool _isProcessing = false;
+  late final TextEditingController _tagController;
 
-  Paint get _paint => Paint()
-    ..color = Colors.white
-    ..strokeWidth = 3.0
-    ..strokeCap = StrokeCap.round
-    ..style = PaintingStyle.stroke;
+  /// Radierer-Modus: Stift löscht ganze Striche, statt zu zeichnen.
+  bool _erasing = false;
+
+  static const double _eraseThreshold = 18.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tagController =
+        TextEditingController(text: formatTags(widget.initialTags));
+    final ink = widget.initialInk;
+    if (ink != null) {
+      for (final s in ink.strokes) {
+        _strokes.add(List<Offset>.from(s.points));
+      }
+      // Nach dem ersten Layout an die aktuelle Canvas-Größe anpassen — z.B.
+      // wenn das Gerät zwischen Erstellen und Bearbeiten gedreht wurde.
+      // Gleiche Größe → No-op (kein Eingriff in den Normalfall).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _fitLoadedInkToCanvas(Size(ink.width, ink.height));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _tagController.dispose();
+    super.dispose();
+  }
+
+  /// Rechnet die geladenen Striche von der gespeicherten Größe [from] auf die
+  /// aktuelle Canvas-Größe um (uniform skaliert, zentriert — keine Verzerrung
+  /// der Handschrift).
+  void _fitLoadedInkToCanvas(Size from) {
+    if (from.width <= 0 || from.height <= 0) return;
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    final to = box?.size;
+    if (to == null || to.isEmpty) return;
+    if ((to.width - from.width).abs() < 1 &&
+        (to.height - from.height).abs() < 1) {
+      return; // gleiche Größe → nichts zu tun
+    }
+    final scale = (to.width / from.width) < (to.height / from.height)
+        ? to.width / from.width
+        : to.height / from.height;
+    final dx = (to.width - from.width * scale) / 2;
+    final dy = (to.height - from.height * scale) / 2;
+    setState(() {
+      for (final stroke in _strokes) {
+        for (int i = 0; i < stroke.length; i++) {
+          stroke[i] =
+              Offset(stroke[i].dx * scale + dx, stroke[i].dy * scale + dy);
+        }
+      }
+    });
+  }
 
   void _onPointerDown(PointerDownEvent event) {
     if (event.kind != PointerDeviceKind.stylus) return;
-    setState(() {
-      _currentStroke = [DrawingPoint(event.localPosition, _paint)];
-      _strokes.add(_currentStroke);
-    });
+    if (_erasing) {
+      _eraseAt(event.localPosition);
+      return;
+    }
+    setState(() => _strokes.add([event.localPosition]));
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     if (event.kind != PointerDeviceKind.stylus) return;
-    setState(() {
-      _currentStroke.add(DrawingPoint(event.localPosition, _paint));
+    if (_erasing) {
+      _eraseAt(event.localPosition);
+      return;
+    }
+    if (_strokes.isEmpty) return;
+    setState(() => _strokes.last.add(event.localPosition));
+  }
+
+  /// Löscht alle Striche, die nah genug an [p] liegen (ganzer Strich).
+  void _eraseAt(Offset p) {
+    bool removed = false;
+    _strokes.removeWhere((stroke) {
+      final hit = _strokeHit(stroke, p);
+      if (hit) removed = true;
+      return hit;
     });
+    if (removed) setState(() {});
   }
 
-  void _onPointerUp(PointerUpEvent event) {
-    if (event.kind != PointerDeviceKind.stylus) return;
-    setState(() => _currentStroke = []);
+  bool _strokeHit(List<Offset> stroke, Offset p) {
+    if (stroke.isEmpty) return false;
+    if (stroke.length == 1) {
+      return (stroke.first - p).distance <= _eraseThreshold;
+    }
+    for (int i = 0; i < stroke.length - 1; i++) {
+      if (_distToSegment(p, stroke[i], stroke[i + 1]) <= _eraseThreshold) {
+        return true;
+      }
+    }
+    return false;
   }
 
-  /// Rendert ein eigenes OCR-Bild: schwarze Striche auf weißem Grund.
-  /// Unabhängig von der dunklen Anzeige.
-  Future<Uint8List> _renderForOcr(Size size) async {
-    const double scale = 2.0;
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    canvas.scale(scale);
+  /// Kürzeste Distanz von Punkt [p] zur Strecke [a]–[b].
+  double _distToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final lenSq = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (lenSq == 0) return (p - a).distance;
+    double t =
+        ((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / lenSq;
+    t = t.clamp(0.0, 1.0);
+    final proj = Offset(a.dx + t * ab.dx, a.dy + t * ab.dy);
+    return (p - proj).distance;
+  }
 
-    // weißer Hintergrund
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = Colors.white,
+  void _undo() {
+    if (_strokes.isEmpty) return;
+    setState(() => _strokes.removeLast());
+  }
+
+  void _clear() => setState(() => _strokes.clear());
+
+  void _confirm() {
+    if (_strokes.isEmpty) return;
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    final size = box?.size ?? const Size(0, 0);
+
+    final ink = InkData(
+      strokes: _strokes.map((s) => InkStroke(List<Offset>.from(s))).toList(),
+      width: size.width,
+      height: size.height,
     );
-
-    // schwarze Striche
-    final inkPaint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    for (final stroke in _strokes) {
-      for (int i = 0; i < stroke.length - 1; i++) {
-        canvas.drawLine(stroke[i].offset, stroke[i + 1].offset, inkPaint);
-      }
-    }
-
-    final picture = recorder.endRecording();
-    final ui.Image image = await picture.toImage(
-      (size.width * scale).round(),
-      (size.height * scale).round(),
-    );
-    final ByteData? byteData =
-        await image.toByteData(format: ui.ImageByteFormat.png);
-    if (byteData == null) {
-      throw Exception('OCR-Bild konnte nicht gerendert werden');
-    }
-    return byteData.buffer.asUint8List();
-  }
-
-  /// TEMPORÄR — Entscheidungs-Experiment:
-  /// Rendert Maschinentext schwarz auf weiß und schickt ihn durch dieselbe
-  /// OCR-Pipeline. Erkennt ML Kit das → Engine ok, Handschrift ist die Grenze.
-  Future<void> _testPrintedText() async {
-    setState(() => _isProcessing = true);
-    try {
-      const double scale = 2.0;
-      const Size size = Size(600, 200);
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      canvas.scale(scale);
-      canvas.drawRect(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = Colors.white,
-      );
-      final tp = TextPainter(
-        text: const TextSpan(
-          text: 'Hallo Welt',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 64,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
-      tp.layout();
-      tp.paint(canvas, const Offset(40, 60));
-
-      final picture = recorder.endRecording();
-      final image = await picture.toImage(
-        (size.width * scale).round(),
-        (size.height * scale).round(),
-      );
-      final byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-      debugPrint('[OCR-TEST] PNG-Bytes: ${pngBytes.length}');
-
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/ocr_test_printed.png');
-      await file.writeAsBytes(pngBytes);
-
-      final analyzer = MLTextAnalyzer();
-      final setting = MLTextAnalyzerSetting.local(
-        path: file.path,
-        language: 'de',
-      );
-      final result = await analyzer.asyncAnalyseFrame(setting);
-      await analyzer.destroy();
-
-      debugPrint('[OCR-TEST] stringValue: "${result.stringValue}"');
-
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('OCR-TEST: "${result.stringValue}"')),
-        );
-      }
-    } catch (e, stack) {
-      debugPrint('[OCR-TEST] FEHLER: $e');
-      debugPrint('[OCR-TEST] Stack: $stack');
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('OCR-TEST fehlgeschlagen: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _confirm() async {
-    setState(() => _isProcessing = true);
-
-    try {
-      // 1. Größe des angezeigten Canvas ermitteln
-      final boundary = _canvasKey.currentContext!.findRenderObject()
-          as RenderRepaintBoundary;
-      final Size size = boundary.size;
-      debugPrint('[OCR] Canvas-Größe: $size, Striche: ${_strokes.length}, '
-          'Punkte gesamt: ${_strokes.fold<int>(0, (s, e) => s + e.length)}');
-
-      // 2. Eigenes OCR-Bild rendern (schwarz auf weiß) und speichern
-      final Uint8List pngBytes = await _renderForOcr(size);
-      debugPrint('[OCR] PNG-Bytes: ${pngBytes.length}');
-
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/ocr_input.png');
-      await file.writeAsBytes(pngBytes);
-      debugPrint('[OCR] Datei: ${file.path}, '
-          'existiert: ${await file.exists()}, '
-          'Größe: ${await file.length()} Bytes');
-
-      // 3. Huawei ML Kit Text Recognition aufrufen
-      final analyzer = MLTextAnalyzer();
-      final setting = MLTextAnalyzerSetting.local(
-        path: file.path,
-        language: 'de',
-      );
-      final MLText result = await analyzer.asyncAnalyseFrame(setting);
-      await analyzer.destroy();
-
-      debugPrint('[OCR] stringValue: "${result.stringValue}"');
-
-      // 4. Erkannten Text extrahieren
-      final recognizedText = result.stringValue ?? '';
-      final text = recognizedText.trim().isEmpty
-          ? '[Handschrift nicht erkannt]'
-          : recognizedText.trim();
-      debugPrint('[OCR] Ergebnis an Journal: "$text"');
-
-      if (mounted) Navigator.pop(context, text);
-    } catch (e, stack) {
-      debugPrint('[OCR] FEHLER: $e');
-      debugPrint('[OCR] Stack: $stack');
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('OCR fehlgeschlagen: $e')),
-        );
-      }
-    }
+    Navigator.pop(context, InkResult(ink, parseTags(_tagController.text)));
   }
 
   @override
@@ -224,70 +177,60 @@ class _DrawingScreenState extends State<DrawingScreen> {
       backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Handschrift', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Tinte',
+          style: TextStyle(color: Colors.white70, fontSize: 16),
+        ),
         actions: [
-          // TEMPORÄR — Entscheidungs-Experiment (Maschinentext durch OCR)
           IconButton(
-            icon: const Icon(Icons.text_fields, color: Colors.orangeAccent),
-            tooltip: 'OCR-Test (Maschinentext)',
-            onPressed: _isProcessing ? null : _testPrintedText,
+            icon: Icon(
+              Icons.cleaning_services,
+              color: _erasing ? const Color(0xFF4A90D9) : Colors.white,
+            ),
+            tooltip: _erasing ? 'Radierer aktiv' : 'Radieren',
+            onPressed: () => setState(() => _erasing = !_erasing),
+          ),
+          IconButton(
+            icon: const Icon(Icons.undo, color: Colors.white),
+            tooltip: 'Letzten Strich zurück',
+            onPressed: _strokes.isEmpty ? null : _undo,
           ),
           IconButton(
             icon: const Icon(Icons.clear, color: Colors.white),
-            onPressed: _isProcessing
-                ? null
-                : () => setState(() => _strokes.clear()),
+            tooltip: 'Alles löschen',
+            onPressed: _strokes.isEmpty ? null : _clear,
           ),
-          if (_isProcessing)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Color(0xFF4A90D9),
-                    strokeWidth: 2.5,
-                  ),
-                ),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
-              onPressed: _strokes.isEmpty ? null : _confirm,
-            ),
+          IconButton(
+            icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
+            tooltip: 'Übernehmen',
+            onPressed: _strokes.isEmpty ? null : _confirm,
+          ),
         ],
       ),
-      body: Listener(
-        onPointerDown: _onPointerDown,
-        onPointerMove: _onPointerMove,
-        onPointerUp: _onPointerUp,
-        child: RepaintBoundary(
-          key: _canvasKey,
-          child: CustomPaint(
-            painter: _DrawingPainter(_strokes),
-            child: Container(),
+      body: Column(
+        children: [
+          Expanded(
+            child: Listener(
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              child: RepaintBoundary(
+                key: _canvasKey,
+                child: CustomPaint(
+                  painter: InkLivePainter(_strokes),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: TagAutocompleteField(
+              controller: _tagController,
+              knownTags: widget.knownTags,
+            ),
+          ),
+        ],
       ),
     );
   }
-}
-
-class _DrawingPainter extends CustomPainter {
-  final List<List<DrawingPoint>> strokes;
-  _DrawingPainter(this.strokes);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final stroke in strokes) {
-      for (int i = 0; i < stroke.length - 1; i++) {
-        canvas.drawLine(stroke[i].offset, stroke[i + 1].offset, stroke[i].paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DrawingPainter oldDelegate) => true;
 }

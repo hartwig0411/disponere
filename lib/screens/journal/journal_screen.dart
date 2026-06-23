@@ -1,12 +1,14 @@
 ﻿import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/journal_entry.dart';
+import '../../models/ink_data.dart';
 import '../../screens/text/native_text_entry_screen.dart';
+import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
+import '../../widgets/ink_painter.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -34,6 +36,9 @@ class _JournalScreenState extends State<JournalScreen> {
         timestamp: DateTime.parse(map['timestamp'] as String),
         content: map['content'] as String,
         tags: List<String>.from(map['tags'] as List),
+        ink: map['ink'] != null
+            ? InkData.fromJson(map['ink'] as Map<String, dynamic>)
+            : null,
       );
     }).toList();
     setState(() {
@@ -46,18 +51,22 @@ class _JournalScreenState extends State<JournalScreen> {
 
   Future<void> _saveEntries() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = _entries.map((e) => jsonEncode({
-      'id': e.id,
-      'timestamp': e.timestamp.toIso8601String(),
-      'content': e.content,
-      'tags': e.tags,
-    })).toList();
+    final raw = _entries.map((e) {
+      final map = <String, Object>{
+        'id': e.id,
+        'timestamp': e.timestamp.toIso8601String(),
+        'content': e.content,
+        'tags': e.tags,
+      };
+      if (e.ink != null) map['ink'] = e.ink!.toJson();
+      return jsonEncode(map);
+    }).toList();
     await prefs.setStringList('entries', raw);
   }
 
-  /// Öffnet das Eingabe-Sheet.
-  /// [existing] == null → Neuer Eintrag.
-  /// [existing] != null → Bestehenden Eintrag bearbeiten (Inhalt + Tags).
+  /// Öffnet das Text-Eingabe-Sheet.
+  /// [existing] == null → Neuer (Text-)Eintrag.
+  /// [existing] != null → Bestehenden Text-Eintrag bearbeiten.
   void _openEntrySheet({JournalEntry? existing}) {
     final isEditing = existing != null;
     final contentController =
@@ -119,19 +128,27 @@ class _JournalScreenState extends State<JournalScreen> {
                     const SizedBox(width: 12),
                     IconButton(
                       icon: const Icon(Icons.edit, color: Color(0xFF4A90D9)),
-                      tooltip: 'Mit Stift schreiben',
+                      tooltip: 'Mit Stift schreiben (Text)',
                       onPressed: () async {
                         Navigator.pop(context);
                         final result = await Navigator.push<NativeTextResult>(
                           this.context,
                           MaterialPageRoute(
-                            builder: (_) =>
-                                NativeTextEntryScreen(knownTags: _tagRegistry.allTags),
+                            builder: (_) => NativeTextEntryScreen(
+                                knownTags: _tagRegistry.allTags),
                           ),
                         );
                         if (result != null && result.text.isNotEmpty) {
                           _addEntry(result.text, result.tags);
                         }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.brush, color: Color(0xFF4A90D9)),
+                      tooltip: 'Mit Stift zeichnen (Tinte)',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openInkEditorNew();
                       },
                     ),
                   ],
@@ -181,6 +198,37 @@ class _JournalScreenState extends State<JournalScreen> {
     );
   }
 
+  /// Tinten-Editor für einen neuen Tinten-Eintrag.
+  Future<void> _openInkEditorNew() async {
+    final result = await Navigator.push<InkResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DrawingScreen(knownTags: _tagRegistry.allTags),
+      ),
+    );
+    if (result != null && result.ink.isNotEmpty) {
+      _addInkEntry(result.ink, result.tags);
+    }
+  }
+
+  /// Tinten-Editor für einen bestehenden Tinten-Eintrag (Striche zurückladen,
+  /// weiterschreiben/korrigieren).
+  Future<void> _openInkEditorEdit(JournalEntry entry) async {
+    final result = await Navigator.push<InkResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DrawingScreen(
+          initialInk: entry.ink,
+          initialTags: entry.tags,
+          knownTags: _tagRegistry.allTags,
+        ),
+      ),
+    );
+    if (result != null && result.ink.isNotEmpty) {
+      _updateInkEntry(entry.id, result.ink, result.tags);
+    }
+  }
+
   void _addEntry(String content, List<String> tags) {
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
@@ -195,6 +243,21 @@ class _JournalScreenState extends State<JournalScreen> {
     _saveEntries();
   }
 
+  void _addInkEntry(InkData ink, List<String> tags) {
+    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
+    final entry = JournalEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      timestamp: DateTime.now(),
+      content: '',
+      tags: canonicalTags,
+      ink: ink,
+    );
+    setState(() {
+      _entries.insert(0, entry);
+    });
+    _saveEntries();
+  }
+
   void _updateEntry(String id, String content, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
@@ -202,6 +265,19 @@ class _JournalScreenState extends State<JournalScreen> {
     setState(() {
       _entries[index] = _entries[index].copyWith(
         content: content,
+        tags: canonicalTags,
+      );
+    });
+    _saveEntries();
+  }
+
+  void _updateInkEntry(String id, InkData ink, List<String> tags) {
+    final index = _entries.indexWhere((e) => e.id == id);
+    if (index == -1) return;
+    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
+    setState(() {
+      _entries[index] = _entries[index].copyWith(
+        ink: ink,
         tags: canonicalTags,
       );
     });
@@ -236,7 +312,13 @@ class _JournalScreenState extends State<JournalScreen> {
           final entry = _entries[index];
           return _EntryCard(
             entry: entry,
-            onTap: () => _openEntrySheet(existing: entry),
+            onTap: () {
+              if (entry.isInk) {
+                _openInkEditorEdit(entry);
+              } else {
+                _openEntrySheet(existing: entry);
+              }
+            },
           );
         },
       ),
@@ -276,23 +358,45 @@ class _EntryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    color: Colors.white30,
-                    fontSize: 12,
-                    letterSpacing: 1.5,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}',
+                      style: const TextStyle(
+                        color: Colors.white30,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    if (entry.isInk) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.brush, size: 12, color: Colors.white24),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  entry.content,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    height: 1.5,
+                if (entry.isInk)
+                  Container(
+                    height: 140,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: CustomPaint(
+                      painter: InkPreviewPainter(entry.ink!),
+                      child: const SizedBox.expand(),
+                    ),
+                  )
+                else
+                  Text(
+                    entry.content,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
                   ),
-                ),
                 if (entry.tags.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
