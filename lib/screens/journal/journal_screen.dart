@@ -9,6 +9,7 @@ import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../../widgets/ink_painter.dart';
+import '../../screens/tags/tag_management_screen.dart';
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -284,6 +285,68 @@ class _JournalScreenState extends State<JournalScreen> {
     _saveEntries();
   }
 
+  /// Nutzungszähler je Tag (Schlüssel = kleingeschrieben). Pro Eintrag zählt
+  /// ein Tag höchstens einmal.
+  Map<String, int> _tagUsage() {
+    final usage = <String, int>{};
+    for (final e in _entries) {
+      final seen = <String>{};
+      for (final t in e.tags) {
+        final k = t.toLowerCase();
+        if (seen.add(k)) {
+          usage[k] = (usage[k] ?? 0) + 1;
+        }
+      }
+    }
+    return usage;
+  }
+
+  void _openTagManagement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TagManagementScreen(
+          tags: _tagRegistry.allTags,
+          usage: _tagUsage(),
+          onRename: _renameTag,
+        ),
+      ),
+    );
+  }
+
+  /// Benennt einen Tag in allen Einträgen um (case-insensitiv erkannt).
+  /// Trifft die Zielschreibweise einen bestehenden Tag, werden beide
+  /// zusammengeführt. Nach dem Umschreiben wird das Register neu aufgebaut.
+  void _renameTag(String from, String to) {
+    final fromKey = from.toLowerCase();
+    final cleanTo = to.trim();
+    if (cleanTo.isEmpty || cleanTo == from) return;
+    final toKey = cleanTo.toLowerCase();
+    setState(() {
+      for (int i = 0; i < _entries.length; i++) {
+        final e = _entries[i];
+        final newTags = <String>[];
+        final seen = <String>{};
+        var changed = false;
+        for (final t in e.tags) {
+          final k = t.toLowerCase();
+          final mapped = (k == fromKey || k == toKey) ? cleanTo : t;
+          if (mapped != t) changed = true;
+          if (seen.add(mapped.toLowerCase())) {
+            newTags.add(mapped);
+          } else {
+            changed = true; // Duplikat (Merge) entfernt
+          }
+        }
+        if (changed) _entries[i] = e.copyWith(tags: newTags);
+      }
+    });
+    // Register neu aufbauen (chronologisch → erste Schreibweise gewinnt;
+    // nach dem Umschreiben ist die neue Schreibweise überall identisch).
+    _tagRegistry.rebuildFrom(_entries.reversed.map((e) => e.tags));
+    _saveEntries();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,6 +362,13 @@ class _JournalScreenState extends State<JournalScreen> {
             letterSpacing: 2,
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sell_outlined, color: Colors.white54),
+            tooltip: 'Tags verwalten',
+            onPressed: _openTagManagement,
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF4A90D9),
