@@ -1,6 +1,5 @@
-﻿import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../data/journal_repository.dart';
 import '../../models/journal_entry.dart';
 import '../../models/ink_data.dart';
 import '../../screens/text/native_text_entry_screen.dart';
@@ -20,49 +19,28 @@ class JournalScreen extends StatefulWidget {
 class _JournalScreenState extends State<JournalScreen> {
   final List<JournalEntry> _entries = [];
   final TagRegistry _tagRegistry = TagRegistry();
+  final JournalRepository _repo = JournalRepository();
 
   @override
   void initState() {
     super.initState();
-    _loadEntries();
+    _init();
   }
 
-  Future<void> _loadEntries() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getStringList('entries') ?? [];
-    final loaded = raw.map((e) {
-      final map = jsonDecode(e) as Map<String, dynamic>;
-      return JournalEntry(
-        id: map['id'] as String,
-        timestamp: DateTime.parse(map['timestamp'] as String),
-        content: map['content'] as String,
-        tags: List<String>.from(map['tags'] as List),
-        ink: map['ink'] != null
-            ? InkData.fromJson(map['ink'] as Map<String, dynamic>)
-            : null,
-      );
-    }).toList();
+  /// Startsequenz: Einmal-Migration aus shared_preferences (falls nötig),
+  /// dann Einträge aus SQLite laden und das Tag-Register aufbauen.
+  Future<void> _init() async {
+    await _repo.migrateFromPrefsIfNeeded();
+    final loaded = await _repo.loadAll();
+    if (!mounted) return;
     setState(() {
-      _entries.addAll(loaded);
+      _entries
+        ..clear()
+        ..addAll(loaded);
     });
     // Tag-Register aus den geladenen Einträgen aufbauen.
     // reversed = chronologisch (ältester zuerst) → erste Schreibweise gewinnt.
     _tagRegistry.rebuildFrom(_entries.reversed.map((e) => e.tags));
-  }
-
-  Future<void> _saveEntries() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = _entries.map((e) {
-      final map = <String, Object>{
-        'id': e.id,
-        'timestamp': e.timestamp.toIso8601String(),
-        'content': e.content,
-        'tags': e.tags,
-      };
-      if (e.ink != null) map['ink'] = e.ink!.toJson();
-      return jsonEncode(map);
-    }).toList();
-    await prefs.setStringList('entries', raw);
   }
 
   /// Öffnet das Text-Eingabe-Sheet.
@@ -241,7 +219,7 @@ class _JournalScreenState extends State<JournalScreen> {
     setState(() {
       _entries.insert(0, entry);
     });
-    _saveEntries();
+    _repo.upsert(entry);
   }
 
   void _addInkEntry(InkData ink, List<String> tags) {
@@ -256,33 +234,35 @@ class _JournalScreenState extends State<JournalScreen> {
     setState(() {
       _entries.insert(0, entry);
     });
-    _saveEntries();
+    _repo.upsert(entry);
   }
 
   void _updateEntry(String id, String content, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
+    final updated = _entries[index].copyWith(
+      content: content,
+      tags: canonicalTags,
+    );
     setState(() {
-      _entries[index] = _entries[index].copyWith(
-        content: content,
-        tags: canonicalTags,
-      );
+      _entries[index] = updated;
     });
-    _saveEntries();
+    _repo.upsert(updated);
   }
 
   void _updateInkEntry(String id, InkData ink, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
+    final updated = _entries[index].copyWith(
+      ink: ink,
+      tags: canonicalTags,
+    );
     setState(() {
-      _entries[index] = _entries[index].copyWith(
-        ink: ink,
-        tags: canonicalTags,
-      );
+      _entries[index] = updated;
     });
-    _saveEntries();
+    _repo.upsert(updated);
   }
 
   /// Nutzungszähler je Tag (Schlüssel = kleingeschrieben). Pro Eintrag zählt
@@ -316,12 +296,14 @@ class _JournalScreenState extends State<JournalScreen> {
 
   /// Benennt einen Tag in allen Einträgen um (case-insensitiv erkannt).
   /// Trifft die Zielschreibweise einen bestehenden Tag, werden beide
-  /// zusammengeführt. Nach dem Umschreiben wird das Register neu aufgebaut.
+  /// zusammengeführt. Nach dem Umschreiben wird das Register neu aufgebaut
+  /// und nur die tatsächlich geänderten Einträge werden persistiert.
   void _renameTag(String from, String to) {
     final fromKey = from.toLowerCase();
     final cleanTo = to.trim();
     if (cleanTo.isEmpty || cleanTo == from) return;
     final toKey = cleanTo.toLowerCase();
+    final changedEntries = <JournalEntry>[];
     setState(() {
       for (int i = 0; i < _entries.length; i++) {
         final e = _entries[i];
@@ -338,13 +320,19 @@ class _JournalScreenState extends State<JournalScreen> {
             changed = true; // Duplikat (Merge) entfernt
           }
         }
-        if (changed) _entries[i] = e.copyWith(tags: newTags);
+        if (changed) {
+          final updated = e.copyWith(tags: newTags);
+          _entries[i] = updated;
+          changedEntries.add(updated);
+        }
       }
     });
     // Register neu aufbauen (chronologisch → erste Schreibweise gewinnt;
     // nach dem Umschreiben ist die neue Schreibweise überall identisch).
     _tagRegistry.rebuildFrom(_entries.reversed.map((e) => e.tags));
-    _saveEntries();
+    if (changedEntries.isNotEmpty) {
+      _repo.upsertAll(changedEntries);
+    }
   }
 
   @override
