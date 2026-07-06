@@ -1,7 +1,7 @@
 # Disponere
 ### Strukturiertes Denken und Notieren
 *Anforderungsdokument — Version 3.0*
-*Stand: Juni 2026 (nach Session 12)*
+*Stand: Juli 2026 (nach Session 14)*
 
 ---
 
@@ -12,7 +12,7 @@
 - **Zwei Eingabe-Modi** pro Eintrag eingeführt: Text-Modus und Tinten-Modus.
 - **Datenmodell präzisiert:** ein durchgehendes Journal, Tags als gefilterte Sicht, Datum als Abfrage.
 - **Tag-System ausgebaut:** Mehrfach-Tags (`#`-getrennt), Tag-Register mit Normalisierung, Autocomplete.
-- **Persistenz:** Migration `shared_preferences` → lokale DB (SQLite) eingeplant.
+- **Persistenz:** Migration `shared_preferences` → lokale DB (SQLite) **umgesetzt** (Session 14, normalisiertes Schema). ✅
 - **Umsetzungsstand** durchgehend markiert: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant.
 
 ---
@@ -42,9 +42,9 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 |---|---|---|
 | Framework | Flutter | Eine Codebasis, gute Stylus-Unterstützung |
 | Handschrift → Text | FreeScript via natives `EditText` (PlatformView, Hybrid Composition) | On-device, offline; Flutters Scribe-Weg auf dem MatePad nicht nutzbar ✅ |
-| Handschrift → Tinte | Canvas, Speicherung als Strichdaten (Vektoren) | Bleibt editierbar; PNG nur bei Bedarf 🔧 |
+| Handschrift → Tinte | Canvas, Speicherung als Strichdaten (Vektoren) | Bleibt editierbar; PNG nur bei Bedarf ✅ |
 | OCR gedruckter Text | Huawei ML Kit | Nur für Dokument-Import; kann **keine** Handschrift |
-| Persistenz | lokal: `shared_preferences` → **SQLite** | Migration geplant ⏳ |
+| Persistenz | lokal: **SQLite** (Migration aus `shared_preferences` abgeschlossen) | Session 14 ✅ |
 | Lizenz | Open Source | GitHub, frei zugänglich |
 | KI-Integration | Claude (Anthropic API) | Teil der Vision von Anfang an ⏳ |
 
@@ -69,11 +69,11 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 - Tags können nachträglich hinzugefügt / entfernt werden (über Editierbarkeit). ✅
 - **Tag-Register mit Normalisierung:** Schreibvarianten werden case-insensitiv zusammengeführt (`ValSys` = `valsys` → ein Tag). Kanonische Schreibweise = **case-preserving, "erste Schreibweise gewinnt"** (Akronyme/deutsche Substantive bleiben lesbar). Abgeleitet aus den Einträgen, keine eigene Persistenz. ✅
 - **Autocomplete:** Vorschlags-Chips zum getippten Fragment; bei keinem Treffer Fuzzy-Vorschlag "Meintest du …?" (Levenshtein). An beiden Eingabewegen. ✅
-- **Tag-Verwaltung / Umbenennen** (kanonische Schreibweise selbst festlegen — löst die reihenfolge-abhängige Kanonisierung). ⏳
+- **Tag-Verwaltung / Umbenennen** (kanonische Schreibweise selbst festlegen — löst die reihenfolge-abhängige Kanonisierung). ✅ (Session 13: Durchschreiben über alle Einträge, case-insensitiver Merge, Nutzungszähler)
 
 ### 4. Zwei Eingabe-Modi
 - **Text-Modus:** Stift (FreeScript) **oder** Tastatur → gespeichert als **Text** → durchsuchbar, von Claude lesbar. ✅
-- **Tinten-Modus:** Canvas → gespeichert als **Strichdaten (Vektoren)**, **keine** Umwandlung → bleibt Handschrift, editier- und weiterschreibbar. 🔧 (Canvas vorhanden; Modell + Serialisierung ausstehend)
+- **Tinten-Modus:** Canvas → gespeichert als **Strichdaten (Vektoren)**, **keine** Umwandlung → bleibt Handschrift, editier- und weiterschreibbar. ✅ (Session 13: InkData/InkStroke, Serialisierung, Tinten-Editor mit Weiterschreiben, Radierer, Orientierungs-Fit)
 - Begründung Strichdaten statt PNG: "Editierbarkeit" ist 🟡 Core — ein nicht weiterbearbeitbarer Tinten-Eintrag würde das brechen. PNG nur als Anzeige-/Render-Version bei Bedarf.
 
 ### 5. Daily Info ⏳
@@ -107,7 +107,7 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 - **Text-Modus:** FreeScript via natives `EditText` / PlatformView (Hybrid Composition) — on-device, offline, Google-frei ✅
 - Ein natives `EditText` deckt **beide** Eingabearten ab: M-Pencil (FreeScript) und Tastatur
 - Flutters eigener Weg (`Scribe` / `stylusHandwritingEnabled`) ist auf dem MatePad **nicht** verfügbar — FreeScript meldet sich nicht über die Standard-AOSP-Schnittstelle
-- **Tinten-Modus:** Canvas mit Palm Rejection (`Listener` + `PointerDeviceKind.stylus`) ✅ — Striche-Speicherung 🔧
+- **Tinten-Modus:** Canvas mit Palm Rejection (`Listener` + `PointerDeviceKind.stylus`) ✅ — Striche-Speicherung ✅
 - ML Kit Text Recognition nur für **gedruckten** Text (Dokument-Import)
 
 ### Google Calendar-Anbindung ⏳
@@ -156,7 +156,7 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 | Flutter läuft auf MatePad | 🔴 Blocker | ✅ |
 | Daily Journal funktioniert | 🔴 Blocker | ✅ |
 | Tag-System funktioniert | 🔴 Blocker | ✅ |
-| Datenpersistenz | 🔴 Blocker | ✅ `shared_preferences` (SQLite-Migration ⏳) |
+| Datenpersistenz | 🔴 Blocker | ✅ SQLite (Migration abgeschlossen, Session 14) |
 | Handschrift Text-Modus (FreeScript) | 🟡 Core | ✅ |
 | Google Calendar-Anbindung | 🟡 Core | ⏳ |
 | Anthropic API-Zugang | 🟡 Core | ⏳ |
@@ -167,14 +167,14 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 |---|---|---|
 | Tastatureingabe (Journaleinträge) | 🔴 Blocker | ✅ |
 | Handschrift Text-Modus (FreeScript) | 🟡 Core | ✅ |
-| Handschrift Tinten-Modus (Canvas / Striche) | 🟡 Core | 🔧 Canvas da, Speicherung ⏳ |
+| Handschrift Tinten-Modus (Canvas / Striche) | 🟡 Core | ✅ |
 | Mehrfach-Tags pro Eintrag | 🟡 Core | ✅ |
 | Tag-Register / Normalisierung | 🟡 Core | ✅ |
 | Editierbarkeit von Einträgen + Tags | 🟡 Core | ✅ |
 | Daily Info | 🟡 Core | ⏳ |
 | Aufgaben-Management | 🟡 Core | ⏳ |
 | Tag-Autocomplete ("Meintest du …?") | 🟢 Enhancement | ✅ |
-| Tag-Verwaltung / Umbenennen | 🟢 Enhancement | ⏳ |
+| Tag-Verwaltung / Umbenennen | 🟢 Enhancement | ✅ |
 | Dokument-Import | 🟢 Enhancement | ⏳ |
 
 *Entfallen gegenüber v2.0: Stempel-Tool (aus v1.0 gestrichen — räumliche Idee lebt als v2-Feature "Bereiche in Handschrift markieren").*
@@ -210,10 +210,7 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 
 | Punkt | Beschreibung |
 |---|---|
-| Tinten-Modus — Datenmodell | Strichdaten serialisieren (JSON), `JournalEntry` um einen Tinten-Körper erweitern, Striche laden / weiterschreiben |
-| Tag-Verwaltung / Umbenennen | Kanonische Schreibweise selbst festlegen — Hebel gegen reihenfolge-abhängige Kanonisierung |
 | Lokale Tinten-Volltextsuche | Keine On-Device-Handschrift-OCR (ML Kit kann keine Handschrift, FreeScript ist reine Eingabe) |
-| DB-Migration | `shared_preferences` → SQLite, abfragbar nach Datum / Tag / Zeitraum (Basis u.a. Perlenkette) |
 | Claude-Integration | Umfang und Einstiegspunkt der KI-Funktionen für v1.0 festlegen |
 | Google Calendar | API-Zugänge einrichten; Kalender → Tag-Mapping bauen |
 | Perlenkette — Datenmodell | Eigener Index über tag-verknüpfte Einträge, oder Laufzeit-Abfrage über Journal + Calendar + Aufgaben? |
