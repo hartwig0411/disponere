@@ -76,7 +76,7 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 - **Tinten-Modus:** Canvas → gespeichert als **Strichdaten (Vektoren)**, **keine** Umwandlung → bleibt Handschrift, editier- und weiterschreibbar. ✅ (Session 13: InkData/InkStroke, Serialisierung, Tinten-Editor mit Weiterschreiben, Radierer, Orientierungs-Fit)
 - Begründung Strichdaten statt PNG: "Editierbarkeit" ist 🟡 Core — ein nicht weiterbearbeitbarer Tinten-Eintrag würde das brechen. PNG nur als Anzeige-/Render-Version bei Bedarf.
 
-### 5. Daily Info ⏳
+### 5. Daily Info ✅
 - Eigener Bereich oben im Journal, farblich abgesetzt
 - Zeigt menschlichen Kontext für den Tag (was ist heute bei Menschen im Umfeld los)
 - Freier Text, ein Eintrag pro Zeile; je Eintrag ein Datum oder eine Zeitspanne (von/bis)
@@ -171,7 +171,7 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 | Mehrfach-Tags pro Eintrag | 🟡 Core | ✅ |
 | Tag-Register / Normalisierung | 🟡 Core | ✅ |
 | Editierbarkeit von Einträgen + Tags | 🟡 Core | ✅ |
-| Daily Info | 🟡 Core | ⏳ |
+| Daily Info | 🟡 Core | ✅ |
 | Aufgaben-Management | 🟡 Core | ⏳ |
 | Tag-Autocomplete ("Meintest du …?") | 🟢 Enhancement | ✅ |
 | Tag-Verwaltung / Umbenennen | 🟢 Enhancement | ✅ |
