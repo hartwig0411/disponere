@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/daily_info.dart';
 import '../models/ink_data.dart';
 import '../models/journal_entry.dart';
 
@@ -17,13 +18,17 @@ import '../models/journal_entry.dart';
 /// - `entry_tags`  — ein Tag pro Zeile, mit lowercase-`tag_key` für
 ///                   case-insensitive Abfragen und `ord` für stabile
 ///                   Anzeige-Reihenfolge.
+/// - `daily_info`  — Tagesinfos (Session 15). Zeitspanne als `yyyy-MM-dd`
+///                   in `start_date`/`end_date`; `end_date` NULL = Einzeltag.
 ///
 /// Das Tag-Register bleibt davon unberührt: Es wird weiter zur Laufzeit aus
 /// den Einträgen abgeleitet (keine eigene Persistenz). `entry_tags` ist nur
 /// die zusätzliche, abfragbare Projektion.
 class JournalRepository {
   static const _dbName = 'disponere.db';
-  static const _dbVersion = 1;
+
+  /// Schema-Version. v2 (Session 15) ergänzt `daily_info` via [_onUpgrade].
+  static const _dbVersion = 2;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -46,6 +51,7 @@ class JournalRepository {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
     _db = db;
     return db;
@@ -76,10 +82,36 @@ class JournalRepository {
     await db.execute(
       'CREATE INDEX idx_entry_tags_tag_key ON entry_tags(tag_key)',
     );
+    // Frische Installation: gleich mit dem aktuellen Schema anlegen.
+    await _createDailyInfoTable(db);
+  }
+
+  /// Schema-Migrationen. Jede Stufe ist idempotent gedacht und baut auf der
+  /// vorherigen auf (kein `else` — bei einem Sprung v1→v3 laufen alle Stufen).
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createDailyInfoTable(db);
+    }
+  }
+
+  /// Legt die `daily_info`-Tabelle an (genutzt von [_onCreate] und
+  /// [_onUpgrade], damit Neuinstallation und Migration dasselbe Schema teilen).
+  Future<void> _createDailyInfoTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE daily_info (
+        id         TEXT PRIMARY KEY,
+        text       TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date   TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_daily_info_start ON daily_info(start_date)',
+    );
   }
 
   // ---------------------------------------------------------------------------
-  // Lesen
+  // Lesen — Einträge
   // ---------------------------------------------------------------------------
 
   /// Alle Einträge, neueste zuerst. Tags werden mitgeladen; ihre Reihenfolge
@@ -112,7 +144,7 @@ class JournalRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // Schreiben
+  // Schreiben — Einträge
   // ---------------------------------------------------------------------------
 
   /// Legt einen Eintrag an oder aktualisiert ihn (inkl. Tags), transaktional.
@@ -167,6 +199,71 @@ class JournalRepository {
   Future<void> delete(String id) async {
     final db = await _database();
     await db.delete('entries', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Daily Info (Session 15)
+  // ---------------------------------------------------------------------------
+
+  /// Datums-Schlüssel `yyyy-MM-dd` (lexikographisch = chronologisch sortierbar,
+  /// direkt in Bereichsabfragen vergleichbar).
+  static String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  DailyInfo _dailyInfoFromRow(Map<String, Object?> row) {
+    final endRaw = row['end_date'] as String?;
+    return DailyInfo(
+      id: row['id'] as String,
+      text: row['text'] as String,
+      startDate: DateTime.parse(row['start_date'] as String),
+      endDate: endRaw != null ? DateTime.parse(endRaw) : null,
+    );
+  }
+
+  /// Alle Tagesinfos, deren Zeitspanne den gegebenen Tag abdeckt.
+  ///
+  /// Nutzt genau die Bereichsabfrage, für die das Schema normalisiert wurde:
+  /// `start_date <= tag <= COALESCE(end_date, start_date)`.
+  Future<List<DailyInfo>> dailyInfosForDay(DateTime day) async {
+    final db = await _database();
+    final key = _dateKey(day);
+    final rows = await db.query(
+      'daily_info',
+      where: 'start_date <= ? AND COALESCE(end_date, start_date) >= ?',
+      whereArgs: [key, key],
+      orderBy: 'start_date ASC',
+    );
+    return rows.map(_dailyInfoFromRow).toList();
+  }
+
+  /// Alle Tagesinfos (für spätere Verwaltungsansicht). Sortiert nach Startdatum.
+  Future<List<DailyInfo>> loadAllDailyInfos() async {
+    final db = await _database();
+    final rows = await db.query('daily_info', orderBy: 'start_date ASC');
+    return rows.map(_dailyInfoFromRow).toList();
+  }
+
+  /// Legt eine Tagesinfo an oder aktualisiert sie.
+  Future<void> upsertDailyInfo(DailyInfo info) async {
+    final db = await _database();
+    await db.insert(
+      'daily_info',
+      {
+        'id': info.id,
+        'text': info.text,
+        'start_date': _dateKey(info.startDate),
+        'end_date': info.endDate != null ? _dateKey(info.endDate!) : null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Löscht eine Tagesinfo.
+  Future<void> deleteDailyInfo(String id) async {
+    final db = await _database();
+    await db.delete('daily_info', where: 'id = ?', whereArgs: [id]);
   }
 
   // ---------------------------------------------------------------------------
