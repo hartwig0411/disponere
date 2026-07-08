@@ -15,6 +15,9 @@ class TagManagementScreen extends StatefulWidget {
   /// Nutzungszähler je Tag, Schlüssel = kleingeschriebener Tag.
   final Map<String, int> usage;
 
+  /// Nutzungszähler je Tag über Aufgaben (analog [usage]).
+  final Map<String, int> taskUsage;
+
   /// Wird mit (alteSchreibweise, neueSchreibweise) aufgerufen.
   final void Function(String from, String to) onRename;
 
@@ -22,6 +25,7 @@ class TagManagementScreen extends StatefulWidget {
     super.key,
     required this.tags,
     required this.usage,
+    this.taskUsage = const {},
     required this.onRename,
   });
 
@@ -32,15 +36,34 @@ class TagManagementScreen extends StatefulWidget {
 class _TagManagementScreenState extends State<TagManagementScreen> {
   late List<String> _tags;
   late Map<String, int> _usage;
+  late Map<String, int> _taskUsage;
 
   @override
   void initState() {
     super.initState();
     _tags = List<String>.from(widget.tags);
     _usage = Map<String, int>.from(widget.usage);
+    _taskUsage = Map<String, int>.from(widget.taskUsage);
   }
 
   int _countFor(String tag) => _usage[tag.toLowerCase()] ?? 0;
+  int _taskCountFor(String tag) => _taskUsage[tag.toLowerCase()] ?? 0;
+
+  /// Untertitel je Tag: Einträge und (falls vorhanden) Aufgaben getrennt.
+  /// Ein reiner Aufgaben-Tag zeigt nur „N Aufgaben", ein reiner Eintrags-Tag
+  /// nur „N Einträge".
+  String _subtitleFor(String tag) {
+    final e = _countFor(tag);
+    final t = _taskCountFor(tag);
+    final parts = <String>[];
+    if (e > 0 || t == 0) {
+      parts.add(e == 1 ? '1 Eintrag' : '$e Einträge');
+    }
+    if (t > 0) {
+      parts.add(t == 1 ? '1 Aufgabe' : '$t Aufgaben');
+    }
+    return parts.join(' · ');
+  }
 
   Future<void> _rename(String tag) async {
     final controller = TextEditingController(text: tag);
@@ -98,6 +121,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final movedCount = _usage.remove(fromKey) ?? 0;
       _usage[toKey] = (_usage[toKey] ?? 0) + movedCount;
 
+      final movedTasks = _taskUsage.remove(fromKey) ?? 0;
+      _taskUsage[toKey] = (_taskUsage[toKey] ?? 0) + movedTasks;
+
       _tags.removeWhere((t) => t.toLowerCase() == fromKey);
       if (!_tags.any((t) => t.toLowerCase() == toKey)) {
         _tags.add(cleaned);
@@ -138,14 +164,13 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   const Divider(height: 1, color: Colors.white10),
               itemBuilder: (context, index) {
                 final tag = _tags[index];
-                final count = _countFor(tag);
                 return ListTile(
                   title: Text(
                     '#$tag',
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                   ),
                   subtitle: Text(
-                    count == 1 ? '1 Eintrag' : '$count Einträge',
+                    _subtitleFor(tag),
                     style: const TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                   trailing: const Icon(Icons.edit, color: Colors.white38),

@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 import '../models/daily_info.dart';
 import '../models/ink_data.dart';
 import '../models/journal_entry.dart';
+import '../models/task.dart';
 
 /// Persistenz-Schicht für Journal-Einträge auf Basis von SQLite.
 ///
@@ -20,15 +21,22 @@ import '../models/journal_entry.dart';
 ///                   Anzeige-Reihenfolge.
 /// - `daily_info`  — Tagesinfos (Session 15). Zeitspanne als `yyyy-MM-dd`
 ///                   in `start_date`/`end_date`; `end_date` NULL = Einzeltag.
+/// - `tasks`       — Aufgaben (Session 16). Fälligkeits-Day als `yyyy-MM-dd`
+///                   in `due_day` (NULL = ohne Day), Uhrzeit als `HH:mm` in
+///                   `due_time`, `done` als 0/1.
+/// - `task_tags`   — ein Tag pro Aufgabe und Zeile, analog `entry_tags`.
+///                   Macht Aufgaben **nach Tag abfragbar** (`tasksForTag`) —
+///                   Grundlage für die „alles zu einem Tag"-Ansicht.
 ///
 /// Das Tag-Register bleibt davon unberührt: Es wird weiter zur Laufzeit aus
-/// den Einträgen abgeleitet (keine eigene Persistenz). `entry_tags` ist nur
-/// die zusätzliche, abfragbare Projektion.
+/// den Einträgen abgeleitet (keine eigene Persistenz). `entry_tags` und
+/// `task_tags` sind nur die zusätzlichen, abfragbaren Projektionen.
 class JournalRepository {
   static const _dbName = 'disponere.db';
 
-  /// Schema-Version. v2 (Session 15) ergänzt `daily_info` via [_onUpgrade].
-  static const _dbVersion = 2;
+  /// Schema-Version. v2 (Session 15) ergänzt `daily_info`, v3 (Session 16)
+  /// ergänzt `tasks` + `task_tags` — jeweils via [_onUpgrade].
+  static const _dbVersion = 3;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -84,6 +92,7 @@ class JournalRepository {
     );
     // Frische Installation: gleich mit dem aktuellen Schema anlegen.
     await _createDailyInfoTable(db);
+    await _createTaskTables(db);
   }
 
   /// Schema-Migrationen. Jede Stufe ist idempotent gedacht und baut auf der
@@ -91,6 +100,9 @@ class JournalRepository {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createDailyInfoTable(db);
+    }
+    if (oldVersion < 3) {
+      await _createTaskTables(db);
     }
   }
 
@@ -107,6 +119,37 @@ class JournalRepository {
     ''');
     await db.execute(
       'CREATE INDEX idx_daily_info_start ON daily_info(start_date)',
+    );
+  }
+
+  /// Legt `tasks` + `task_tags` an (genutzt von [_onCreate] und [_onUpgrade],
+  /// damit Neuinstallation und Migration dasselbe Schema teilen). `task_tags`
+  /// spiegelt `entry_tags` (lowercase `tag_key`, `ord`, ON DELETE CASCADE).
+  Future<void> _createTaskTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE tasks (
+        id       TEXT PRIMARY KEY,
+        title    TEXT    NOT NULL,
+        due_day  TEXT,
+        due_time TEXT,
+        done     INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_tasks_due_day ON tasks(due_day)',
+    );
+    await db.execute('''
+      CREATE TABLE task_tags (
+        task_id TEXT    NOT NULL,
+        tag     TEXT    NOT NULL,
+        tag_key TEXT    NOT NULL,
+        ord     INTEGER NOT NULL,
+        PRIMARY KEY (task_id, tag_key),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_task_tags_tag_key ON task_tags(tag_key)',
     );
   }
 
@@ -264,6 +307,135 @@ class JournalRepository {
   Future<void> deleteDailyInfo(String id) async {
     final db = await _database();
     await db.delete('daily_info', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Aufgaben (Session 16)
+  // ---------------------------------------------------------------------------
+
+  /// Baut aus `tasks`-Zeilen [Task]-Objekte inkl. ihrer Tags auf. Lädt die
+  /// Tags der betroffenen Aufgaben in **einer** Abfrage nach (Reihenfolge über
+  /// `ord` stabil), statt pro Aufgabe einzeln.
+  Future<List<Task>> _hydrateTasks(
+      Database db, List<Map<String, Object?>> rows) async {
+    if (rows.isEmpty) return const [];
+
+    final ids = rows.map((r) => r['id'] as String).toList();
+    final placeholders = List.filled(ids.length, '?').join(',');
+    final tagRows = await db.query(
+      'task_tags',
+      where: 'task_id IN ($placeholders)',
+      whereArgs: ids,
+      orderBy: 'ord ASC',
+    );
+
+    final tagsByTask = <String, List<String>>{};
+    for (final row in tagRows) {
+      final tid = row['task_id'] as String;
+      (tagsByTask[tid] ??= <String>[]).add(row['tag'] as String);
+    }
+
+    return rows.map((row) {
+      final id = row['id'] as String;
+      final dueDayRaw = row['due_day'] as String?;
+      return Task(
+        id: id,
+        title: row['title'] as String,
+        dueDay: dueDayRaw != null ? DateTime.parse(dueDayRaw) : null,
+        dueTime: row['due_time'] as String?,
+        done: (row['done'] as int) == 1,
+        tags: tagsByTask[id] ?? const <String>[],
+      );
+    }).toList();
+  }
+
+  /// Aufgaben, die am gegebenen Day im Journal erscheinen sollen: alle
+  /// **offenen** Aufgaben mit `due_day <= day` (also fällig oder überfällig)
+  /// **oder** ganz ohne Day. Zukünftig datierte bleiben weg (analog zum
+  /// Daily-Info-Zukunftsfall); erledigte fallen ganz heraus.
+  ///
+  /// Sortierung: nach Day aufsteigend (überfällige zuerst), danach Uhrzeit;
+  /// Aufgaben ohne Day/Uhrzeit jeweils zuletzt.
+  Future<List<Task>> surfacedTasksForDay(DateTime day) async {
+    final db = await _database();
+    final key = _dateKey(day);
+    final rows = await db.query(
+      'tasks',
+      where: 'done = 0 AND (due_day IS NULL OR due_day <= ?)',
+      whereArgs: [key],
+      orderBy: 'due_day IS NULL, due_day ASC, due_time IS NULL, due_time ASC',
+    );
+    return _hydrateTasks(db, rows);
+  }
+
+  /// Alle Aufgaben mit dem gegebenen Tag (case-insensitiv). Grundlage für die
+  /// „alles zu einem Tag"-Ansicht und später die Perlenkette. Noch kein
+  /// Aufrufer in der UI (wie seinerzeit `dailyInfosForDay` beim Anlegen).
+  Future<List<Task>> tasksForTag(String tag) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      '''
+      SELECT t.* FROM tasks t
+      JOIN task_tags tt ON tt.task_id = t.id
+      WHERE tt.tag_key = ?
+      ORDER BY t.due_day IS NULL, t.due_day ASC,
+               t.due_time IS NULL, t.due_time ASC
+      ''',
+      [tag.toLowerCase()],
+    );
+    return _hydrateTasks(db, rows);
+  }
+
+  /// Alle Aufgaben (für spätere Verwaltungs-/Erledigt-Ansicht). Offene zuerst.
+  Future<List<Task>> loadAllTasks() async {
+    final db = await _database();
+    final rows = await db.query(
+      'tasks',
+      orderBy:
+          'done ASC, due_day IS NULL, due_day ASC, due_time IS NULL, due_time ASC',
+    );
+    return _hydrateTasks(db, rows);
+  }
+
+  /// Legt eine Aufgabe an oder aktualisiert sie (inkl. Tags), transaktional.
+  Future<void> upsertTask(Task task) async {
+    final db = await _database();
+    await db.transaction((txn) async {
+      await txn.insert(
+        'tasks',
+        {
+          'id': task.id,
+          'title': task.title,
+          'due_day': task.dueDay != null ? _dateKey(task.dueDay!) : null,
+          'due_time': task.dueTime,
+          'done': task.done ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      // Tags der Aufgabe neu setzen: erst löschen, dann in Reihenfolge einfügen.
+      await txn
+          .delete('task_tags', where: 'task_id = ?', whereArgs: [task.id]);
+      for (var i = 0; i < task.tags.length; i++) {
+        final tag = task.tags[i];
+        await txn.insert(
+          'task_tags',
+          {
+            'task_id': task.id,
+            'tag': tag,
+            'tag_key': tag.toLowerCase(),
+            'ord': i,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  /// Löscht eine Aufgabe samt ihrer Tags (task_tags via ON DELETE CASCADE).
+  Future<void> deleteTask(String id) async {
+    final db = await _database();
+    await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
   }
 
   // ---------------------------------------------------------------------------
