@@ -62,7 +62,7 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 - Beim ersten Start eines Tages wird automatisch eine neue Journal-Sicht angelegt
 - Das Journal ist die zentrale Arbeitsfläche; jeder Eintrag trägt Datum und Uhrzeit ✅
 - Google Calendar-Integration: Termine erscheinen automatisch als vor-getaggte Einträge mit Zeitstempel ⏳
-- Aufgaben mit Fälligkeit heute erscheinen ebenfalls im Journal ⏳
+- Aufgaben mit Fälligkeit heute erscheinen ebenfalls im Journal ✅
 
 ### 3. Tag-System ✅
 - **Mehrfach-Tags pro Eintrag**, `#`-getrennt (`#MBS #ValSys #Vertrag`). Ein Tag = ein Wort. ✅
@@ -83,7 +83,7 @@ Disponere ist Open Source — gebaut für einen Nutzer, offen für alle. Und ein
 - Erscheint automatisch im Journal aller betroffenen Tage
 - Klar getrennt von Aufgaben und Kalenderterminen
 
-### 6. Aufgaben ⏳
+### 6. Aufgaben ✅
 - Jederzeit erstellbar; Datum und Uhrzeit optional
 - Am Fälligkeitstag automatisch im Journal; klar unterscheidbar von Kalenderterminen
 
@@ -172,7 +172,7 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 | Tag-Register / Normalisierung | 🟡 Core | ✅ |
 | Editierbarkeit von Einträgen + Tags | 🟡 Core | ✅ |
 | Daily Info | 🟡 Core | ✅ |
-| Aufgaben-Management | 🟡 Core | ⏳ |
+| Aufgaben-Management | 🟡 Core | ✅ |
 | Tag-Autocomplete ("Meintest du …?") | 🟢 Enhancement | ✅ |
 | Tag-Verwaltung / Umbenennen | 🟢 Enhancement | ✅ |
 | Dokument-Import | 🟢 Enhancement | ⏳ |
