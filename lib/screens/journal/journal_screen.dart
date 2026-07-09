@@ -10,7 +10,9 @@ import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../../widgets/ink_painter.dart';
+import '../../widgets/task_sheet.dart';
 import '../../screens/tags/tag_management_screen.dart';
+import '../../screens/tasks/task_overview_screen.dart';
 
 /// Warmer Bernstein-Akzent für Daily Info — hebt sie klar vom kühlen Blau der
 /// Einträge ab und lässt Raum für spätere Aufgaben/Termine in eigenen Farben.
@@ -571,266 +573,35 @@ class _JournalScreenState extends State<JournalScreen> {
   /// Öffnet das Aufgaben-Sheet.
   /// [existing] == null → Neue Aufgabe (ohne Day/Uhrzeit).
   /// [existing] != null → Bestehende Aufgabe bearbeiten (mit Löschen).
+  /// Öffnet das wiederverwendbare Aufgaben-Sheet (Journal-Variante).
+  /// Persistenz und Neuladen liegen hier: nach Speichern/Löschen wird die
+  /// heutige Liste (und alle Aufgaben fürs Register) neu geladen.
   void _openTaskSheet({Task? existing}) {
-    final isEditing = existing != null;
-    final titleController = TextEditingController(text: existing?.title ?? '');
-    final tagController = TextEditingController(
-        text: existing != null ? formatTags(existing.tags) : '');
-    DateTime? dueDay =
-        existing?.dueDay != null ? Task.dayOnly(existing!.dueDay!) : null;
-    String? dueTime = existing?.dueTime;
-
-    showModalBottomSheet(
+    showTaskSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF16213E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            Future<DateTime?> pickDay(DateTime initial) {
-              return showDatePicker(
-                context: sheetContext,
-                initialDate: initial,
-                firstDate: DateTime(DateTime.now().year - 5),
-                lastDate: DateTime(DateTime.now().year + 5),
-              );
-            }
-
-            Future<TimeOfDay?> pickTime() {
-              var initial = const TimeOfDay(hour: 9, minute: 0);
-              if (dueTime != null) {
-                final parts = dueTime!.split(':');
-                initial = TimeOfDay(
-                    hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-              }
-              return showTimePicker(
-                  context: sheetContext, initialTime: initial);
-            }
-
-            String fmtTime(TimeOfDay t) =>
-                '${t.hour.toString().padLeft(2, '0')}:'
-                '${t.minute.toString().padLeft(2, '0')}';
-
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 24,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.check_circle_outline,
-                          color: _kTaskAccent, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        isEditing ? 'Aufgabe bearbeiten' : 'Neue Aufgabe',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: titleController,
-                    autofocus: true,
-                    maxLines: 2,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: 'Was ist zu tun?',
-                      hintStyle: const TextStyle(color: Colors.white30),
-                      filled: true,
-                      fillColor: Colors.white10,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TagAutocompleteField(
-                    controller: tagController,
-                    knownTags: _tagRegistry.allTags,
-                  ),
-                  const SizedBox(height: 16),
-                  // Fälligkeits-Day (optional)
-                  if (dueDay == null)
-                    TextButton.icon(
-                      onPressed: () async {
-                        final picked = await pickDay(DateTime.now());
-                        if (picked != null) {
-                          setSheetState(() => dueDay = Task.dayOnly(picked));
-                        }
-                      },
-                      icon: const Icon(Icons.event,
-                          size: 18, color: _kTaskAccent),
-                      label: const Text(
-                        'Fälligkeit (Day)',
-                        style: TextStyle(color: _kTaskAccent),
-                      ),
-                    )
-                  else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DateRow(
-                            label: 'Fällig',
-                            value: _formatDate(dueDay!),
-                            onTap: () async {
-                              final picked = await pickDay(dueDay!);
-                              if (picked != null) {
-                                setSheetState(
-                                    () => dueDay = Task.dayOnly(picked));
-                              }
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Fälligkeit entfernen',
-                          icon: const Icon(Icons.close, color: Colors.white38),
-                          onPressed: () => setSheetState(() {
-                            dueDay = null;
-                            dueTime = null; // Uhrzeit ohne Day ergibt keinen Sinn
-                          }),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // Uhrzeit (optional, nur mit Day)
-                    if (dueTime == null)
-                      TextButton.icon(
-                        onPressed: () async {
-                          final picked = await pickTime();
-                          if (picked != null) {
-                            setSheetState(() => dueTime = fmtTime(picked));
-                          }
-                        },
-                        icon: const Icon(Icons.access_time,
-                            size: 18, color: _kTaskAccent),
-                        label: const Text(
-                          'Uhrzeit',
-                          style: TextStyle(color: _kTaskAccent),
-                        ),
-                      )
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DateRow(
-                              label: 'Uhrzeit',
-                              value: dueTime!,
-                              icon: Icons.access_time,
-                              onTap: () async {
-                                final picked = await pickTime();
-                                if (picked != null) {
-                                  setSheetState(
-                                      () => dueTime = fmtTime(picked));
-                                }
-                              },
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Uhrzeit entfernen',
-                            icon:
-                                const Icon(Icons.close, color: Colors.white38),
-                            onPressed: () =>
-                                setSheetState(() => dueTime = null),
-                          ),
-                        ],
-                      ),
-                  ],
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      if (existing != null)
-                        IconButton(
-                          tooltip: 'Löschen',
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.redAccent),
-                          onPressed: () {
-                            Navigator.pop(sheetContext);
-                            _deleteTask(existing.id);
-                          },
-                        ),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _kTaskAccent,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () {
-                            final title = titleController.text.trim();
-                            if (title.isEmpty) return;
-                            final tags = parseTags(tagController.text);
-                            if (existing != null) {
-                              _updateTask(
-                                  existing, title, dueDay, dueTime, tags);
-                            } else {
-                              _addTask(title, dueDay, dueTime, tags);
-                            }
-                            Navigator.pop(sheetContext);
-                          },
-                          child: const Text(
-                            'Speichern',
-                            style: TextStyle(
-                              color: Color(0xFF1A1A2E),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
+      tagRegistry: _tagRegistry,
+      existing: existing,
+      onSave: (task) async {
+        await _repo.upsertTask(task);
+        await _reloadTasks();
       },
+      onDelete: _deleteTask,
     );
   }
 
-  Future<void> _addTask(String title, DateTime? dueDay, String? dueTime,
-      List<String> tags) async {
-    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
-    final task = Task(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
-      dueDay: dueDay,
-      dueTime: dueTime,
-      tags: canonicalTags,
+  /// Öffnet die Aufgaben-Übersicht (alle Aufgaben, sortierbar, erledigte
+  /// eingeklappt). Beim Zurückkehren wird neu geladen, da dort abgehakt,
+  /// bearbeitet oder gelöscht worden sein kann.
+  Future<void> _openTaskOverview() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskOverviewScreen(
+          repo: _repo,
+          tagRegistry: _tagRegistry,
+        ),
+      ),
     );
-    await _repo.upsertTask(task);
-    await _reloadTasks();
-  }
-
-  Future<void> _updateTask(Task existing, String title, DateTime? dueDay,
-      String? dueTime, List<String> tags) async {
-    final canonicalTags = _tagRegistry.canonicalizeAll(tags);
-    final updated = Task(
-      id: existing.id,
-      title: title,
-      dueDay: dueDay,
-      dueTime: dueTime,
-      done: existing.done, // Erledigt-Status wird über die Checkbox gesetzt
-      tags: canonicalTags,
-    );
-    await _repo.upsertTask(updated);
     await _reloadTasks();
   }
 
@@ -1003,6 +774,7 @@ class _JournalScreenState extends State<JournalScreen> {
               onAdd: () => _openTaskSheet(),
               onToggle: _toggleTaskDone,
               onTapTask: (task) => _openTaskSheet(existing: task),
+              onOpenOverview: _openTaskOverview,
             );
           }
           final entry = _entries[index - 2];
@@ -1177,6 +949,7 @@ class _TasksSection extends StatelessWidget {
   final VoidCallback onAdd;
   final void Function(Task) onToggle;
   final void Function(Task) onTapTask;
+  final VoidCallback onOpenOverview;
 
   const _TasksSection({
     required this.tasks,
@@ -1184,6 +957,7 @@ class _TasksSection extends StatelessWidget {
     required this.onAdd,
     required this.onToggle,
     required this.onTapTask,
+    required this.onOpenOverview,
   });
 
   @override
@@ -1208,6 +982,15 @@ class _TasksSection extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.checklist, size: 20, color: _kTaskAccent),
+                tooltip: 'Alle Aufgaben',
+                onPressed: onOpenOverview,
+              ),
+              const SizedBox(width: 4),
               IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
@@ -1369,12 +1152,10 @@ class _DateRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback onTap;
-  final IconData icon;
   const _DateRow({
     required this.label,
     required this.value,
     required this.onTap,
-    this.icon = Icons.calendar_today,
   });
 
   @override
@@ -1400,7 +1181,7 @@ class _DateRow extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 15),
             ),
             const SizedBox(width: 8),
-            Icon(icon, size: 15, color: Colors.white38),
+            const Icon(Icons.calendar_today, size: 15, color: Colors.white38),
           ],
         ),
       ),
