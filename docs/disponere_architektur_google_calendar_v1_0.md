@@ -146,10 +146,18 @@ Ein Kalender darf mehrere Tags erben. Ein-/Ausschalten je Kalender über `calend
 
 ## 12. Offene Setup-Entscheidungen (vor Coding-Session A, außerhalb des Codes)
 
-- **Google-Cloud-Projekt** anlegen (nicht Huawei AGC!), **Calendar API aktivieren**,
-  **OAuth-Consent-Screen** in „Testing" mit Steffen als Testnutzer, **OAuth-Client** anlegen.
-- Konkrete Klick-Pfade gehören in die Vorbereitung von Coding-Session A, **nicht** in dieses Dokument.
-- (Zurückgestellt) Business-Adresse / Workspace — kein Teil von v1.0.
+Google-Cloud-Projekt vorhanden; Google Calendar API aktiviert.
+OAuth-Zustimmungsbildschirm (Google Auth Platform): Extern, Status Testing,
+Steffen als Testnutzer eingetragen.
+Scope calendar.readonly unter Datenzugriff hinzugefuegt.
+OAuth-Client Typ Android erstellt (Paketname com.steffen.disponere, Debug-SHA-1
+hinterlegt). Client-ID, SHA-1 und abgeleitetes Redirect-Schema liegen privat
+(git-ignoriert), nicht im oeffentlichen Repo.
+Offene Entscheidung fuer Session A - Veroeffentlichungsstatus: calendar.readonly
+ist ein sensibler Scope; in Testing laeuft das Refresh-Token nach 7 Tagen ab. Fuer die
+Ein-Personen-App spaeter auf "In production" (unverifiziert) stellen, damit der Login
+einmalig bleibt. Fuer den ersten Testlauf reicht Testing.
+(Zurueckgestellt) Business-Adresse / Workspace - kein Teil von v1.0.
 
 ---
 
