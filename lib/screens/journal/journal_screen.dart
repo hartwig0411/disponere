@@ -13,6 +13,7 @@ import '../../widgets/ink_painter.dart';
 import '../../widgets/task_sheet.dart';
 import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
+import '../../screens/settings/calendar_settings_screen.dart';
 
 /// Warmer Bernstein-Akzent für Daily Info — hebt sie klar vom kühlen Blau der
 /// Einträge ab und lässt Raum für spätere Aufgaben/Termine in eigenen Farben.
@@ -747,6 +748,16 @@ class _JournalScreenState extends State<JournalScreen> {
             icon: const Icon(Icons.sell_outlined, color: Colors.white54),
             tooltip: 'Tags verwalten',
             onPressed: _openTagManagement,
+          ),
+          IconButton(
+            icon: const Icon(Icons.event_outlined, color: Colors.white54),
+            tooltip: 'Google Calendar',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CalendarSettingsScreen(),
+              ),
+            ),
           ),
         ],
       ),

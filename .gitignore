@@ -120,3 +120,9 @@ app.*.symbols
 # Private Doku - nicht ins oeffentliche Repo
 docs/steffen_projektplan.md
 docs/Heimlabor_Zusammenfassung.md
+
+# OAuth-Config - haelt die Client-ID aus dem oeffentlichen Repo
+lib/config/google_config.dart
+
+# Debug-Mitschnitte
+logcat.txt

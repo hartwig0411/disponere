@@ -24,6 +24,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // OAuth-Rueckkanal fuer flutter_appauth: umgedrehte Client-ID.
+        // Muss zeichengleich zu GoogleConfig.redirectScheme sein
+        // (lib/config/google_config.dart, git-ignoriert).
+        manifestPlaceholders["appAuthRedirectScheme"] =
+            "com.googleusercontent.apps.505497602062-hk0ti6m40nkl2ean6ruqca6roqs6fb0j"
     }
 
     buildTypes {
