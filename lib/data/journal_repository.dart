@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/calendar_source.dart';
 import '../models/daily_info.dart';
 import '../models/ink_data.dart';
 import '../models/journal_entry.dart';
@@ -35,8 +36,9 @@ class JournalRepository {
   static const _dbName = 'disponere.db';
 
   /// Schema-Version. v2 (Session 15) ergänzt `daily_info`, v3 (Session 16)
-  /// ergänzt `tasks` + `task_tags` — jeweils via [_onUpgrade].
-  static const _dbVersion = 3;
+  /// ergänzt `tasks` + `task_tags`; v4 ergänzt `calendar_sources` +
+  /// `calendar_source_tags` — jeweils via [_onUpgrade].
+  static const _dbVersion = 4;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -93,6 +95,7 @@ class JournalRepository {
     // Frische Installation: gleich mit dem aktuellen Schema anlegen.
     await _createDailyInfoTable(db);
     await _createTaskTables(db);
+    await _createCalendarSourceTables(db);
   }
 
   /// Schema-Migrationen. Jede Stufe ist idempotent gedacht und baut auf der
@@ -103,6 +106,9 @@ class JournalRepository {
     }
     if (oldVersion < 3) {
       await _createTaskTables(db);
+    }
+    if (oldVersion < 4) {
+      await _createCalendarSourceTables(db);
     }
   }
 
@@ -150,6 +156,36 @@ class JournalRepository {
     ''');
     await db.execute(
       'CREATE INDEX idx_task_tags_tag_key ON task_tags(tag_key)',
+    );
+  }
+
+  /// Legt `calendar_sources` + `calendar_source_tags` an (genutzt von
+  /// [_onCreate] und [_onUpgrade], damit Neuinstallation und Migration
+  /// dasselbe Schema teilen). `calendar_source_tags` spiegelt `task_tags`
+  /// (lowercase `tag_key`, `ord`, ON DELETE CASCADE). `enabled` ist standardmäßig
+  /// 0 — neue Kalender bleiben aus, bis der Nutzer sie aktiviert.
+  Future<void> _createCalendarSourceTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE calendar_sources (
+        calendar_id  TEXT PRIMARY KEY,
+        display_name TEXT    NOT NULL,
+        enabled      INTEGER NOT NULL DEFAULT 0,
+        sync_token   TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE calendar_source_tags (
+        calendar_id TEXT    NOT NULL,
+        tag         TEXT    NOT NULL,
+        tag_key     TEXT    NOT NULL,
+        ord         INTEGER NOT NULL,
+        PRIMARY KEY (calendar_id, tag_key),
+        FOREIGN KEY (calendar_id) REFERENCES calendar_sources(calendar_id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_calendar_source_tags_tag_key '
+      'ON calendar_source_tags(tag_key)',
     );
   }
 
@@ -436,6 +472,131 @@ class JournalRepository {
   Future<void> deleteTask(String id) async {
     final db = await _database();
     await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Kalender-Quellen (Schema v4)
+  // ---------------------------------------------------------------------------
+
+  /// Baut aus `calendar_sources`-Zeilen [CalendarSource]-Objekte inkl. ihrer
+  /// Tags auf. Lädt die Tags in einem Rutsch und ordnet sie über `ord`.
+  Future<List<CalendarSource>> _hydrateCalendarSources(
+    Database db,
+    List<Map<String, Object?>> rows,
+  ) async {
+    final tagRows = await db.query('calendar_source_tags', orderBy: 'ord ASC');
+    final tagsBySource = <String, List<String>>{};
+    for (final row in tagRows) {
+      final cid = row['calendar_id'] as String;
+      (tagsBySource[cid] ??= <String>[]).add(row['tag'] as String);
+    }
+    return rows.map((row) {
+      final cid = row['calendar_id'] as String;
+      return CalendarSource(
+        calendarId: cid,
+        displayName: row['display_name'] as String,
+        enabled: (row['enabled'] as int) != 0,
+        tags: tagsBySource[cid] ?? const <String>[],
+        syncToken: row['sync_token'] as String?,
+      );
+    }).toList();
+  }
+
+  /// Alle Kalender-Quellen, alphabetisch nach Anzeigename.
+  Future<List<CalendarSource>> loadCalendarSources() async {
+    final db = await _database();
+    final rows = await db.query(
+      'calendar_sources',
+      orderBy: 'display_name COLLATE NOCASE ASC',
+    );
+    return _hydrateCalendarSources(db, rows);
+  }
+
+  /// Legt eine Kalender-Quelle an oder aktualisiert sie (inkl. Tags),
+  /// transaktional — spiegelt [upsertTask].
+  Future<void> upsertCalendarSource(CalendarSource source) async {
+    final db = await _database();
+    await db.transaction((txn) async {
+      await txn.insert(
+        'calendar_sources',
+        {
+          'calendar_id': source.calendarId,
+          'display_name': source.displayName,
+          'enabled': source.enabled ? 1 : 0,
+          'sync_token': source.syncToken,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      // Tags der Quelle neu setzen: erst löschen, dann in Reihenfolge einfügen.
+      await txn.delete(
+        'calendar_source_tags',
+        where: 'calendar_id = ?',
+        whereArgs: [source.calendarId],
+      );
+      for (var i = 0; i < source.tags.length; i++) {
+        final tag = source.tags[i];
+        await txn.insert(
+          'calendar_source_tags',
+          {
+            'calendar_id': source.calendarId,
+            'tag': tag,
+            'tag_key': tag.toLowerCase(),
+            'ord': i,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+  }
+
+  /// Gleicht die lokale Kalenderliste mit der frisch abgerufenen ab
+  /// ([fetched] = `calendarId` → Anzeigename). Vorhandene Kalender behalten
+  /// `enabled`, Tags und `sync_token`; nur der Anzeigename wird aufgefrischt.
+  /// Neue Kalender kommen mit `enabled = 0` und ohne Tags hinzu. Kalender, die
+  /// nicht mehr in [fetched] stehen, fallen samt Mapping raus
+  /// (`calendar_source_tags` via ON DELETE CASCADE).
+  Future<void> mergeCalendarList(Map<String, String> fetched) async {
+    final db = await _database();
+    await db.transaction((txn) async {
+      final existingRows = await txn.query(
+        'calendar_sources',
+        columns: ['calendar_id'],
+      );
+      final existingIds =
+          existingRows.map((r) => r['calendar_id'] as String).toSet();
+
+      for (final entry in fetched.entries) {
+        if (existingIds.contains(entry.key)) {
+          await txn.update(
+            'calendar_sources',
+            {'display_name': entry.value},
+            where: 'calendar_id = ?',
+            whereArgs: [entry.key],
+          );
+        } else {
+          await txn.insert(
+            'calendar_sources',
+            {
+              'calendar_id': entry.key,
+              'display_name': entry.value,
+              'enabled': 0,
+              'sync_token': null,
+            },
+          );
+        }
+      }
+
+      for (final id in existingIds) {
+        if (!fetched.containsKey(id)) {
+          await txn.delete(
+            'calendar_sources',
+            where: 'calendar_id = ?',
+            whereArgs: [id],
+          );
+        }
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import '../../models/journal_entry.dart';
 import '../../models/daily_info.dart';
 import '../../models/task.dart';
 import '../../models/ink_data.dart';
+import '../../models/calendar_source.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
@@ -44,6 +45,11 @@ class _JournalScreenState extends State<JournalScreen> {
   /// Durchschreiben beim Tag-Umbenennen (nicht nur die heute sichtbaren).
   final List<Task> _allTasks = [];
 
+  /// Kalender-Quellen — hier nur gehalten, um ihre Tags ins Tag-Register zu
+  /// füttern, damit auch ein nur an einem Kalender hängender Tag im
+  /// Autocomplete auftaucht.
+  final List<CalendarSource> _calendarSources = [];
+
   final TagRegistry _tagRegistry = TagRegistry();
   final JournalRepository _repo = JournalRepository();
 
@@ -61,6 +67,7 @@ class _JournalScreenState extends State<JournalScreen> {
     final infos = await _repo.dailyInfosForDay(DateTime.now());
     final surfaced = await _repo.surfacedTasksForDay(DateTime.now());
     final allTasks = await _repo.loadAllTasks();
+    final calendarSources = await _repo.loadCalendarSources();
     if (!mounted) return;
     setState(() {
       _entries
@@ -75,19 +82,24 @@ class _JournalScreenState extends State<JournalScreen> {
       _allTasks
         ..clear()
         ..addAll(allTasks);
+      _calendarSources
+        ..clear()
+        ..addAll(calendarSources);
     });
     _rebuildTagRegistry();
   }
 
-  /// Baut das Tag-Register aus **Einträgen und Aufgaben** auf. Einträge
-  /// zuerst (chronologisch, ältester zuerst → erste Schreibweise gewinnt),
-  /// danach die Aufgaben — so definieren Einträge die kanonische Schreibweise
-  /// und Aufgaben übernehmen sie. Damit erscheinen auch reine Aufgaben-Tags
-  /// im Autocomplete und in der Tag-Verwaltung.
+  /// Baut das Tag-Register aus **Einträgen, Aufgaben und Kalender-Quellen** auf.
+  /// Einträge zuerst (chronologisch, ältester zuerst → erste Schreibweise
+  /// gewinnt), danach Aufgaben und Kalender-Tags — so definieren Einträge die
+  /// kanonische Schreibweise und die übrigen übernehmen sie. Damit erscheinen
+  /// auch reine Aufgaben- oder Kalender-Tags im Autocomplete und in der
+  /// Tag-Verwaltung.
   void _rebuildTagRegistry() {
     final lists = <List<String>>[
       ..._entries.reversed.map((e) => e.tags),
       ..._allTasks.map((t) => t.tags),
+      ..._calendarSources.map((c) => c.tags),
     ];
     _tagRegistry.rebuildFrom(lists);
   }
@@ -119,6 +131,20 @@ class _JournalScreenState extends State<JournalScreen> {
       _allTasks
         ..clear()
         ..addAll(allTasks);
+    });
+    _rebuildTagRegistry();
+  }
+
+  /// Lädt die Kalender-Quellen neu (nach Rückkehr aus den Kalender-
+  /// Einstellungen) und baut das Tag-Register neu auf — so landen frisch
+  /// zugeordnete Kalender-Tags im Autocomplete.
+  Future<void> _reloadCalendarSources() async {
+    final sources = await _repo.loadCalendarSources();
+    if (!mounted) return;
+    setState(() {
+      _calendarSources
+        ..clear()
+        ..addAll(sources);
     });
     _rebuildTagRegistry();
   }
@@ -752,12 +778,16 @@ class _JournalScreenState extends State<JournalScreen> {
           IconButton(
             icon: const Icon(Icons.event_outlined, color: Colors.white54),
             tooltip: 'Google Calendar',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const CalendarSettingsScreen(),
-              ),
-            ),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      CalendarSettingsScreen(tagRegistry: _tagRegistry),
+                ),
+              );
+              await _reloadCalendarSources();
+            },
           ),
         ],
       ),
