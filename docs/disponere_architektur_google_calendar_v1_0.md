@@ -1,10 +1,10 @@
 # Disponere – Architektur: Google Calendar-Anbindung
 
-**Dokument-Revision:** v1.0
-**Status:** Design abgeschlossen — vor Coding
+**Dokument-Revision:** v1.0 (in-place gepflegt)
+**Status:** Coding-Session A, Teil 1 abgeschlossen (Auth/PKCE, „In Produktion" umgestellt) — Teil 2 folgt
 **Erfüllt:** Anforderungen v3.0 → *Google Calendar-Anbindung* (🟡 Core) und Kernkonzept 2
 (*Termine erscheinen automatisch als vor-getaggte Einträge mit Zeitstempel*)
-**Nachgelagert:** zwei Coding-Sessions (A: Auth + Einstellungen, B: Sync + Schema v4 + Einblendung)
+**Nachgelagert:** Coding-Session A Teil 2 (Schema, Kalenderliste, Tag-Mapping) + Session B (Sync + Einblendung)
 
 ---
 
@@ -37,9 +37,9 @@ Aus dieser Trennung folgen die Auth-Entscheidung und die Paket-Wahl weiter unten
 
 | # | Entscheidung | Wahl | Begründung |
 |---|---|---|---|
-| 1 | **Auth** | AppAuth (System-Browser / Custom-Tab, Authorization Code + **PKCE**) primär; **Device-Flow** als dokumentierter Fallback | GMS-unabhängig; einmaliger Login, Refresh-Token danach. Fallback, falls Custom-Tabs auf EMUI zicken. |
+| 1 | **Auth** | AppAuth (System-Browser / Custom-Tab, Authorization Code + **PKCE**). **Kein Fallback.** | GMS-unabhängig; einmaliger Login, Refresh-Token danach. Custom-Tabs laufen auf EMUI einwandfrei (Session A bestätigt). Device-Flow scheidet aus: `calendar.readonly` steht nicht auf seiner erlaubten Scope-Liste. |
 | 2 | **Scope** | **read-only** (`calendar.readonly`) | Datenfluss ist einseitig; kleinster Scope, keine Konfliktlösung, bessere Vertrauens-Story. |
-| 3 | **Datenmodell** | Eigene `calendar_events`-Tabelle, ins Journal **eingeblendet wie Aufgaben** (Schema v4) | Synchronisierte Google-Daten bleiben sauber von selbst geschriebenen Einträgen getrennt; Resync kann gefahrlos neu aufbauen. Deckt die Perlenkette-Union direkt ab. |
+| 3 | **Datenmodell** | Eigene `calendar_events`-Tabelle, ins Journal **eingeblendet wie Aufgaben** (Schema v4/v5, s. §5) | Synchronisierte Google-Daten bleiben sauber von selbst geschriebenen Einträgen getrennt; Resync kann gefahrlos neu aufbauen. Deckt die Perlenkette-Union direkt ab. |
 | 4 | **Tags** | Nur **Kalender→Tag global**; Termin erbt die Tags seines Kalenders. **Kein** Per-Termin-Override in v1.0 | „Neues Projekt = höchstens eine Zeile." Per-Termin-Override → 🟢 später. |
 | 5 | **Secrets** | Config (Client-ID etc.) **git-ignored** (+ `.example`); **Refresh-Token in `flutter_secure_storage`** (Keystore), nicht in SQLite | Öffentliches Repo → keine Config committen. Token gehören in den Keystore, nicht in die DB. |
 
@@ -53,10 +53,22 @@ ist eine **lokale** Notiz und kein Write-back.
 
 ---
 
-## 5. Datenmodell (Schema v4)
+## 5. Datenmodell (Schema v4 + v5)
 
 Spiegelt das bewährte **Aufgaben-Muster** (eigene Tabelle, `surfacedTasksForDay`, normalisierte
-`task_tags` mit lowercase `tag_key` + `ord` + `ON DELETE CASCADE`).
+`task_tags` mit lowercase `tag_key` + `ord` + `ON DELETE CASCADE`). Das Modell wird in **zwei
+Migrationen** angelegt: **v4** bringt die Kalender-Quellen (Session A, Teil 2), **v5** die eigentlichen
+Termine (Session B). So bleibt jede Migration klein und für sich testbar.
+
+### Schema v4 — Kalender-Quellen (Session A, Teil 2)
+
+**`calendar_sources`**
+`calendar_id` (PK), `display_name`, `enabled` (0/1), `sync_token?`
+
+**`calendar_source_tags`** — die „Kalender→Tag"-Zuordnung
+`calendar_id`, `tag`, `tag_key`, `ord`
+
+### Schema v5 — Termine (Session B)
 
 **`calendar_events`**
 `id` (PK, `calendarId:eventId`), `calendar_id`, `ical_uid`, `title`, `description?`,
@@ -66,19 +78,15 @@ Spiegelt das bewährte **Aufgaben-Muster** (eigene Tabelle, `surfacedTasksForDay
 **`event_tags`** (exakt wie `task_tags`)
 `event_id`, `tag`, `tag_key` (lowercase), `ord`; PK (`event_id`, `tag_key`); FK → `calendar_events` `ON DELETE CASCADE`
 
-**`calendar_sources`**
-`calendar_id` (PK), `display_name`, `enabled` (0/1), `sync_token?`
-
-**`calendar_source_tags`** — die „Kalender→Tag"-Zuordnung
-`calendar_id`, `tag`, `tag_key`, `ord`
-
-**Neue Repository-Methoden** (analog zu `surfacedTasksForDay` / `tasksForTag`):
-`surfacedEventsForDay(day)`, `eventsForTag(tagKey)`, Upsert/Delete für den Sync,
-Getter/Setter für Quellen (aktiv/inaktiv) und Mapping. Tags laufen durch die geteilte
-`TagRegistry`-Kanonisierung.
-
 **`ical_uid` als Dedup-Reserve:** Taucht durch geteilte Kalender oder Einladungen derselbe Termin
 zweimal auf, kann über die `iCalUID` dedupliziert werden. Ein Feld mehr, kein Umbau.
+
+### Repository-Methoden (analog zu `surfacedTasksForDay` / `tasksForTag`)
+
+- **v4 (Session A, Teil 2):** Getter/Setter für Quellen (aktiv/inaktiv) und das Kalender→Tag-Mapping.
+- **v5 (Session B):** `surfacedEventsForDay(day)`, `eventsForTag(tagKey)`, Upsert/Delete für den Sync.
+
+Tags laufen durchgehend durch die geteilte `TagRegistry`-Kanonisierung.
 
 ---
 
@@ -121,7 +129,9 @@ Ein Kalender darf mehrere Tags erben. Ein-/Ausschalten je Kalender über `calend
 ## 10. Paket-Kandidaten (reversibel geflaggt)
 
 - **`flutter_appauth`** — GMS-unabhängiger OAuth (Custom-Tabs / externer Browser).
-  *EMUI-Risiko:* Custom-Tabs-Verfügbarkeit auf dem MatePad in Coding-Session A früh testen; sonst Device-Flow-Fallback.
+  *Verifiziert (Session A):* Custom-Tabs laufen auf dem MatePad (EMUI) einwandfrei. Das ursprünglich
+  als Fallback vorgesehene **Device-Flow entfällt** — `calendar.readonly` steht nicht auf seiner
+  erlaubten Scope-Liste; das Risiko, das der Fallback absichern sollte, ist nicht eingetreten.
 - **`googleapis`** (`CalendarApi`, reines Dart) gefüttert mit dem AppAuth-Bearer-Token **oder** rohe
   REST-Calls über `http`. Entscheidung in Coding-Session B, ändert das Design nicht.
 - **`flutter_secure_storage`** — Token-Ablage.
@@ -144,31 +154,50 @@ Ein Kalender darf mehrere Tags erben. Ein-/Ausschalten je Kalender über `calend
 
 ---
 
-## 12. Offene Setup-Entscheidungen (vor Coding-Session A, außerhalb des Codes)
+## 12. Setup-Entscheidungen (außerhalb des Codes)
+
+*Stand nach Coding-Session A, Teil 1 — die vormals offenen Punkte sind entschieden und angewandt.*
 
 Google-Cloud-Projekt vorhanden; Google Calendar API aktiviert.
-OAuth-Zustimmungsbildschirm (Google Auth Platform): Extern, Status Testing,
-Steffen als Testnutzer eingetragen.
-Scope calendar.readonly unter Datenzugriff hinzugefuegt.
-OAuth-Client Typ Android erstellt (Paketname com.steffen.disponere, Debug-SHA-1
+OAuth-Zustimmungsbildschirm (Google Auth Platform): Extern.
+Scope `calendar.readonly` unter Datenzugriff hinzugefügt.
+OAuth-Client Typ Android erstellt (Paketname `com.steffen.disponere`, Debug-SHA-1
 hinterlegt). Client-ID, SHA-1 und abgeleitetes Redirect-Schema liegen privat
-(git-ignoriert), nicht im oeffentlichen Repo.
-Offene Entscheidung fuer Session A - Veroeffentlichungsstatus: calendar.readonly
-ist ein sensibler Scope; in Testing laeuft das Refresh-Token nach 7 Tagen ab. Fuer die
-Ein-Personen-App spaeter auf "In production" (unverifiziert) stellen, damit der Login
-einmalig bleibt. Fuer den ersten Testlauf reicht Testing.
-(Zurueckgestellt) Business-Adresse / Workspace - kein Teil von v1.0.
+(git-ignoriert), nicht im öffentlichen Repo.
+
+**Veröffentlichungsstatus — entschieden (21.07.2026):** `calendar.readonly` ist ein
+sensibler Scope; in „Testing" läuft das Refresh-Token nach 7 Tagen ab. Deshalb auf
+**„In Produktion" (unverifiziert)** umgestellt — damit trägt der einmalige Login dauerhaft.
+Der „nicht verifiziert"-Hinweis beim Login ist erwartet und wird einmal weggeklickt.
+Volle Google-Verifizierung wird für eine Ein-Personen-App **nicht** verfolgt (permanentes
+100-Nutzer-Limit; die Domain `harder-business.com` läge als verifizierte Domain bereit,
+falls sie je gebraucht wird).
+
+**Custom-URI-Schema-Schalter — Pflicht:** Unter Clients → Android-Client →
+Erweiterte Einstellungen muss **„Enable custom URI scheme"** aktiv sein, sonst greift das
+Custom-Redirect-Schema nicht. Nach dem Speichern 5–10 min Wartezeit einplanen.
+
+**Manifest-Fallstrick `taskAffinity`:** `android:taskAffinity=""` an `MainActivity`
+(aus der Flutter-Vorlage) lässt AppAuths `RedirectUriReceiverActivity` in einem separaten
+Android-Task landen — der Login-Rücksprung schlägt dann fehl („User cancelled flow").
+Lösung: `android:taskAffinity=""` aus dem Manifest entfernen.
+
+(Zurückgestellt) Business-Adresse / Workspace — kein Teil von v1.0.
 
 ---
 
 ## 13. Schnitt in Coding-Sessions
 
-- **Coding-Session A — Auth + Einstellungen.** Konto verbinden (AppAuth/PKCE), Kalender listen
-  (`calendarList.list`), je Kalender aktivieren + Tag-Mapping, Token sicher ablegen.
-  *Testbar:* Login klappt, Kalender erscheinen, Mapping gespeichert.
-- **Coding-Session B — Sync + Schema v4 + Einblendung.** Sync-Engine (`syncToken`, `singleEvents`),
-  Schema-v4-Migration via `_onUpgrade`, `surfacedEventsForDay`/`eventsForTag`, TERMINE-Sektion,
-  „Sync jetzt"-Button.
+- **Coding-Session A, Teil 1 — Auth.** ✅ Abgeschlossen. Konto verbinden (AppAuth/PKCE),
+  Token sicher ablegen (`flutter_secure_storage`), stiller Refresh nach Neustart,
+  Trennen/Neu-verbinden. „In Produktion" umgestellt.
+- **Coding-Session A, Teil 2 — Einstellungen + Schema v4.** Kalender listen (`calendarList.list`),
+  je Kalender aktivieren + Tag-Mapping, Schema-**v4**-Migration (`calendar_sources` +
+  `calendar_source_tags`) via `_onUpgrade`.
+  *Testbar:* Kalender erscheinen, Aktiv-Schalter + Mapping werden gespeichert und überleben Neustart.
+- **Coding-Session B — Sync + Schema v5 + Einblendung.** Sync-Engine (`syncToken`, `singleEvents`),
+  Schema-**v5**-Migration (`calendar_events` + `event_tags`) via `_onUpgrade`,
+  `surfacedEventsForDay`/`eventsForTag`, TERMINE-Sektion, „Sync jetzt"-Button.
   *Testbar auf MatePad:* echte Termine erscheinen vor-getaggt am richtigen Day.
 
 ---
