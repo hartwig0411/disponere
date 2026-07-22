@@ -68,23 +68,47 @@ Termine (Session B). So bleibt jede Migration klein und für sich testbar.
 **`calendar_source_tags`** — die „Kalender→Tag"-Zuordnung
 `calendar_id`, `tag`, `tag_key`, `ord`
 
-### Schema v5 — Termine (Session B)
+### Schema v5 — Termine (Session B, Teil 1) — *umgesetzt, Commit `a5549a1`*
 
 **`calendar_events`**
-`id` (PK, `calendarId:eventId`), `calendar_id`, `ical_uid`, `title`, `description?`,
-`start_utc`, `end_utc`, `all_day` (0/1), `location?`, `google_updated`, `last_synced`
-— Zeiten als **UTC + `all_day`-Flag** gespeichert, in Gerätezeitzone gerendert.
+PK **zusammengesetzt** (`calendar_id`, `event_id`) · `ical_uid?` · `summary` · `location?` ·
+`all_day` (0/1) · `start_day`, `start_time?` · `end_day`, `end_time?`
+— FK auf `calendar_sources(calendar_id)` `ON DELETE CASCADE`, Index auf `start_day`.
 
-**`event_tags`** (exakt wie `task_tags`)
-`event_id`, `tag`, `tag_key` (lowercase), `ord`; PK (`event_id`, `tag_key`); FK → `calendar_events` `ON DELETE CASCADE`
+**`event_tags`**
+`calendar_id`, `event_id`, `tag`, `tag_key` (lowercase), `ord`; PK (`calendar_id`, `event_id`,
+`tag_key`); zusammengesetzter FK → `calendar_events` `ON DELETE CASCADE`
 
-**`ical_uid` als Dedup-Reserve:** Taucht durch geteilte Kalender oder Einladungen derselbe Termin
-zweimal auf, kann über die `iCalUID` dedupliziert werden. Ein Feld mehr, kein Umbau.
+**Abweichung 1 — zusammengesetzter PK statt String-Schlüssel `calendarId:eventId`.**
+Dieselbe Einladung kann in mehreren aktivierten Kalendern liegen; die Event-ID allein ist
+also nicht eindeutig. Ein echter zusammengesetzter Schlüssel drückt das im Schema aus,
+statt es in einen zusammengeklebten String zu verstecken — und die Fremdschlüssel von
+`event_tags` greifen direkt.
+
+**Abweichung 2 — lokale Tages-/Zeit-Keys statt `start_utc`/`end_utc`.**
+`start_day`/`end_day` sind `yyyy-MM-dd`, `start_time`/`end_time` sind `HH:mm` in
+**Gerätezeit**; `end_day` ist **inklusiv**. Grund: Die Kernabfrage ist „welche Termine
+berühren diesen Kalendertag" — mit lokalen Tages-Keys ist das derselbe String-Vergleich
+wie bei `daily_info` (`start_day <= ? AND end_day >= ?`), mit UTC-Zeitstempeln müsste
+jede Tagesabfrage erst rechnen und die Zeitzone auflösen.
+*Preis:* Ein Zeitzonenwechsel (Reise) macht die gespeicherten Tage falsch. Für ein
+Tablet, das zu Hause steht, ist das tragbar — und die Korrektur ist ein Knopfdruck auf
+„Sync jetzt", weil ohnehin vollständig neu gespiegelt wird. **Reversibel geflaggt.**
+
+**Abweichung 3 — `description`, `google_updated`, `last_synced` entfallen.**
+Beim Vollabruf (siehe §6) gibt es keinen Änderungsvergleich, für den Zeitstempel nötig
+wären. `description` ist für die Einblendung nicht vorgesehen; nachrüstbar ohne Umbau.
+
+**`ical_uid` als Dedup-Reserve:** Taucht durch geteilte Kalender oder Einladungen derselbe
+Termin zweimal auf, kann über die `iCalUID` dedupliziert werden. Feld ist angelegt und
+befüllt, wird in v1.0 nicht ausgewertet.
 
 ### Repository-Methoden (analog zu `surfacedTasksForDay` / `tasksForTag`)
 
-- **v4 (Session A, Teil 2):** Getter/Setter für Quellen (aktiv/inaktiv) und das Kalender→Tag-Mapping.
-- **v5 (Session B):** `surfacedEventsForDay(day)`, `eventsForTag(tagKey)`, Upsert/Delete für den Sync.
+- **v4 (Session A, Teil 2):** `loadCalendarSources`, `upsertCalendarSource`, `mergeCalendarList`.
+- **v5 (Session B, Teil 1):** `calendarEventsForDay(day)` (nur *aktivierte* Kalender, ganztägig
+  zuerst), `calendarEventsForTag(tag)`, `replaceCalendarEvents`, `deleteCalendarEventsFor`,
+  `reapplyCalendarSourceTags`, `countCalendarEvents`.
 
 Tags laufen durchgehend durch die geteilte `TagRegistry`-Kanonisierung.
 
@@ -93,9 +117,22 @@ Tags laufen durchgehend durch die geteilte `TagRegistry`-Kanonisierung.
 ## 6. Sync-Design
 
 - **`events.list` mit `singleEvents=true`** — Google expandiert Serien in Einzeltermine.
-  **Kein RRULE-Motor nötig.** (Parameter bleibt über alle Syncs konstant, sonst wird der `syncToken` ungültig.)
-- **Delta-Sync über `syncToken`**; bei `410 GONE` voller Resync des betroffenen Kalenders.
-- **Fenster** z.B. −30 / +365 Tage.
+  **Kein RRULE-Motor nötig.** *Nebenwirkung:* Ein wöchentlicher Termin zählt im +365-Fenster
+  rund 52 Zeilen; die Gesamtzahl liegt deutlich über der gefühlten. Das ist korrekt.
+- **Vollabruf im Zeitfenster statt Delta-Sync.** Ursprünglich war `syncToken` mit Resync bei
+  `410 GONE` vorgesehen. **Das ist mit dem Zeitfenster nicht kombinierbar:** Google lehnt
+  `timeMin`/`timeMax` zusammen mit `syncToken` mit HTTP 400 ab. Entweder Delta über den
+  gesamten Kalender seit Anbeginn — oder Vollabruf im Fenster.
+  **Entschieden: Vollabruf**, und die Termine eines Kalenders lokal vollständig ersetzen
+  (`replaceCalendarEvents`, eine Transaktion). Löschungen und Verschiebungen ergeben sich
+  damit von selbst; es gibt keinen Token-Zustand, der ablaufen und wieder eingefangen werden
+  müsste. Für einen persönlichen Kalender sind das wenige hundert Einträge pro Abruf —
+  *Verlässlichkeit vor Bastelei*. Die Spalte `sync_token` bleibt ungenutzt im Schema stehen.
+- **Fenster −30 / +365 Tage, rollend** ab dem Sync-Zeitpunkt, damit die Zukunft nie ausläuft.
+- **Paginierung** über `pageToken`, `maxResults=250`, Notbremse bei 40 Seiten.
+- **Robustheit:** Abgesagte Termine sowie Einträge ohne ID oder Startangabe werden übersprungen,
+  statt den Sync zu kippen. Jeder Kalender wird einzeln weggeschrieben — bricht einer ab,
+  bleibt das übrige Ergebnis stehen und der betroffene Kalender wird namentlich gemeldet.
 - **Auslöser:** App-Start + **„Sync jetzt"-Button**. **Kein Hintergrunddienst** in v1.0 (persönliches Tablet).
 - **All-Day vs. terminiert:** All-Day zuerst, dann terminierte nach Startzeit; Surfacing nach **Day**
   (Gerätezeitzone).
@@ -195,10 +232,21 @@ Lösung: `android:taskAffinity=""` aus dem Manifest entfernen.
   je Kalender aktivieren + Tag-Mapping, Schema-**v4**-Migration (`calendar_sources` +
   `calendar_source_tags`) via `_onUpgrade`.
   *Testbar:* Kalender erscheinen, Aktiv-Schalter + Mapping werden gespeichert und überleben Neustart.
-- **Coding-Session B — Sync + Schema v5 + Einblendung.** Sync-Engine (`syncToken`, `singleEvents`),
-  Schema-**v5**-Migration (`calendar_events` + `event_tags`) via `_onUpgrade`,
-  `surfacedEventsForDay`/`eventsForTag`, TERMINE-Sektion, „Sync jetzt"-Button.
+- **Coding-Session A, Teil 2 — Einstellungen + Schema v4.** ✅ Abgeschlossen (`a555f3c`).
+- **Coding-Session B, Teil 1 — Sync + Schema v5.** ✅ Abgeschlossen (`a5549a1`). Sync-Engine
+  (Vollabruf im rollenden Fenster, `singleEvents`), Schema-**v5**-Migration
+  (`calendar_events` + `event_tags`) via `_onUpgrade`, `calendarEventsForDay`/
+  `calendarEventsForTag`, „Sync jetzt"-Button mit Bestandsanzeige.
+  *Getestet auf MatePad:* Sync läuft, Zähler stimmt, zweiter Sync erzeugt keine Dubletten,
+  ein neu angelegter Termin erhöht den Zähler um eins.
+- **Coding-Session B, Teil 2 — Einblendung.** TERMINE-Sektion pro Tag im Journal über
+  `calendarEventsForDay`, Uhrzeit über `CalendarEvent.timeLabelForDay` (bei mehrtägigen
+  „ab …" / „bis …"), geerbte Tags sichtbar.
   *Testbar auf MatePad:* echte Termine erscheinen vor-getaggt am richtigen Day.
+
+*Warum Session B geteilt wurde:* Der Datenweg ist für sich prüfbar (Sync läuft, Zähler
+stimmt), ohne die große `journal_screen.dart` anzufassen. Derselbe Schnitt wie bei
+Session A — das Risiko zuerst, die UI danach.
 
 ---
 
