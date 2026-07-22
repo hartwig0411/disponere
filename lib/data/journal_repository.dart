@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/calendar_event.dart';
 import '../models/calendar_source.dart';
 import '../models/daily_info.dart';
 import '../models/ink_data.dart';
@@ -28,6 +29,14 @@ import '../models/task.dart';
 /// - `task_tags`   — ein Tag pro Aufgabe und Zeile, analog `entry_tags`.
 ///                   Macht Aufgaben **nach Tag abfragbar** (`tasksForTag`) —
 ///                   Grundlage für die „alles zu einem Tag"-Ansicht.
+/// - `calendar_sources` / `calendar_source_tags` — die ausgewählten Google-
+///                   Kalender und ihre Tag-Zuordnung (Session 20).
+/// - `calendar_events` / `event_tags` — die gespiegelten Termine (Session 21).
+///                   Zeitspanne als `yyyy-MM-dd` in `start_day`/`end_day`
+///                   (Endtag **inklusiv**), Uhrzeit als `HH:mm` in lokaler
+///                   Zeit. `event_tags` materialisiert die vom Kalender
+///                   geerbten Tags, damit Termine in derselben Form nach Tag
+///                   abfragbar sind wie Einträge und Aufgaben.
 ///
 /// Das Tag-Register bleibt davon unberührt: Es wird weiter zur Laufzeit aus
 /// den Einträgen abgeleitet (keine eigene Persistenz). `entry_tags` und
@@ -36,9 +45,10 @@ class JournalRepository {
   static const _dbName = 'disponere.db';
 
   /// Schema-Version. v2 (Session 15) ergänzt `daily_info`, v3 (Session 16)
-  /// ergänzt `tasks` + `task_tags`; v4 ergänzt `calendar_sources` +
-  /// `calendar_source_tags` — jeweils via [_onUpgrade].
-  static const _dbVersion = 4;
+  /// ergänzt `tasks` + `task_tags`, v4 (Session 20) ergänzt `calendar_sources`
+  /// + `calendar_source_tags`; v5 ergänzt `calendar_events` + `event_tags` —
+  /// jeweils via [_onUpgrade].
+  static const _dbVersion = 5;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -96,6 +106,7 @@ class JournalRepository {
     await _createDailyInfoTable(db);
     await _createTaskTables(db);
     await _createCalendarSourceTables(db);
+    await _createCalendarEventTables(db);
   }
 
   /// Schema-Migrationen. Jede Stufe ist idempotent gedacht und baut auf der
@@ -109,6 +120,9 @@ class JournalRepository {
     }
     if (oldVersion < 4) {
       await _createCalendarSourceTables(db);
+    }
+    if (oldVersion < 5) {
+      await _createCalendarEventTables(db);
     }
   }
 
@@ -186,6 +200,54 @@ class JournalRepository {
     await db.execute(
       'CREATE INDEX idx_calendar_source_tags_tag_key '
       'ON calendar_source_tags(tag_key)',
+    );
+  }
+
+  /// Legt `calendar_events` + `event_tags` an (genutzt von [_onCreate] und
+  /// [_onUpgrade], damit Neuinstallation und Migration dasselbe Schema teilen).
+  ///
+  /// Der Primärschlüssel ist **zusammengesetzt** (`calendar_id`, `event_id`):
+  /// Dieselbe Einladung kann in mehreren aktivierten Kalendern liegen und wäre
+  /// über die Event-ID allein nicht eindeutig. `ical_uid` steht für die
+  /// spätere Deduplizierung bereit.
+  ///
+  /// `start_day`/`end_day` sind `yyyy-MM-dd` mit **inklusivem** Endtag —
+  /// dieselbe Form wie bei `daily_info`, damit die Tagesabfrage identisch
+  /// aussieht.
+  Future<void> _createCalendarEventTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE calendar_events (
+        calendar_id TEXT    NOT NULL,
+        event_id    TEXT    NOT NULL,
+        ical_uid    TEXT,
+        summary     TEXT    NOT NULL,
+        location    TEXT,
+        all_day     INTEGER NOT NULL DEFAULT 0,
+        start_day   TEXT    NOT NULL,
+        start_time  TEXT,
+        end_day     TEXT    NOT NULL,
+        end_time    TEXT,
+        PRIMARY KEY (calendar_id, event_id),
+        FOREIGN KEY (calendar_id) REFERENCES calendar_sources(calendar_id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_calendar_events_start ON calendar_events(start_day)',
+    );
+    await db.execute('''
+      CREATE TABLE event_tags (
+        calendar_id TEXT    NOT NULL,
+        event_id    TEXT    NOT NULL,
+        tag         TEXT    NOT NULL,
+        tag_key     TEXT    NOT NULL,
+        ord         INTEGER NOT NULL,
+        PRIMARY KEY (calendar_id, event_id, tag_key),
+        FOREIGN KEY (calendar_id, event_id)
+          REFERENCES calendar_events(calendar_id, event_id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_event_tags_tag_key ON event_tags(tag_key)',
     );
   }
 
@@ -597,6 +659,186 @@ class JournalRepository {
         }
       }
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Kalender-Termine (Schema v5)
+  // ---------------------------------------------------------------------------
+
+  /// Baut aus `calendar_events`-Zeilen [CalendarEvent]-Objekte inkl. ihrer
+  /// Tags auf. Lädt die Tags in einem Rutsch und ordnet sie über `ord`.
+  Future<List<CalendarEvent>> _hydrateCalendarEvents(
+    Database db,
+    List<Map<String, Object?>> rows,
+  ) async {
+    if (rows.isEmpty) return <CalendarEvent>[];
+    final tagRows = await db.query('event_tags', orderBy: 'ord ASC');
+    final tagsByEvent = <String, List<String>>{};
+    for (final row in tagRows) {
+      final key = '${row['calendar_id']}\u0000${row['event_id']}';
+      (tagsByEvent[key] ??= <String>[]).add(row['tag'] as String);
+    }
+    return rows.map((row) {
+      final calendarId = row['calendar_id'] as String;
+      final eventId = row['event_id'] as String;
+      return CalendarEvent(
+        calendarId: calendarId,
+        eventId: eventId,
+        iCalUid: row['ical_uid'] as String?,
+        summary: row['summary'] as String,
+        location: row['location'] as String?,
+        allDay: (row['all_day'] as int) != 0,
+        startDay: row['start_day'] as String,
+        startTime: row['start_time'] as String?,
+        endDay: row['end_day'] as String,
+        endTime: row['end_time'] as String?,
+        tags: tagsByEvent['$calendarId\u0000$eventId'] ?? const <String>[],
+      );
+    }).toList();
+  }
+
+  /// Ersetzt **alle** gespiegelten Termine eines Kalenders durch [events].
+  ///
+  /// Bewusst „löschen und neu schreiben" statt Einzelabgleich: Der Abruf
+  /// liefert das vollständige Zeitfenster, also sind verschwundene Termine
+  /// genau die abgesagten oder verschobenen. Alles läuft in **einer**
+  /// Transaktion — bei einem Abbruch bleibt der alte Stand stehen, statt dass
+  /// halbe Kalender im Journal auftauchen.
+  Future<void> replaceCalendarEvents(
+    String calendarId,
+    List<CalendarEvent> events,
+  ) async {
+    final db = await _database();
+    await db.transaction((txn) async {
+      // event_tags folgen via ON DELETE CASCADE.
+      await txn.delete(
+        'calendar_events',
+        where: 'calendar_id = ?',
+        whereArgs: [calendarId],
+      );
+      for (final event in events) {
+        await txn.insert(
+          'calendar_events',
+          {
+            'calendar_id': event.calendarId,
+            'event_id': event.eventId,
+            'ical_uid': event.iCalUid,
+            'summary': event.summary,
+            'location': event.location,
+            'all_day': event.allDay ? 1 : 0,
+            'start_day': event.startDay,
+            'start_time': event.startTime,
+            'end_day': event.endDay,
+            'end_time': event.endTime,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+        for (var i = 0; i < event.tags.length; i++) {
+          final tag = event.tags[i];
+          await txn.insert(
+            'event_tags',
+            {
+              'calendar_id': event.calendarId,
+              'event_id': event.eventId,
+              'tag': tag,
+              'tag_key': tag.toLowerCase(),
+              'ord': i,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+    });
+  }
+
+  /// Wirft die gespiegelten Termine eines Kalenders weg — beim Deaktivieren
+  /// des Kalenders, damit nichts Verwaistes im Journal stehen bleibt.
+  Future<void> deleteCalendarEventsFor(String calendarId) async {
+    final db = await _database();
+    await db.delete(
+      'calendar_events',
+      where: 'calendar_id = ?',
+      whereArgs: [calendarId],
+    );
+  }
+
+  /// Zieht eine geänderte Kalender→Tag-Zuordnung auf die bereits
+  /// gespiegelten Termine nach, ohne neu zu synchronisieren.
+  Future<void> reapplyCalendarSourceTags(
+    String calendarId,
+    List<String> tags,
+  ) async {
+    final db = await _database();
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'calendar_events',
+        columns: ['event_id'],
+        where: 'calendar_id = ?',
+        whereArgs: [calendarId],
+      );
+      await txn.delete(
+        'event_tags',
+        where: 'calendar_id = ?',
+        whereArgs: [calendarId],
+      );
+      for (final row in rows) {
+        final eventId = row['event_id'] as String;
+        for (var i = 0; i < tags.length; i++) {
+          final tag = tags[i];
+          await txn.insert(
+            'event_tags',
+            {
+              'calendar_id': calendarId,
+              'event_id': eventId,
+              'tag': tag,
+              'tag_key': tag.toLowerCase(),
+              'ord': i,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+    });
+  }
+
+  /// Alle Termine, die einen Kalendertag berühren ([day] als `yyyy-MM-dd`) —
+  /// nur aus **aktivierten** Kalendern. Bereichsabfrage wie bei `daily_info`
+  /// (Endtag ist inklusiv gespeichert). Ganztägige zuerst, danach nach
+  /// Uhrzeit. Das ist die Grundlage der „TERMINE"-Sektion im Journal.
+  Future<List<CalendarEvent>> calendarEventsForDay(String day) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      'SELECT e.* FROM calendar_events e '
+      'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
+      'WHERE s.enabled = 1 AND e.start_day <= ? AND e.end_day >= ? '
+      "ORDER BY e.all_day DESC, COALESCE(e.start_time, '') ASC, "
+      'e.summary COLLATE NOCASE ASC',
+      [day, day],
+    );
+    return _hydrateCalendarEvents(db, rows);
+  }
+
+  /// Alle Termine zu einem Tag (case-insensitiv), aufsteigend nach Startzeit —
+  /// das Gegenstück zu `tasksForTag` für die „alles zu einem Tag"-Ansicht.
+  Future<List<CalendarEvent>> calendarEventsForTag(String tag) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      'SELECT e.* FROM calendar_events e '
+      'JOIN event_tags t '
+      '  ON t.calendar_id = e.calendar_id AND t.event_id = e.event_id '
+      'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
+      'WHERE s.enabled = 1 AND t.tag_key = ? '
+      "ORDER BY e.start_day ASC, COALESCE(e.start_time, '') ASC",
+      [tag.toLowerCase()],
+    );
+    return _hydrateCalendarEvents(db, rows);
+  }
+
+  /// Anzahl gespiegelter Termine — für die Statuszeile in den Einstellungen.
+  Future<int> countCalendarEvents() async {
+    final db = await _database();
+    final rows = await db.rawQuery('SELECT COUNT(*) AS n FROM calendar_events');
+    return (rows.first['n'] as int?) ?? 0;
   }
 
   // ---------------------------------------------------------------------------

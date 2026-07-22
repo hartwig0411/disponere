@@ -16,9 +16,11 @@ const Color _kBg = Color(0xFF1A1A2E);
 /// Einstellungen → Google Calendar.
 ///
 /// **Teil 1:** Konto verbinden/trennen und Zugriff prüfen.
-/// **Teil 2 (hier):** Kalenderliste abrufen (`calendarList.list`), je Kalender
-/// aktivieren und Tags zuordnen. Alles wandert sofort in die DB (Schema v4).
-/// Der Sync der eigentlichen Termine folgt in Coding-Session B.
+/// **Teil 2:** Kalenderliste abrufen (`calendarList.list`), je Kalender
+/// aktivieren und Tags zuordnen (Schema v4).
+/// **Session B, Teil 1 (hier):** „Sync jetzt" — die Termine der aktivierten
+/// Kalender ins lokale Schema v5 spiegeln. Die Einblendung im Journal folgt
+/// in Teil 2.
 class CalendarSettingsScreen extends StatefulWidget {
   const CalendarSettingsScreen({super.key, required this.tagRegistry});
 
@@ -40,6 +42,9 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
   bool _signedIn = false;
   bool _busy = true;
   bool _loadingCalendars = false;
+  bool _syncing = false;
+  String? _syncProgress;
+  int _eventCount = 0;
   String? _message;
   bool _messageIsError = false;
   List<CalendarSource> _sources = <CalendarSource>[];
@@ -50,18 +55,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     _init();
   }
 
-  Future<void> _init() async {
-    final signedIn = await _auth.isSignedIn();
-    final sources =
-        signedIn ? await _repo.loadCalendarSources() : <CalendarSource>[];
-    _registerTags(sources);
-    if (!mounted) return;
-    setState(() {
-      _signedIn = signedIn;
-      _sources = sources;
-      _busy = false;
-    });
-  }
+  Future<void> _init() => _refreshStatus();
 
   /// Füttert die bereits zugeordneten Kalender-Tags ins geteilte Register,
   /// damit sie diese Sitzung über im Autocomplete auftauchen.
@@ -102,11 +96,13 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     final signedIn = await _auth.isSignedIn();
     final sources =
         signedIn ? await _repo.loadCalendarSources() : <CalendarSource>[];
+    final count = signedIn ? await _repo.countCalendarEvents() : 0;
     _registerTags(sources);
     if (!mounted) return;
     setState(() {
       _signedIn = signedIn;
       _sources = sources;
+      _eventCount = count;
       _busy = false;
     });
   }
@@ -151,7 +147,82 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
   Future<void> _toggleEnabled(CalendarSource source, bool value) async {
     final updated = source.copyWith(enabled: value);
     await _repo.upsertCalendarSource(updated);
+    // Ausgeschaltet heißt: raus aus dem Journal. Die gespiegelten Termine
+    // dieses Kalenders fliegen sofort weg, statt bis zum nächsten Sync
+    // stehen zu bleiben.
+    if (!value) await _repo.deleteCalendarEventsFor(source.calendarId);
+    final count = await _repo.countCalendarEvents();
     _replaceSource(updated);
+    if (!mounted) return;
+    setState(() => _eventCount = count);
+  }
+
+  /// Spiegelt die Termine aller aktivierten Kalender ins lokale Schema v5.
+  ///
+  /// Läuft Kalender für Kalender und schreibt jeden einzeln weg — bricht einer
+  /// ab (Netz, Rechte), bleibt das bereits Gespiegelte erhalten und der Fehler
+  /// wird benannt, statt den ganzen Durchlauf zu verwerfen. Ein Kalender, der
+  /// gerade deaktiviert wurde, verliert hier seine Termine.
+  Future<void> _syncNow() async {
+    final enabled = _sources.where((s) => s.enabled).toList();
+    if (enabled.isEmpty) {
+      setState(() {
+        _message = 'Kein Kalender aktiviert — nichts zu synchronisieren.';
+        _messageIsError = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _syncing = true;
+      _message = null;
+      _syncProgress = null;
+    });
+
+    var total = 0;
+    final failures = <String>[];
+
+    try {
+      for (final source in _sources) {
+        if (!source.enabled) {
+          await _repo.deleteCalendarEventsFor(source.calendarId);
+          continue;
+        }
+        if (mounted) {
+          setState(() => _syncProgress = source.displayName);
+        }
+        try {
+          final events = await _calendarService.fetchEvents(
+            source.calendarId,
+            source.tags,
+          );
+          await _repo.replaceCalendarEvents(source.calendarId, events);
+          total += events.length;
+        } catch (e) {
+          failures.add('${source.displayName}: $e');
+        }
+      }
+
+      final count = await _repo.countCalendarEvents();
+      if (!mounted) return;
+      setState(() {
+        _eventCount = count;
+        _messageIsError = failures.isNotEmpty;
+        _message = failures.isEmpty
+            ? '$total Termine aus ${enabled.length} Kalender'
+                '${enabled.length == 1 ? '' : 'n'} gespiegelt '
+                '(${GoogleCalendarService.windowDaysBack} Tage zurück, '
+                '${GoogleCalendarService.windowDaysAhead} Tage voraus).'
+            : 'Teilweise fehlgeschlagen:\n${failures.join('\n')}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _syncing = false;
+          _syncProgress = null;
+        });
+      }
+    }
   }
 
   /// Öffnet einen Tag-Editor für einen Kalender. Speichert die kanonisierten
@@ -217,6 +288,9 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     if (saved == null) return; // abgebrochen
     final updated = source.copyWith(tags: saved);
     await _repo.upsertCalendarSource(updated);
+    // Geänderte Zuordnung sofort auf die bereits gespiegelten Termine ziehen —
+    // ohne erneuten Sync, es ist reine lokale Arbeit.
+    await _repo.reapplyCalendarSourceTags(source.calendarId, saved);
     _replaceSource(updated);
   }
 
@@ -310,6 +384,39 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
               label: Text(
                 _loadingCalendars ? 'Lädt …' : 'Kalender laden/aktualisieren',
               ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _kAccent,
+                side: BorderSide(color: _kAccent.withValues(alpha: 0.5)),
+              ),
+              onPressed:
+                  (_syncing || _loadingCalendars || _sources.isEmpty)
+                      ? null
+                      : _syncNow,
+              icon: _syncing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _kAccent,
+                      ),
+                    )
+                  : const Icon(Icons.cloud_download_outlined),
+              label: Text(
+                _syncing
+                    ? 'Synchronisiert ${_syncProgress ?? ''} …'.trim()
+                    : 'Termine jetzt synchronisieren',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _eventCount == 0
+                  ? 'Noch keine Termine gespiegelt.'
+                  : '$_eventCount Termine lokal gespeichert.',
+              style: const TextStyle(color: Colors.white30, fontSize: 12),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
