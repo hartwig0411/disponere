@@ -179,9 +179,13 @@ class GoogleCalendarService {
     final end = item['end'] as Map<String, dynamic>?;
     if (start == null) return null;
 
-    final startDate = start['date'] as String?;
+    // `date` ist laut API ein reines `yyyy-MM-dd`. Manche Darstellungen
+    // liefern es als vollen Zeitstempel (`2026-07-27T00:00:00Z`) — der
+    // Schnitt am `T` ist für reine Datumsstrings wirkungslos und fängt den
+    // anderen Fall ab, bevor er als Tages-Key in die DB wandert.
+    final startDate = _dateOnly(start['date'] as String?);
     final startDateTime = start['dateTime'] as String?;
-    final endDate = end?['date'] as String?;
+    final endDate = _dateOnly(end?['date'] as String?);
     final endDateTime = end?['dateTime'] as String?;
 
     String startDay;
@@ -238,6 +242,11 @@ class GoogleCalendarService {
       tags: tags,
     );
   }
+
+  /// Schneidet einen etwaigen Zeitanteil ab, sodass ein reiner Tages-Key
+  /// (`yyyy-MM-dd`) übrig bleibt.
+  static String? _dateOnly(String? raw) =>
+      raw == null ? null : raw.split('T').first;
 
   static String _two(int value) => value.toString().padLeft(2, '0');
 

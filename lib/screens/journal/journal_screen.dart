@@ -4,6 +4,7 @@ import '../../models/journal_entry.dart';
 import '../../models/daily_info.dart';
 import '../../models/task.dart';
 import '../../models/ink_data.dart';
+import '../../models/calendar_event.dart';
 import '../../models/calendar_source.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
@@ -25,6 +26,12 @@ const Color _kDailyInfoAccent = Color(0xFFD9A441);
 /// Entscheidung steht noch aus.
 const Color _kTaskAccent = Color(0xFF5FA86A);
 
+/// Violetter Akzent für Kalendertermine — „von außen gesetzt, nicht
+/// veränderbar". Vierte und letzte Farbe im Journal: Bernstein (Tagesinfo),
+/// Violett (Termine), Grün (Aufgaben), Blau (Einträge). Provisorisch wie die
+/// übrigen.
+const Color _kEventAccent = Color(0xFF9C7BD6);
+
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
   @override
@@ -45,10 +52,13 @@ class _JournalScreenState extends State<JournalScreen> {
   /// Durchschreiben beim Tag-Umbenennen (nicht nur die heute sichtbaren).
   final List<Task> _allTasks = [];
 
-  /// Kalender-Quellen — hier nur gehalten, um ihre Tags ins Tag-Register zu
-  /// füttern, damit auch ein nur an einem Kalender hängender Tag im
-  /// Autocomplete auftaucht.
+  /// Kalender-Quellen — für das Tag-Register (damit auch ein nur an einem
+  /// Kalender hängender Tag im Autocomplete auftaucht) und für die Frage,
+  /// ob die TERMINE-Sektion überhaupt angezeigt wird.
   final List<CalendarSource> _calendarSources = [];
+
+  /// Gespiegelte Kalendertermine, die den **heutigen** Tag berühren.
+  final List<CalendarEvent> _todayEvents = [];
 
   final TagRegistry _tagRegistry = TagRegistry();
   final JournalRepository _repo = JournalRepository();
@@ -68,11 +78,15 @@ class _JournalScreenState extends State<JournalScreen> {
     final surfaced = await _repo.surfacedTasksForDay(DateTime.now());
     final allTasks = await _repo.loadAllTasks();
     final calendarSources = await _repo.loadCalendarSources();
+    final events = await _repo.calendarEventsForDay(_dayKey(DateTime.now()));
     if (!mounted) return;
     setState(() {
       _entries
         ..clear()
         ..addAll(loaded);
+      _todayEvents
+        ..clear()
+        ..addAll(events);
       _todayInfos
         ..clear()
         ..addAll(infos);
@@ -140,13 +154,27 @@ class _JournalScreenState extends State<JournalScreen> {
   /// zugeordnete Kalender-Tags im Autocomplete.
   Future<void> _reloadCalendarSources() async {
     final sources = await _repo.loadCalendarSources();
+    // Auch die Termine neu holen: In den Kalender-Einstellungen kann eben
+    // synchronisiert oder ein Kalender ab-/zugeschaltet worden sein.
+    final events = await _repo.calendarEventsForDay(_dayKey(DateTime.now()));
     if (!mounted) return;
     setState(() {
       _calendarSources
         ..clear()
         ..addAll(sources);
+      _todayEvents
+        ..clear()
+        ..addAll(events);
     });
     _rebuildTagRegistry();
+  }
+
+  /// Kalendertag als `yyyy-MM-dd` — dasselbe Format, in dem `calendar_events`
+  /// die Tage ablegt.
+  static String _dayKey(DateTime date) {
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '${date.year.toString().padLeft(4, '0')}-$m-$d';
   }
 
   /// Öffnet das Text-Eingabe-Sheet.
@@ -754,6 +782,18 @@ class _JournalScreenState extends State<JournalScreen> {
     }
   }
 
+  /// Öffnet die Kalender-Einstellungen und zieht danach Quellen **und**
+  /// Termine nach — dort kann synchronisiert oder umgeschaltet worden sein.
+  Future<void> _openCalendarSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CalendarSettingsScreen(tagRegistry: _tagRegistry),
+      ),
+    );
+    await _reloadCalendarSources();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -778,16 +818,7 @@ class _JournalScreenState extends State<JournalScreen> {
           IconButton(
             icon: const Icon(Icons.event_outlined, color: Colors.white54),
             tooltip: 'Google Calendar',
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      CalendarSettingsScreen(tagRegistry: _tagRegistry),
-                ),
-              );
-              await _reloadCalendarSources();
-            },
+            onPressed: _openCalendarSettings,
           ),
         ],
       ),
@@ -798,8 +829,11 @@ class _JournalScreenState extends State<JournalScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(24),
-        // +2 für die beiden festen Kopf-Bereiche: Daily Info, dann Aufgaben.
-        itemCount: _entries.length + 2,
+        // +3 für die festen Kopf-Bereiche: Tagesinfo, Termine, Aufgaben.
+        // Reihenfolge bewusst so: erst der Rahmen des Tages (Tagesinfo), dann
+        // die festen Zeitpunkte (Termine), dann das Bewegliche (Aufgaben).
+        // Reversibel — reine Anordnungsfrage.
+        itemCount: _entries.length + 3,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _DailyInfoSection(
@@ -809,6 +843,16 @@ class _JournalScreenState extends State<JournalScreen> {
             );
           }
           if (index == 1) {
+            return _EventsSection(
+              events: _todayEvents,
+              day: _dayKey(DateTime.now()),
+              // Ohne aktivierten Kalender bleibt die Sektion unsichtbar —
+              // wer Google Calendar nicht nutzt, sieht keinen leeren Kasten.
+              visible: _calendarSources.any((c) => c.enabled),
+              onOpenSettings: _openCalendarSettings,
+            );
+          }
+          if (index == 2) {
             return _TasksSection(
               tasks: _todayTasks,
               today: DateTime.now(),
@@ -818,7 +862,7 @@ class _JournalScreenState extends State<JournalScreen> {
               onOpenOverview: _openTaskOverview,
             );
           }
-          final entry = _entries[index - 2];
+          final entry = _entries[index - 3];
           return _EntryCard(
             entry: entry,
             onTap: () {
@@ -901,7 +945,7 @@ class _DailyInfoSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _kDailyInfoAccent.withOpacity(0.25),
+                    color: _kDailyInfoAccent.withValues(alpha: 0.25),
                   ),
                 ),
                 child: const Text(
@@ -931,7 +975,7 @@ class _DailyInfoCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: _kDailyInfoAccent.withOpacity(0.10),
+        color: _kDailyInfoAccent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -984,6 +1028,167 @@ class _DailyInfoCard extends StatelessWidget {
 /// Farblich abgesetzter Bereich unter Daily Info: die heute erscheinenden
 /// Aufgaben plus ein dezenter Einstieg zum Anlegen. Grüner Akzent, klar
 /// getrennt von Bernstein (Daily Info) und Blau (Einträge).
+/// Die heute anstehenden Kalendertermine, gespiegelt aus Google Calendar.
+///
+/// **Bewusst nicht editierbar:** Termine gehören dem Kalender, nicht dem
+/// Journal. Es gibt darum kein Plus und kein Bearbeiten-Sheet — nur den Weg
+/// in die Einstellungen. Die Sektion verschwindet ganz, solange kein Kalender
+/// aktiviert ist ([visible]), damit niemand einen leeren Kasten anstarrt, der
+/// ihn nichts angeht.
+class _EventsSection extends StatelessWidget {
+  final List<CalendarEvent> events;
+
+  /// Der dargestellte Kalendertag als `yyyy-MM-dd` — bestimmt bei mehrtägigen
+  /// Terminen, ob „ab 10:00", „bis 11:30" oder gar keine Zeit angezeigt wird.
+  final String day;
+
+  final bool visible;
+  final VoidCallback onOpenSettings;
+
+  const _EventsSection({
+    required this.events,
+    required this.day,
+    required this.visible,
+    required this.onOpenSettings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.event_outlined, size: 14, color: _kEventAccent),
+              const SizedBox(width: 6),
+              const Text(
+                'TERMINE',
+                style: TextStyle(
+                  color: _kEventAccent,
+                  fontSize: 11,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.tune, size: 18, color: _kEventAccent),
+                tooltip: 'Kalender und Sync',
+                onPressed: onOpenSettings,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (events.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _kEventAccent.withValues(alpha: 0.25),
+                ),
+              ),
+              child: const Text(
+                'Heute keine Termine',
+                style: TextStyle(color: Colors.white38, fontSize: 13),
+              ),
+            )
+          else
+            ...events.map((event) => _EventCard(event: event, day: day)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Eine Terminkarte: Zeit, Titel, optional Ort, geerbte Tags.
+class _EventCard extends StatelessWidget {
+  final CalendarEvent event;
+  final String day;
+
+  const _EventCard({required this.event, required this.day});
+
+  @override
+  Widget build(BuildContext context) {
+    final timeLabel = event.timeLabelForDay(day);
+    // Ganztägig und der Mitteltag eines mehrtägigen Termins haben keine
+    // Uhrzeit — dort steht „ganztägig", damit die Spalte nicht leer wirkt.
+    final label = timeLabel ?? 'ganztägig';
+    final location = event.location;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _kEventAccent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: const Border(
+            left: BorderSide(color: _kEventAccent, width: 3),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: _kEventAccent,
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              event.summary,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+            ),
+            if (location != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.place_outlined,
+                      size: 13, color: Colors.white30),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      location,
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (event.tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final tag in event.tags) _TagChip(label: tag),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TasksSection extends StatelessWidget {
   final List<Task> tasks;
   final DateTime today;
@@ -1054,7 +1259,7 @@ class _TasksSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _kTaskAccent.withOpacity(0.25),
+                    color: _kTaskAccent.withValues(alpha: 0.25),
                   ),
                 ),
                 child: const Text(
@@ -1095,7 +1300,7 @@ class _TaskCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: _kTaskAccent.withOpacity(0.10),
+        color: _kTaskAccent.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),

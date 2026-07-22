@@ -204,6 +204,8 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
       }
 
       final count = await _repo.countCalendarEvents();
+
+
       if (!mounted) return;
       setState(() {
         _eventCount = count;
@@ -521,7 +523,7 @@ class _CalendarTile extends StatelessWidget {
               ),
               Switch(
                 value: source.enabled,
-                activeColor: _kAccent,
+                activeThumbColor: _kAccent,
                 onChanged: onToggle,
               ),
             ],
