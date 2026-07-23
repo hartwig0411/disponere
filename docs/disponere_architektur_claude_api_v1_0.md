@@ -1,7 +1,7 @@
 # Disponere – Architektur: Claude-API-Anbindung
 
 **Dokument-Revision:** v1.0 (in-place gepflegt)
-**Status:** Architektur-Session abgeschlossen (Session 23, 23.07.2026) — Coding-Session folgt
+**Status:** Teil 1 gebaut (Session 24, 23.07.2026, Commit `6fe8ff3`) — Teil 2 offen
 **Erfüllt:** Anforderungen v3.0 → *Claude-Integration* (🟡 Core)
 **Vorgänger-Commit (Code):** `6386e2c` — TERMINE-Sektion im Journal
 **Nachgelagert:** Coding-Session C, Teil 1 (Key, Service, Tinten-Auswertung, Schema v6) + Teil 2 (Wochenauswertung, Suche)
@@ -143,7 +143,13 @@ InkData (Striche + Canvas-Maße)
   der eigentliche Erkennungskiller — deutlich eher als eine zu geringe Auflösung.
 - **Eine Seite pro Eintrag.** Der Zeichenbereich ist `Expanded` + `SizedBox.expand()`, also fest und
   nicht scrollbar. Es gibt keine Mehrseitigkeit, kein Zusammensetzen von Teilbildern.
-- Wird nur **hochskaliert, wenn nötig** — kleine Zeichnungen werden nicht künstlich aufgeblasen.
+- **Zuschnitt auf die tatsächlich beschriebene Fläche** statt auf den vollen Zeichenbereich
+  *(nachgezogen in Session 24)*. Wer fünf Zeilen an den oberen Rand schreibt, bekäme sonst ein
+  Bild, das zur Hälfte aus leerem Weiß besteht — die Schrift selbst hätte nur einen Bruchteil
+  der Auflösung. Der Zuschnitt verbessert beides: Erkennung und Token-Preis.
+- **Untergrenze 768 px** an der langen Kante *(nachgezogen in Session 24)*. Eine einzelne kurze
+  Zeile ergäbe sonst ein Briefmarken-PNG. Bei Vektorstrichen ist Hochskalieren verlustfrei und
+  kostet nur wenige Token; darüber hinaus wird nicht künstlich aufgeblasen.
 
 ---
 
@@ -351,15 +357,23 @@ Kein Kostenlimit, kein Aufruf-Zähler in v1.0: Einzelnutzer, manuell ausgelöst,
 
 ---
 
-## 15. Beim Coden zu prüfen
+## 15. Beim Coden geprüft (Session 24)
 
-- **Modell-ID** und **aktuelle Preise** gegen die Dokumentation abgleichen, bevor die Konstante
-  festgeschrieben wird
-- **Token-Kosten des Bildes** in der Größenordnung gegenprüfen und den Skalierungswert (1568 px)
-  bestätigen oder anpassen
-- **Erkennungsqualität** auf echter Handschrift: Wenn die Ergebnisse enttäuschen, ist die
-  Strichbreite der erste Stellhebel, die Auflösung der zweite
+- **Modell-ID `claude-sonnet-5`** gegen die Dokumentation bestätigt: 1M Kontext, 128k max output,
+  Vision. Bleibt als Konstante im Service.
+- **Preis** $2/$10 je Mio. Token (Einführungspreis bis 31.08.2026), danach $3/$15. Ein Tinten-PNG
+  bei 1568 px liegt bei rund 2.000–2.500 Input-Token — **unter einem halben Cent je Auswertung**.
+  Der Skalierungswert bleibt unverändert.
+- **`thinking: {"type": "disabled"}` ist für Sonnet 5 gültig und notwendig.** Sonnet 5 unterstützt
+  nur adaptives Thinking, hat es **standardmäßig an** und weist `"enabled"` mit 400 zurück;
+  `"disabled"` wird akzeptiert. Ohne diese Zeile käme zu jeder Transkription ungefragter
+  Thinking-Aufwand dazu. Ein späterer Modellwechsel muss diese Zeile mit prüfen.
+- **Erkennungsqualität** auf echter Handschrift: noch nicht abgenommen (siehe Blocker im
+  Fortschrittsdokument). Stellhebel in dieser Reihenfolge: **Strichbreite**, **Auflösung**, und
+  als dritter das **Wiedereinschalten von Thinking** — Kontext hilft beim Entziffern schwieriger
+  Handschrift.
 
 ---
 
 *Architektur-Session vom 23.07.2026 (Session 23). Code-Stand bei Erstellung: `6386e2c`.*
+*Teil 1 gebaut in Session 24 (23.07.2026), Commit `6fe8ff3`; §6 und §15 dort nachgezogen.*
