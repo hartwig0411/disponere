@@ -16,6 +16,7 @@ import '../../widgets/task_sheet.dart';
 import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
 import '../../screens/settings/calendar_settings_screen.dart';
+import '../../screens/settings/claude_settings_screen.dart';
 
 /// Warmer Bernstein-Akzent für Daily Info — hebt sie klar vom kühlen Blau der
 /// Einträge ab und lässt Raum für spätere Aufgaben/Termine in eigenen Farben.
@@ -312,6 +313,10 @@ class _JournalScreenState extends State<JournalScreen> {
   }
 
   /// Tinten-Editor für einen neuen Tinten-Eintrag.
+  ///
+  /// **Ohne** Auswertungs-Callback: Ein Eintrag, den es noch nicht gibt, hat
+  /// keine id, an der ein erkannter Text hängen könnte. Erst übernehmen, dann
+  /// auswerten.
   Future<void> _openInkEditorNew() async {
     final result = await Navigator.push<InkResult>(
       context,
@@ -326,6 +331,10 @@ class _JournalScreenState extends State<JournalScreen> {
 
   /// Tinten-Editor für einen bestehenden Tinten-Eintrag (Striche zurückladen,
   /// weiterschreiben/korrigieren).
+  ///
+  /// Reicht einen bereits erkannten Text mit hinein und nimmt über
+  /// [_saveInkText] einen neuen entgegen. Die Persistenz bleibt hier beim
+  /// Aufrufer — derselbe Schnitt wie beim Aufgaben-Sheet.
   Future<void> _openInkEditorEdit(JournalEntry entry) async {
     final result = await Navigator.push<InkResult>(
       context,
@@ -334,12 +343,32 @@ class _JournalScreenState extends State<JournalScreen> {
           initialInk: entry.ink,
           initialTags: entry.tags,
           knownTags: _tagRegistry.allTags,
+          initialInkText: entry.inkText,
+          initialInkTextAt: entry.inkTextAt,
+          onInkTextAccepted: (text) => _saveInkText(entry.id, text),
         ),
       ),
     );
     if (result != null && result.ink.isNotEmpty) {
       _updateInkEntry(entry.id, result.ink, result.tags);
     }
+  }
+
+  /// Übernimmt den von Claude erkannten Text zu einem Tinten-Eintrag.
+  ///
+  /// Schreibt gezielt die beiden Spalten (Schema v6) und zieht den Eintrag in
+  /// der Liste nach, damit ein anschließendes Speichern aus dem Editor die
+  /// frische Auswertung nicht mit einem veralteten Objekt überschreibt.
+  Future<DateTime> _saveInkText(String id, String text) async {
+    final at = await _repo.setInkText(id, text);
+    final index = _entries.indexWhere((e) => e.id == id);
+    if (index != -1 && mounted) {
+      setState(() {
+        _entries[index] =
+            _entries[index].copyWith(inkText: text, inkTextAt: at);
+      });
+    }
+    return at;
   }
 
   void _addEntry(String content, List<String> tags) {
@@ -794,6 +823,15 @@ class _JournalScreenState extends State<JournalScreen> {
     await _reloadCalendarSources();
   }
 
+  /// Öffnet die Claude-Einstellungen (API-Schlüssel). Kein Nachladen nötig —
+  /// dort wird nichts verändert, was das Journal anzeigt.
+  Future<void> _openClaudeSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ClaudeSettingsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -819,6 +857,11 @@ class _JournalScreenState extends State<JournalScreen> {
             icon: const Icon(Icons.event_outlined, color: Colors.white54),
             tooltip: 'Google Calendar',
             onPressed: _openCalendarSettings,
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white54),
+            tooltip: 'Claude',
+            onPressed: _openClaudeSettings,
           ),
         ],
       ),

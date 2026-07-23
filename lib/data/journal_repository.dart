@@ -18,6 +18,9 @@ import '../models/task.dart';
 /// abfragbar** sind (Anforderung v3.0; Grundlage u.a. für die Perlenkette):
 ///
 /// - `entries`     — ein Eintrag pro Zeile (Text ODER Tinte als JSON-Blob).
+///                   `ink_text`/`ink_text_at` halten seit v6 den von Claude
+///                   erkannten Text zu einem Tinten-Eintrag — getrennt von
+///                   `content`, das dem Nutzer gehört.
 /// - `entry_tags`  — ein Tag pro Zeile, mit lowercase-`tag_key` für
 ///                   case-insensitive Abfragen und `ord` für stabile
 ///                   Anzeige-Reihenfolge.
@@ -46,9 +49,10 @@ class JournalRepository {
 
   /// Schema-Version. v2 (Session 15) ergänzt `daily_info`, v3 (Session 16)
   /// ergänzt `tasks` + `task_tags`, v4 (Session 20) ergänzt `calendar_sources`
-  /// + `calendar_source_tags`; v5 ergänzt `calendar_events` + `event_tags` —
+  /// + `calendar_source_tags`, v5 ergänzt `calendar_events` + `event_tags`;
+  /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at` —
   /// jeweils via [_onUpgrade].
-  static const _dbVersion = 5;
+  static const _dbVersion = 6;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -80,10 +84,12 @@ class JournalRepository {
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE entries (
-        id        TEXT PRIMARY KEY,
-        timestamp TEXT NOT NULL,
-        content   TEXT NOT NULL,
-        ink       TEXT
+        id          TEXT PRIMARY KEY,
+        timestamp   TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        ink         TEXT,
+        ink_text    TEXT,
+        ink_text_at TEXT
       )
     ''');
     await db.execute(
@@ -123,6 +129,9 @@ class JournalRepository {
     }
     if (oldVersion < 5) {
       await _createCalendarEventTables(db);
+    }
+    if (oldVersion < 6) {
+      await _addInkTextColumns(db);
     }
   }
 
@@ -251,6 +260,19 @@ class JournalRepository {
     );
   }
 
+  /// Ergänzt die beiden Spalten für den von Claude erkannten Text
+  /// (Schema v6). `_onCreate` legt sie direkt in der `CREATE TABLE entries`
+  /// mit an — dieselbe Doppelung wie bei den übrigen Stufen, damit
+  /// Neuinstallation und Migration dasselbe Schema erzeugen.
+  ///
+  /// `ADD COLUMN` ist in SQLite billig (nur ein Eintrag im Tabellenkopf,
+  /// keine Umschreibung der Daten). Bestehende Zeilen bekommen NULL — also
+  /// „nie ausgewertet", was genau stimmt.
+  Future<void> _addInkTextColumns(Database db) async {
+    await db.execute('ALTER TABLE entries ADD COLUMN ink_text TEXT');
+    await db.execute('ALTER TABLE entries ADD COLUMN ink_text_at TEXT');
+  }
+
   // ---------------------------------------------------------------------------
   // Lesen — Einträge
   // ---------------------------------------------------------------------------
@@ -272,6 +294,7 @@ class JournalRepository {
     return entryRows.map((row) {
       final id = row['id'] as String;
       final inkJson = row['ink'] as String?;
+      final inkTextAtRaw = row['ink_text_at'] as String?;
       return JournalEntry(
         id: id,
         timestamp: DateTime.parse(row['timestamp'] as String),
@@ -280,6 +303,9 @@ class JournalRepository {
         ink: inkJson != null
             ? InkData.fromJson(jsonDecode(inkJson) as Map<String, dynamic>)
             : null,
+        inkText: row['ink_text'] as String?,
+        inkTextAt:
+            inkTextAtRaw != null ? DateTime.tryParse(inkTextAtRaw) : null,
       );
     }).toList();
   }
@@ -306,6 +332,9 @@ class JournalRepository {
   }
 
   Future<void> _upsertInTxn(Transaction txn, JournalEntry entry) async {
+    // `replace` schreibt die **ganze** Zeile neu — deshalb müssen `ink_text`
+    // und `ink_text_at` hier mitfahren. Fehlten sie, würde jedes Speichern
+    // eines bearbeiteten Eintrags die Auswertung stillschweigend löschen.
     await txn.insert(
       'entries',
       {
@@ -313,6 +342,8 @@ class JournalRepository {
         'timestamp': entry.timestamp.toIso8601String(),
         'content': entry.content,
         'ink': entry.ink != null ? jsonEncode(entry.ink!.toJson()) : null,
+        'ink_text': entry.inkText,
+        'ink_text_at': entry.inkTextAt?.toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -340,6 +371,31 @@ class JournalRepository {
   Future<void> delete(String id) async {
     final db = await _database();
     await db.delete('entries', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Schreibt den von Claude erkannten Text zu einem Tinten-Eintrag und
+  /// stempelt den Zeitpunkt (Schema v6).
+  ///
+  /// Gezieltes `UPDATE` statt Umweg über [upsert]: Der Aufrufer hat den Text
+  /// gerade übernommen und soll dafür nicht den ganzen Eintrag samt Tinte und
+  /// Tags neu schreiben müssen. Die Tinte selbst wird dabei nie angefasst —
+  /// sie bleibt das Original, der erkannte Text steht daneben.
+  ///
+  /// Gibt den gesetzten Zeitstempel zurück, damit die UI ihn anzeigen kann,
+  /// ohne neu zu laden.
+  Future<DateTime> setInkText(String entryId, String text) async {
+    final db = await _database();
+    final now = DateTime.now();
+    await db.update(
+      'entries',
+      {
+        'ink_text': text,
+        'ink_text_at': now.toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [entryId],
+    );
+    return now;
   }
 
   // ---------------------------------------------------------------------------
