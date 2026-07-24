@@ -144,6 +144,9 @@ sinnvoller Mensch-KI-Zusammenarbeit: Claude ist von Anfang an Teil der App.
 - **Harte Regel:** Ergänze nichts, was nicht im Material steht. Ergibt sich nichts Konkretes,
   steht genau das da — statt vier ausgedachter Ratschläge.
 - Landeplatz: erst Anzeige-Screen, dann **Übernahme per Knopf** als Eintrag mit `#Wochenauswertung`.
+- **Mindmap-Darstellung** der sechs festen Überschriften ist als 🟢 vorgemerkt — reine Anzeige
+  auf einer Gliederung, die ohnehin im Text steht. Voraussetzung: die Überschriften bleiben
+  stabil. Jede spätere Änderung an ihnen ist damit auch eine Änderung an dieser Aussicht.
 
 ### 9. Perlenkette *(Version 2.0)* ⏳
 
@@ -294,6 +297,7 @@ Status: ✅ gebaut · 🔧 in Arbeit · ⏳ geplant
 | Tag-Verwaltung / Umbenennen | 🟢 Enhancement | ✅ |
 | Dokument-Import | 🟢 Enhancement | ⏳ |
 | Backup / Export | 🟢 Enhancement | ⏳ |
+| Mindmap-Darstellung der Wochenauswertung | 🟢 Enhancement | ⏳ |
 
 *Entfallen gegenüber v2.0: Stempel-Tool (aus v1.0 gestrichen — räumliche Idee lebt als
 v2-Feature „Bereiche in Handschrift markieren").*
@@ -343,6 +347,7 @@ v2-Feature „Bereiche in Handschrift markieren").*
 | Lokale Tinten-Volltextsuche | Ohne vorherige Claude-Auswertung nicht möglich — keine On-Device-Handschrift-OCR. |
 | Zeitzonen-Preis der Tages-Keys | Kalendertermine liegen als lokale Tages-Keys in der DB. Ein Zeitzonenwechsel macht sie falsch; Korrektur ist ein Druck auf „Sync jetzt". Reversibel geflaggt. |
 | Perlenkette — Datenmodell | Eigener Index über tag-verknüpfte Einträge, oder Laufzeit-Abfrage über Journal + Calendar + Aufgaben? |
+| Tags der Wochenauswertung | Beim Übernehmen nur `#Wochenauswertung`, oder zusätzlich die Tags der Woche? Letzteres ließe sie unter jedem berührten Projekt auftauchen — nah am Kern der App. Journal-Arbeit, nicht Prompt-Arbeit. |
 | Plaud-Ordner auf dem MatePad | Fester lokaler Ordner für den Dokument-Import noch festzulegen. |
 
 ---
