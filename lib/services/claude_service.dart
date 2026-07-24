@@ -68,6 +68,11 @@ class ClaudeService {
   /// Zeitlimit der Tinten-Auswertung (Architektur §7).
   static const Duration inkTimeout = Duration(seconds: 60);
 
+  /// Zeitlimit der Wochenauswertung (Architektur §8). Großzügiger als bei der
+  /// Tinte: Hier geht eine ganze Woche Material hinein und ein mehrteiliger
+  /// Text kommt heraus.
+  static const Duration weekTimeout = Duration(seconds: 120);
+
   /// Zeitlimit des Verbindungstests — der schickt fast nichts und darf
   /// entsprechend schnell aufgeben.
   static const Duration testTimeout = Duration(seconds: 30);
@@ -158,6 +163,24 @@ class ClaudeService {
       maxTokens: 4096,
       timeout: inkTimeout,
       thinking: false,
+    );
+  }
+
+  /// Schickt den zusammengestellten Wochenkontext zur Auswertung und gibt den
+  /// Text zurück (Architektur §8).
+  ///
+  /// Anders als bei der Transkription bleibt Thinking auf der Vorgabe: Eine
+  /// Woche zusammenzufassen ist Abwägung — was gehört zusammen, was war
+  /// Nebensache. Sollte sich das Ergebnis als zu lang oder zu brav erweisen,
+  /// sind Prompt (`claude_prompts.dart`) und [maxTokens] die Stellhebel.
+  Future<String> reviewWeek(String context) {
+    return _send(
+      content: [
+        {'type': 'text', 'text': ClaudePrompts.weekReview},
+        {'type': 'text', 'text': context},
+      ],
+      maxTokens: 8192,
+      timeout: weekTimeout,
     );
   }
 

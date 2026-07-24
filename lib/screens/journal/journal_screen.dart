@@ -18,6 +18,7 @@ import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
 import '../../screens/settings/calendar_settings_screen.dart';
 import '../../screens/settings/claude_settings_screen.dart';
+import '../../screens/review/week_review_screen.dart';
 
 /// Warmer Bernstein-Akzent für Daily Info — hebt sie klar vom kühlen Blau der
 /// Einträge ab und lässt Raum für spätere Aufgaben/Termine in eigenen Farben.
@@ -863,6 +864,21 @@ class _JournalScreenState extends State<JournalScreen> {
     );
   }
 
+  /// Öffnet die Wochenauswertung und legt bei „Übernehmen" den Eintrag an.
+  ///
+  /// Der Screen gibt nur den Text zurück; geschrieben wird hier — über
+  /// denselben [_addEntry], den auch das Eintrags-Sheet nimmt. Damit bleibt
+  /// die Persistenz an einer Stelle (wie beim Such-Screen), und die
+  /// Auswertung landet als ganz gewöhnlicher Eintrag von heute im Journal.
+  Future<void> _openWeekReview() async {
+    final text = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const WeekReviewScreen()),
+    );
+    if (text == null || text.trim().isEmpty || !mounted) return;
+    _addEntry(text, const ['Wochenauswertung']);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -898,6 +914,34 @@ class _JournalScreenState extends State<JournalScreen> {
             icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white54),
             tooltip: 'Claude',
             onPressed: _openClaudeSettings,
+          ),
+          // Überlauf-Menü (Architektur §12). Hier landet, was selten gebraucht
+          // wird — eine Wochenauswertung macht man einmal die Woche, eine
+          // Suche mehrmals am Tag. Das Funkel-Symbol bleibt vorerst daneben
+          // stehen; ob die Claude-Einstellungen ebenfalls hierher wandern,
+          // wird entschieden, wenn das Menü im Betrieb erlebt wurde.
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white54),
+            tooltip: 'Mehr',
+            color: const Color(0xFF16213E),
+            onSelected: (value) {
+              if (value == 'week') _openWeekReview();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'week',
+                child: Row(
+                  children: [
+                    Icon(Icons.date_range, size: 18, color: Colors.white54),
+                    SizedBox(width: 12),
+                    Text(
+                      'Wochenauswertung',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

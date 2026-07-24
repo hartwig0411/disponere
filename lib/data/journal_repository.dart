@@ -283,8 +283,37 @@ class JournalRepository {
   /// chronologisch).
   Future<List<JournalEntry>> loadAll() async {
     final db = await _database();
-    final entryRows = await db.query('entries', orderBy: 'timestamp DESC');
-    final tagRows = await db.query('entry_tags', orderBy: 'ord ASC');
+    final rows = await db.query('entries', orderBy: 'timestamp DESC');
+    return _hydrateEntries(db, rows, allTags: true);
+  }
+
+  /// Baut aus `entries`-Zeilen [JournalEntry]-Objekte inkl. ihrer Tags auf —
+  /// das Gegenstück zu [_hydrateTasks] und [_hydrateCalendarEvents].
+  ///
+  /// [allTags] lädt die Tag-Tabelle ungefiltert. Das ist genau dann richtig,
+  /// wenn ohnehin **alle** Einträge geladen werden ([loadAll]): eine Abfrage
+  /// statt einer mit langer `IN`-Liste. Bei einem Ausschnitt (Wochenfenster)
+  /// wird dagegen auf die betroffenen Ids eingeschränkt.
+  Future<List<JournalEntry>> _hydrateEntries(
+    Database db,
+    List<Map<String, Object?>> rows, {
+    bool allTags = false,
+  }) async {
+    if (rows.isEmpty) return <JournalEntry>[];
+
+    final List<Map<String, Object?>> tagRows;
+    if (allTags) {
+      tagRows = await db.query('entry_tags', orderBy: 'ord ASC');
+    } else {
+      final ids = rows.map((r) => r['id'] as String).toList();
+      final placeholders = List.filled(ids.length, '?').join(',');
+      tagRows = await db.query(
+        'entry_tags',
+        where: 'entry_id IN ($placeholders)',
+        whereArgs: ids,
+        orderBy: 'ord ASC',
+      );
+    }
 
     final tagsByEntry = <String, List<String>>{};
     for (final row in tagRows) {
@@ -292,7 +321,7 @@ class JournalRepository {
       (tagsByEntry[id] ??= <String>[]).add(row['tag'] as String);
     }
 
-    return entryRows.map((row) {
+    return rows.map((row) {
       final id = row['id'] as String;
       final inkJson = row['ink'] as String?;
       final inkTextAtRaw = row['ink_text_at'] as String?;
@@ -993,6 +1022,94 @@ class JournalRepository {
     final db = await _database();
     final rows = await db.rawQuery('SELECT COUNT(*) AS n FROM calendar_events');
     return (rows.first['n'] as int?) ?? 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bereichsabfragen für die Wochenauswertung (Session 26)
+  // ---------------------------------------------------------------------------
+
+  /// Der Kalendertag **nach** [d]. Bewusst über `DateTime(y, m, d + 1)` statt
+  /// `add(Duration(days: 1))`: Die Konstruktor-Variante rollt über Monats- und
+  /// Jahresgrenzen korrekt und landet **immer** auf Mitternacht. Ein
+  /// `Duration` verschiebt dagegen die absolute Zeit — beim Umstellen von
+  /// Sommer- auf Winterzeit käme 23:00 des Vortages heraus und der
+  /// Datums-Schlüssel wäre um einen Tag daneben.
+  static DateTime _nextDay(DateTime d) => DateTime(d.year, d.month, d.day + 1);
+
+  /// Einträge eines Kalendertag-Bereichs, **älteste zuerst** — die Reihenfolge,
+  /// in der eine Woche gelesen wird (Gegenstück zu [loadAll], das für das
+  /// Journal absteigend liefert). [toInclusive] zählt als ganzer Tag mit.
+  ///
+  /// `timestamp` ist ISO-8601 und damit lexikographisch vergleichbar; die
+  /// obere Grenze ist Mitternacht des Folgetages, exklusiv — so fällt kein
+  /// Eintrag vom Sonntagabend heraus.
+  Future<List<JournalEntry>> entriesInRange(
+    DateTime from,
+    DateTime toInclusive,
+  ) async {
+    final db = await _database();
+    final rows = await db.query(
+      'entries',
+      where: 'timestamp >= ? AND timestamp < ?',
+      whereArgs: [
+        '${_dateKey(from)}T00:00:00.000',
+        '${_dateKey(_nextDay(toInclusive))}T00:00:00.000',
+      ],
+      orderBy: 'timestamp ASC',
+    );
+    return _hydrateEntries(db, rows);
+  }
+
+  /// Aufgaben mit Fälligkeit im Bereich — **offene und erledigte**. Für die
+  /// Wochenauswertung ist gerade das Erledigte die Auskunft; Aufgaben ganz
+  /// ohne Day gehören zu keiner Woche und bleiben deshalb draußen.
+  Future<List<Task>> tasksInRange(
+    DateTime from,
+    DateTime toInclusive,
+  ) async {
+    final db = await _database();
+    final rows = await db.query(
+      'tasks',
+      where: 'due_day IS NOT NULL AND due_day >= ? AND due_day <= ?',
+      whereArgs: [_dateKey(from), _dateKey(toInclusive)],
+      orderBy: 'due_day ASC, due_time IS NULL, due_time ASC',
+    );
+    return _hydrateTasks(db, rows);
+  }
+
+  /// Tagesinfos, deren Zeitspanne den Bereich **berührt** (nicht nur die, die
+  /// ganz darin liegen) — eine über die Woche hinausreichende Info wie ein
+  /// Urlaub gehört in den Kontext.
+  Future<List<DailyInfo>> dailyInfosInRange(
+    DateTime from,
+    DateTime toInclusive,
+  ) async {
+    final db = await _database();
+    final rows = await db.query(
+      'daily_info',
+      where: 'start_date <= ? AND COALESCE(end_date, start_date) >= ?',
+      whereArgs: [_dateKey(toInclusive), _dateKey(from)],
+      orderBy: 'start_date ASC',
+    );
+    return rows.map(_dailyInfoFromRow).toList();
+  }
+
+  /// Termine aus **aktivierten** Kalendern, die den Bereich berühren.
+  /// Bereichslogik wie bei [calendarEventsForDay] (Endtag inklusiv).
+  Future<List<CalendarEvent>> calendarEventsInRange(
+    DateTime from,
+    DateTime toInclusive,
+  ) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      'SELECT e.* FROM calendar_events e '
+      'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
+      'WHERE s.enabled = 1 AND e.start_day <= ? AND e.end_day >= ? '
+      "ORDER BY e.start_day ASC, e.all_day DESC, "
+      "COALESCE(e.start_time, '') ASC, e.summary COLLATE NOCASE ASC",
+      [_dateKey(toInclusive), _dateKey(from)],
+    );
+    return _hydrateCalendarEvents(db, rows);
   }
 
   // ---------------------------------------------------------------------------
