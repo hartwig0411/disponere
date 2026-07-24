@@ -13,6 +13,7 @@ import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../../widgets/ink_painter.dart';
 import '../../widgets/task_sheet.dart';
+import '../../screens/search/search_screen.dart';
 import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
 import '../../screens/settings/calendar_settings_screen.dart';
@@ -823,6 +824,36 @@ class _JournalScreenState extends State<JournalScreen> {
     await _reloadCalendarSources();
   }
 
+  /// Öffnet die Suche und öffnet anschließend den angetippten Eintrag.
+  ///
+  /// Der Such-Screen liefert nur die Id zurück; geöffnet wird hier — mit
+  /// genau den Wegen, die auch das Antippen einer Karte im Journal nimmt.
+  /// Damit bleibt die Persistenz an einer Stelle und die Suche ein reiner
+  /// Lese-Screen.
+  ///
+  /// **Bewusst kein Scrollen zur Karte:** Das Journal ist ein
+  /// `ListView.builder` mit unterschiedlich hohen Einträgen — eine Position
+  /// außerhalb des Sichtbereichs lässt sich darin nicht verlässlich
+  /// ansteuern, ohne ein zusätzliches Paket einzuführen. Den Eintrag zu
+  /// öffnen ist ohnehin das, was nach einem Treffer gewollt ist: lesen,
+  /// gegebenenfalls ergänzen.
+  Future<void> _openSearch() async {
+    final entryId = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const SearchScreen()),
+    );
+    if (entryId == null || !mounted) return;
+
+    final index = _entries.indexWhere((e) => e.id == entryId);
+    if (index == -1) return;
+    final entry = _entries[index];
+    if (entry.isInk) {
+      await _openInkEditorEdit(entry);
+    } else {
+      _openEntrySheet(existing: entry);
+    }
+  }
+
   /// Öffnet die Claude-Einstellungen (API-Schlüssel). Kein Nachladen nötig —
   /// dort wird nichts verändert, was das Journal anzeigt.
   Future<void> _openClaudeSettings() async {
@@ -848,6 +879,11 @@ class _JournalScreenState extends State<JournalScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white54),
+            tooltip: 'Suchen',
+            onPressed: _openSearch,
+          ),
           IconButton(
             icon: const Icon(Icons.sell_outlined, color: Colors.white54),
             tooltip: 'Tags verwalten',

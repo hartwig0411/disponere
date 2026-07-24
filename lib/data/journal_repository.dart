@@ -9,6 +9,7 @@ import '../models/calendar_source.dart';
 import '../models/daily_info.dart';
 import '../models/ink_data.dart';
 import '../models/journal_entry.dart';
+import '../models/search_hit.dart';
 import '../models/task.dart';
 
 /// Persistenz-Schicht für Journal-Einträge auf Basis von SQLite.
@@ -396,6 +397,103 @@ class JournalRepository {
       whereArgs: [entryId],
     );
     return now;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Suche (Session 25)
+  // ---------------------------------------------------------------------------
+
+  /// Volltextsuche über `entries.content` **und** `entries.ink_text`,
+  /// Treffer nach Zeitstempel absteigend (Architektur §9).
+  ///
+  /// **Warum in Dart gefiltert wird und nicht in SQL:** SQLites `LIKE` und
+  /// `LOWER()` sind ASCII-only. `LOWER('Über')` bleibt `Über`, und die Suche
+  /// nach „über" fände den Satz nicht. Bei deutschen Texten ist das kein
+  /// Randfall, sondern der Normalfall. Dieselbe Entscheidung liegt schon
+  /// `tag_key` zugrunde, der ebenfalls in Dart kleingeschrieben wird —
+  /// `toLowerCase()` kann Umlaute, SQLite kann sie nicht.
+  ///
+  /// Geladen werden nur vier Spalten; die Tinte selbst (`ink`, der große
+  /// JSON-Blob) bleibt außen vor — von ihr wird nur gefragt, **ob** sie da
+  /// ist. Bei einem persönlichen Journal in der Größenordnung einiger
+  /// tausend Einträge ist das unproblematisch. Sollte es je spürbar werden,
+  /// ist der Ausbauweg eine mitgeführte, in Dart normalisierte Suchspalte —
+  /// eine Migration, kein Umbau.
+  Future<List<SearchHit>> searchEntries(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return const <SearchHit>[];
+
+    final db = await _database();
+    // `timestamp` ist ISO-8601 — lexikographisch sortiert = chronologisch.
+    final rows = await db.rawQuery(
+      'SELECT id, timestamp, content, ink_text, '
+      '(ink IS NOT NULL) AS is_ink '
+      'FROM entries ORDER BY timestamp DESC',
+    );
+
+    final hits = <SearchHit>[];
+    for (final row in rows) {
+      final content = (row['content'] as String?) ?? '';
+      final inkText = row['ink_text'] as String?;
+
+      // Reihenfolge mit Absicht: Was der Nutzer selbst geschrieben hat, wird
+      // vor der Maschinenerkennung geprüft. Ein Eintrag ist ohnehin entweder
+      // Text oder Tinte — „beides trifft" ist ein theoretischer Fall.
+      var index = content.toLowerCase().indexOf(q);
+      var source = SearchHitSource.content;
+      var text = content;
+      if (index == -1 && inkText != null) {
+        index = inkText.toLowerCase().indexOf(q);
+        source = SearchHitSource.inkText;
+        text = inkText;
+      }
+      if (index == -1) continue;
+
+      hits.add(SearchHit(
+        entryId: row['id'] as String,
+        timestamp: DateTime.parse(row['timestamp'] as String),
+        source: source,
+        snippet: _snippetAround(text, index, q.length),
+        isInk: ((row['is_ink'] as int?) ?? 0) == 1,
+      ));
+    }
+    return hits;
+  }
+
+  /// Wie viel Text vor der Fundstelle in den Ausschnitt kommt.
+  static const _snippetLead = 40;
+
+  /// Wie viel Text nach der Fundstelle in den Ausschnitt kommt.
+  static const _snippetTrail = 120;
+
+  /// Schneidet einen Ausschnitt um die Fundstelle heraus.
+  ///
+  /// Der Ausschnitt liegt **um** den Treffer herum und nicht am Textanfang:
+  /// Bei einem langen Eintrag wären die ersten drei Zeilen sonst genau das,
+  /// was mit dem Treffer nichts zu tun hat.
+  ///
+  /// [matchIndex] stammt aus dem kleingeschriebenen Text. Für lateinische
+  /// Schrift ändert `toLowerCase()` die Länge nicht; falls es doch je
+  /// auseinanderläuft, wird der Index geklemmt — dann sitzt der Ausschnitt
+  /// etwas daneben, statt dass die Suche abstürzt.
+  static String _snippetAround(String text, int matchIndex, int queryLength) {
+    if (text.isEmpty) return '';
+    var at = matchIndex;
+    if (at < 0) at = 0;
+    if (at > text.length) at = text.length;
+
+    var start = at - _snippetLead;
+    var end = at + queryLength + _snippetTrail;
+    final cutStart = start > 0;
+    final cutEnd = end < text.length;
+    if (start < 0) start = 0;
+    if (end > text.length) end = text.length;
+
+    var slice =
+        text.substring(start, end).replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (cutStart) slice = '… $slice';
+    if (cutEnd) slice = '$slice …';
+    return slice;
   }
 
   // ---------------------------------------------------------------------------
