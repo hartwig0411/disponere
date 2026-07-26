@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme/app_colors.dart';
 import 'screens/journal/journal_screen.dart';
 
 void main() {
@@ -13,7 +14,7 @@ class DisponereApp extends StatelessWidget {
     return MaterialApp(
       title: 'Disponere',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
+      theme: AppColors.buildLightTheme(),
       home: const JournalScreen(),
     );
   }

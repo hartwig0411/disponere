@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_colors.dart';
 import '../../data/journal_repository.dart';
 import '../../models/journal_entry.dart';
 import '../../models/daily_info.dart';
@@ -20,20 +21,11 @@ import '../../screens/settings/calendar_settings_screen.dart';
 import '../../screens/settings/claude_settings_screen.dart';
 import '../../screens/review/week_review_screen.dart';
 
-/// Warmer Bernstein-Akzent für Daily Info — hebt sie klar vom kühlen Blau der
-/// Einträge ab und lässt Raum für spätere Aufgaben/Termine in eigenen Farben.
-const Color _kDailyInfoAccent = Color(0xFFD9A441);
-
-/// Grüner Akzent für Aufgaben — „erledigbar/aktiv", klar abgesetzt von
-/// Bernstein (Daily Info) und Blau (Einträge). Provisorisch: die App-Theme-
-/// Entscheidung steht noch aus.
-const Color _kTaskAccent = Color(0xFF5FA86A);
-
-/// Violetter Akzent für Kalendertermine — „von außen gesetzt, nicht
-/// veränderbar". Vierte und letzte Farbe im Journal: Bernstein (Tagesinfo),
-/// Violett (Termine), Grün (Aufgaben), Blau (Einträge). Provisorisch wie die
-/// übrigen.
-const Color _kEventAccent = Color(0xFF9C7BD6);
+// Farben leben ab dem hellen Theme zentral in AppColors
+// (lib/theme/app_colors.dart). Die frueheren provisorischen Akzente
+// (Bernstein/Gruen/Violett) sind mit der Design-Entscheidung entfallen: ein
+// ruhiges, grau getoentes Tagesinfo-Band, gedaempft-blaue Aufgaben-Kaestchen
+// und ein blaues Kalender-Icon tragen jetzt alles ueber das eine Akzentblau.
 
 class JournalScreen extends StatefulWidget {
   const JournalScreen({super.key});
@@ -181,8 +173,8 @@ class _JournalScreenState extends State<JournalScreen> {
   }
 
   /// Öffnet das Text-Eingabe-Sheet.
-  /// [existing] == null → Neuer (Text-)Eintrag.
-  /// [existing] != null → Bestehenden Text-Eintrag bearbeiten.
+  /// [existing] == null -> Neuer (Text-)Eintrag.
+  /// [existing] != null -> Bestehenden Text-Eintrag bearbeiten.
   void _openEntrySheet({JournalEntry? existing}) {
     final isEditing = existing != null;
     final contentController =
@@ -193,7 +185,7 @@ class _JournalScreenState extends State<JournalScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF16213E),
+      backgroundColor: AppColors.paper,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -212,7 +204,7 @@ class _JournalScreenState extends State<JournalScreen> {
               Text(
                 isEditing ? 'Eintrag bearbeiten' : 'Neuer Eintrag',
                 style: const TextStyle(
-                  color: Colors.white70,
+                  color: AppColors.iconInactive,
                   fontSize: 14,
                   letterSpacing: 2,
                 ),
@@ -225,12 +217,14 @@ class _JournalScreenState extends State<JournalScreen> {
                       controller: contentController,
                       autofocus: true,
                       maxLines: 4,
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      style:
+                          const TextStyle(color: AppColors.text, fontSize: 16),
                       decoration: InputDecoration(
                         hintText: 'Was ist gerade wichtig?',
-                        hintStyle: const TextStyle(color: Colors.white30),
+                        hintStyle:
+                            const TextStyle(color: AppColors.placeholder),
                         filled: true,
-                        fillColor: Colors.white10,
+                        fillColor: AppColors.fieldFill,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -239,11 +233,11 @@ class _JournalScreenState extends State<JournalScreen> {
                     ),
                   ),
                   // Stift-Eingabe nur beim Neuanlegen: das native Feld kann
-                  // (noch) nicht vorbefüllt werden → Bearbeiten via Tastatur.
+                  // (noch) nicht vorbefuellt werden -> Bearbeiten via Tastatur.
                   if (!isEditing) ...[
                     const SizedBox(width: 12),
                     IconButton(
-                      icon: const Icon(Icons.edit, color: Color(0xFF4A90D9)),
+                      icon: const Icon(Icons.edit, color: AppColors.accent),
                       tooltip: 'Mit Stift schreiben (Text)',
                       onPressed: () async {
                         Navigator.pop(context);
@@ -260,7 +254,7 @@ class _JournalScreenState extends State<JournalScreen> {
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.brush, color: Color(0xFF4A90D9)),
+                      icon: const Icon(Icons.brush, color: AppColors.accent),
                       tooltip: 'Mit Stift zeichnen (Tinte)',
                       onPressed: () {
                         Navigator.pop(context);
@@ -280,7 +274,7 @@ class _JournalScreenState extends State<JournalScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90D9),
+                    backgroundColor: AppColors.accent,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -435,20 +429,21 @@ class _JournalScreenState extends State<JournalScreen> {
   // ---------------------------------------------------------------------------
 
   /// Öffnet das Daily-Info-Sheet.
-  /// [existing] == null → Neue Tagesinfo (Start = heute).
-  /// [existing] != null → Bestehende Tagesinfo bearbeiten (mit Löschen).
+  /// [existing] == null -> Neue Tagesinfo (Start = heute).
+  /// [existing] != null -> Bestehende Tagesinfo bearbeiten (mit Löschen).
   void _openDailyInfoSheet({DailyInfo? existing}) {
     final isEditing = existing != null;
     final textController = TextEditingController(text: existing?.text ?? '');
     DateTime startDate =
         DailyInfo.dayOnly(existing?.startDate ?? DateTime.now());
-    DateTime? endDate =
-        existing?.endDate != null ? DailyInfo.dayOnly(existing!.endDate!) : null;
+    DateTime? endDate = existing?.endDate != null
+        ? DailyInfo.dayOnly(existing!.endDate!)
+        : null;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF16213E),
+      backgroundColor: AppColors.paper,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -477,13 +472,13 @@ class _JournalScreenState extends State<JournalScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.wb_sunny_outlined,
-                          color: _kDailyInfoAccent, size: 18),
+                      const Icon(Icons.info_outline,
+                          color: AppColors.dailyInfoText, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         isEditing ? 'Tagesinfo bearbeiten' : 'Neue Tagesinfo',
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: AppColors.iconInactive,
                           fontSize: 14,
                           letterSpacing: 2,
                         ),
@@ -495,12 +490,12 @@ class _JournalScreenState extends State<JournalScreen> {
                     controller: textController,
                     autofocus: true,
                     maxLines: 3,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    style: const TextStyle(color: AppColors.text, fontSize: 16),
                     decoration: InputDecoration(
                       hintText: 'Was ist an diesem Tag bei Menschen im Umfeld?',
-                      hintStyle: const TextStyle(color: Colors.white30),
+                      hintStyle: const TextStyle(color: AppColors.placeholder),
                       filled: true,
-                      fillColor: Colors.white10,
+                      fillColor: AppColors.fieldFill,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -517,7 +512,6 @@ class _JournalScreenState extends State<JournalScreen> {
                       if (picked != null) {
                         setSheetState(() {
                           startDate = DailyInfo.dayOnly(picked);
-                          // Enddatum nie vor Startdatum.
                           if (endDate != null && endDate!.isBefore(startDate)) {
                             endDate = startDate;
                           }
@@ -533,10 +527,10 @@ class _JournalScreenState extends State<JournalScreen> {
                         setSheetState(() => endDate = startDate);
                       },
                       icon: const Icon(Icons.date_range,
-                          size: 18, color: _kDailyInfoAccent),
+                          size: 18, color: AppColors.accent),
                       label: const Text(
                         'Zeitspanne (bis-Datum)',
-                        style: TextStyle(color: _kDailyInfoAccent),
+                        style: TextStyle(color: AppColors.accent),
                       ),
                     )
                   else
@@ -551,9 +545,8 @@ class _JournalScreenState extends State<JournalScreen> {
                               if (picked != null) {
                                 final d = DailyInfo.dayOnly(picked);
                                 setSheetState(() {
-                                  endDate = d.isBefore(startDate)
-                                      ? startDate
-                                      : d;
+                                  endDate =
+                                      d.isBefore(startDate) ? startDate : d;
                                 });
                               }
                             },
@@ -561,7 +554,8 @@ class _JournalScreenState extends State<JournalScreen> {
                         ),
                         IconButton(
                           tooltip: 'Zeitspanne entfernen',
-                          icon: const Icon(Icons.close, color: Colors.white38),
+                          icon: const Icon(Icons.close,
+                              color: AppColors.iconInactive),
                           onPressed: () {
                             setSheetState(() => endDate = null);
                           },
@@ -575,7 +569,7 @@ class _JournalScreenState extends State<JournalScreen> {
                         IconButton(
                           tooltip: 'Löschen',
                           icon: const Icon(Icons.delete_outline,
-                              color: Colors.redAccent),
+                              color: AppColors.danger),
                           onPressed: () {
                             Navigator.pop(sheetContext);
                             _deleteDailyInfo(existing.id);
@@ -584,7 +578,7 @@ class _JournalScreenState extends State<JournalScreen> {
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _kDailyInfoAccent,
+                            backgroundColor: AppColors.accent,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -604,7 +598,7 @@ class _JournalScreenState extends State<JournalScreen> {
                           child: const Text(
                             'Speichern',
                             style: TextStyle(
-                              color: Color(0xFF1A1A2E),
+                              color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 1,
@@ -881,111 +875,120 @@ class _JournalScreenState extends State<JournalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final entryCount = _entries.isEmpty ? 1 : _entries.length;
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: Text(
-          _formatDate(DateTime.now()),
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 16,
-            fontWeight: FontWeight.w300,
-            letterSpacing: 2,
-          ),
+        backgroundColor: AppColors.paper,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        // Oben links: Menue mit den selteneren Aktionen (Tags, Kalender,
+        // Wochenauswertung). Design 8.
+        leading: PopupMenuButton<String>(
+          icon: const Icon(Icons.menu, color: AppColors.iconInactive),
+          tooltip: 'Menue',
+          color: AppColors.paper,
+          onSelected: (value) {
+            switch (value) {
+              case 'tags':
+                _openTagManagement();
+                break;
+              case 'calendar':
+                _openCalendarSettings();
+                break;
+              case 'week':
+                _openWeekReview();
+                break;
+            }
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem<String>(
+              value: 'tags',
+              child: Row(children: [
+                Icon(Icons.sell_outlined,
+                    size: 18, color: AppColors.iconActive),
+                SizedBox(width: 12),
+                Text('Tags verwalten',
+                    style: TextStyle(color: AppColors.iconActive)),
+              ]),
+            ),
+            PopupMenuItem<String>(
+              value: 'calendar',
+              child: Row(children: [
+                Icon(Icons.event_outlined,
+                    size: 18, color: AppColors.iconActive),
+                SizedBox(width: 12),
+                Text('Google Calendar',
+                    style: TextStyle(color: AppColors.iconActive)),
+              ]),
+            ),
+            PopupMenuItem<String>(
+              value: 'week',
+              child: Row(children: [
+                Icon(Icons.date_range,
+                    size: 18, color: AppColors.iconActive),
+                SizedBox(width: 12),
+                Text('Wochenauswertung',
+                    style: TextStyle(color: AppColors.iconActive)),
+              ]),
+            ),
+          ],
         ),
+        // Oben rechts: das Funkel-Symbol (Claude). Design 8.
         actions: [
           IconButton(
-            icon: const Icon(Icons.search, color: Colors.white54),
-            tooltip: 'Suchen',
-            onPressed: _openSearch,
-          ),
-          IconButton(
-            icon: const Icon(Icons.sell_outlined, color: Colors.white54),
-            tooltip: 'Tags verwalten',
-            onPressed: _openTagManagement,
-          ),
-          IconButton(
-            icon: const Icon(Icons.event_outlined, color: Colors.white54),
-            tooltip: 'Google Calendar',
-            onPressed: _openCalendarSettings,
-          ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome_outlined, color: Colors.white54),
+            icon: const Icon(Icons.auto_awesome_outlined,
+                color: AppColors.accent),
             tooltip: 'Claude',
             onPressed: _openClaudeSettings,
           ),
-          // Überlauf-Menü (Architektur §12). Hier landet, was selten gebraucht
-          // wird — eine Wochenauswertung macht man einmal die Woche, eine
-          // Suche mehrmals am Tag. Das Funkel-Symbol bleibt vorerst daneben
-          // stehen; ob die Claude-Einstellungen ebenfalls hierher wandern,
-          // wird entschieden, wenn das Menü im Betrieb erlebt wurde.
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white54),
-            tooltip: 'Mehr',
-            color: const Color(0xFF16213E),
-            onSelected: (value) {
-              if (value == 'week') _openWeekReview();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
-                value: 'week',
-                child: Row(
-                  children: [
-                    Icon(Icons.date_range, size: 18, color: Colors.white54),
-                    SizedBox(width: 12),
-                    Text(
-                      'Wochenauswertung',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(width: 4),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF4A90D9),
-        onPressed: () => _openEntrySheet(),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
       body: ListView.builder(
-        padding: const EdgeInsets.all(24),
-        // +3 für die festen Kopf-Bereiche: Tagesinfo, Termine, Aufgaben.
-        // Reihenfolge bewusst so: erst der Rahmen des Tages (Tagesinfo), dann
-        // die festen Zeitpunkte (Termine), dann das Bewegliche (Aufgaben).
-        // Reversibel — reine Anordnungsfrage.
-        itemCount: _entries.length + 3,
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        // Feste Kopf-Bereiche (4): Datumskopf, Tagesinfo, Termine, Aufgaben.
+        // Danach die Eintraege - oder, solange keiner da ist, die leise
+        // Einladung zum Schreiben (leerer Heute-Zustand, Design 6).
+        itemCount: 4 + entryCount,
         itemBuilder: (context, index) {
           if (index == 0) {
+            return _DateHeader(
+              weekday: _weekdayName(today),
+              date: _formatDate(today),
+            );
+          }
+          if (index == 1) {
             return _DailyInfoSection(
               infos: _todayInfos,
               onAdd: () => _openDailyInfoSheet(),
               onTapInfo: (info) => _openDailyInfoSheet(existing: info),
             );
           }
-          if (index == 1) {
+          if (index == 2) {
             return _EventsSection(
               events: _todayEvents,
-              day: _dayKey(DateTime.now()),
-              // Ohne aktivierten Kalender bleibt die Sektion unsichtbar —
-              // wer Google Calendar nicht nutzt, sieht keinen leeren Kasten.
+              day: _dayKey(today),
+              // Ohne aktivierten Kalender bleibt die Sektion unsichtbar.
               visible: _calendarSources.any((c) => c.enabled),
               onOpenSettings: _openCalendarSettings,
             );
           }
-          if (index == 2) {
+          if (index == 3) {
             return _TasksSection(
               tasks: _todayTasks,
-              today: DateTime.now(),
+              today: today,
               onAdd: () => _openTaskSheet(),
               onToggle: _toggleTaskDone,
               onTapTask: (task) => _openTaskSheet(existing: task),
               onOpenOverview: _openTaskOverview,
             );
           }
-          final entry = _entries[index - 3];
+          if (_entries.isEmpty) {
+            return _EmptyEntryInvitation(onTap: () => _openEntrySheet());
+          }
+          final entry = _entries[index - 4];
           return _EntryCard(
             entry: entry,
             onTap: () {
@@ -998,7 +1001,26 @@ class _JournalScreenState extends State<JournalScreen> {
           );
         },
       ),
+      bottomNavigationBar: _BottomBar(
+        onJournal: () {},
+        onSearch: _openSearch,
+        onTasks: _openTaskOverview,
+        onNewEntry: () => _openEntrySheet(),
+      ),
     );
+  }
+
+  String _weekdayName(DateTime date) {
+    const names = [
+      'MONTAG',
+      'DIENSTAG',
+      'MITTWOCH',
+      'DONNERSTAG',
+      'FREITAG',
+      'SAMSTAG',
+      'SONNTAG',
+    ];
+    return names[date.weekday - 1];
   }
 
   String _formatDate(DateTime date) {
@@ -1010,9 +1032,47 @@ class _JournalScreenState extends State<JournalScreen> {
   }
 }
 
-/// Farblich abgesetzter Bereich oben im Journal: die heute betroffenen
-/// Tagesinfos plus ein dezenter Einstieg zum Anlegen. Klar getrennt von
-/// Einträgen (kühles Blau) durch den warmen Bernstein-Akzent.
+/// Zweizeiliger Datumskopf: klein und grau der Wochentag, darunter gross das
+/// Datum. Der ruhige Anker des heutigen Tages (Design 3/4).
+class _DateHeader extends StatelessWidget {
+  final String weekday;
+  final String date;
+  const _DateHeader({required this.weekday, required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            weekday,
+            style: const TextStyle(
+              color: AppColors.weekday,
+              fontSize: 12,
+              letterSpacing: 2.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            date,
+            style: const TextStyle(
+              color: AppColors.dateLarge,
+              fontSize: 30,
+              fontWeight: FontWeight.w500,
+              height: 1.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Tagesinfo-Band oben im Journal: was fuer den ganzen Tag gilt. Ruhige, grau
+/// getoente Flaeche mit Info-Icon; klar von den Eintraegen abgesetzt.
 class _DailyInfoSection extends StatelessWidget {
   final List<DailyInfo> infos;
   final VoidCallback onAdd;
@@ -1033,13 +1093,13 @@ class _DailyInfoSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.wb_sunny_outlined,
-                  size: 14, color: _kDailyInfoAccent),
+              const Icon(Icons.info_outline,
+                  size: 14, color: AppColors.dailyInfoText),
               const SizedBox(width: 6),
               const Text(
                 'TAGESINFO',
                 style: TextStyle(
-                  color: _kDailyInfoAccent,
+                  color: AppColors.dailyInfoText,
                   fontSize: 11,
                   letterSpacing: 2,
                   fontWeight: FontWeight.w600,
@@ -1050,8 +1110,9 @@ class _DailyInfoSection extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.add, size: 20, color: _kDailyInfoAccent),
-                tooltip: 'Tagesinfo hinzufügen',
+                icon: const Icon(Icons.add,
+                    size: 20, color: AppColors.dailyInfoText),
+                tooltip: 'Tagesinfo hinzufuegen',
                 onPressed: onAdd,
               ),
             ],
@@ -1066,14 +1127,12 @@ class _DailyInfoSection extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
+                  color: AppColors.dailyInfoBand,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _kDailyInfoAccent.withValues(alpha: 0.25),
-                  ),
                 ),
                 child: const Text(
-                  'Keine Tagesinfo für heute — tippen zum Hinzufügen',
-                  style: TextStyle(color: Colors.white38, fontSize: 13),
+                  'Keine Tagesinfo fuer heute - tippen zum Hinzufuegen',
+                  style: TextStyle(color: AppColors.placeholder, fontSize: 13),
                 ),
               ),
             )
@@ -1098,19 +1157,13 @@ class _DailyInfoCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: _kDailyInfoAccent.withValues(alpha: 0.10),
+        color: AppColors.dailyInfoBand,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border(
-                left: BorderSide(color: _kDailyInfoAccent, width: 3),
-              ),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1118,7 +1171,7 @@ class _DailyInfoCard extends StatelessWidget {
                   Text(
                     _rangeLabel(info),
                     style: const TextStyle(
-                      color: _kDailyInfoAccent,
+                      color: AppColors.dailyInfoText,
                       fontSize: 11,
                       letterSpacing: 1,
                     ),
@@ -1128,7 +1181,7 @@ class _DailyInfoCard extends StatelessWidget {
                 Text(
                   info.text,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.dailyInfoText,
                     fontSize: 15,
                     height: 1.4,
                   ),
@@ -1144,25 +1197,19 @@ class _DailyInfoCard extends StatelessWidget {
   String _rangeLabel(DailyInfo info) {
     String d(DateTime x) =>
         '${x.day.toString().padLeft(2, '0')}.${x.month.toString().padLeft(2, '0')}.';
-    return '${d(info.startDate)} – ${d(info.endDate!)}';
+    return '${d(info.startDate)} - ${d(info.endDate!)}';
   }
 }
 
-/// Farblich abgesetzter Bereich unter Daily Info: die heute erscheinenden
-/// Aufgaben plus ein dezenter Einstieg zum Anlegen. Grüner Akzent, klar
-/// getrennt von Bernstein (Daily Info) und Blau (Einträge).
 /// Die heute anstehenden Kalendertermine, gespiegelt aus Google Calendar.
 ///
-/// **Bewusst nicht editierbar:** Termine gehören dem Kalender, nicht dem
-/// Journal. Es gibt darum kein Plus und kein Bearbeiten-Sheet — nur den Weg
-/// in die Einstellungen. Die Sektion verschwindet ganz, solange kein Kalender
-/// aktiviert ist ([visible]), damit niemand einen leeren Kasten anstarrt, der
-/// ihn nichts angeht.
+/// Bewusst nicht editierbar: Termine gehoeren dem Kalender, nicht dem Journal.
+/// Kein Plus, kein Bearbeiten-Sheet - nur der Weg in die Einstellungen. Die
+/// Sektion verschwindet ganz, solange kein Kalender aktiviert ist ([visible]).
 class _EventsSection extends StatelessWidget {
   final List<CalendarEvent> events;
 
-  /// Der dargestellte Kalendertag als `yyyy-MM-dd` — bestimmt bei mehrtägigen
-  /// Terminen, ob „ab 10:00", „bis 11:30" oder gar keine Zeit angezeigt wird.
+  /// Der dargestellte Kalendertag als `yyyy-MM-dd`.
   final String day;
 
   final bool visible;
@@ -1185,12 +1232,13 @@ class _EventsSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.event_outlined, size: 14, color: _kEventAccent),
+              const Icon(Icons.event_outlined,
+                  size: 14, color: AppColors.iconInactive),
               const SizedBox(width: 6),
               const Text(
                 'TERMINE',
                 style: TextStyle(
-                  color: _kEventAccent,
+                  color: AppColors.iconInactive,
                   fontSize: 11,
                   letterSpacing: 2,
                   fontWeight: FontWeight.w600,
@@ -1201,7 +1249,8 @@ class _EventsSection extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.tune, size: 18, color: _kEventAccent),
+                icon: const Icon(Icons.tune,
+                    size: 18, color: AppColors.iconInactive),
                 tooltip: 'Kalender und Sync',
                 onPressed: onOpenSettings,
               ),
@@ -1213,14 +1262,13 @@ class _EventsSection extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
+                color: AppColors.paper,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _kEventAccent.withValues(alpha: 0.25),
-                ),
+                border: Border.all(color: AppColors.hairline),
               ),
               child: const Text(
                 'Heute keine Termine',
-                style: TextStyle(color: Colors.white38, fontSize: 13),
+                style: TextStyle(color: AppColors.placeholder, fontSize: 13),
               ),
             )
           else
@@ -1231,7 +1279,7 @@ class _EventsSection extends StatelessWidget {
   }
 }
 
-/// Eine Terminkarte: Zeit, Titel, optional Ort, geerbte Tags.
+/// Eine Terminkarte: blaues Kalender-Icon, Zeit, Titel, optional Ort, Tags.
 class _EventCard extends StatelessWidget {
   final CalendarEvent event;
   final String day;
@@ -1241,77 +1289,74 @@ class _EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final timeLabel = event.timeLabelForDay(day);
-    // Ganztägig und der Mitteltag eines mehrtägigen Termins haben keine
-    // Uhrzeit — dort steht „ganztägig", damit die Spalte nicht leer wirkt.
-    final label = timeLabel ?? 'ganztägig';
+    final label = timeLabel ?? 'ganztaegig';
     final location = event.location;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: _kEventAccent.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: const Border(
-            left: BorderSide(color: _kEventAccent, width: 3),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 2, right: 10),
+            child: Icon(Icons.event, size: 18, color: AppColors.accent),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: _kEventAccent,
-                fontSize: 11,
-                letterSpacing: 1,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              event.summary,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
-            ),
-            if (location != null) ...[
-              const SizedBox(height: 4),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.place_outlined,
-                      size: 13, color: Colors.white30),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      location,
-                      style: const TextStyle(
-                          color: Colors.white38, fontSize: 12),
-                    ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.accent,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  event.summary,
+                  style: const TextStyle(color: AppColors.text, fontSize: 15),
+                ),
+                if (location != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.place_outlined,
+                          size: 13, color: AppColors.placeholder),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          location,
+                          style: const TextStyle(
+                              color: AppColors.iconInactive, fontSize: 12),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
-            if (event.tags.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final tag in event.tags) _TagChip(label: tag),
+                if (event.tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final tag in event.tags) _TagChip(label: tag),
+                    ],
+                  ),
                 ],
-              ),
-            ],
-          ],
-        ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+/// Die heute erscheinenden Aufgaben plus ein dezenter Einstieg zum Anlegen.
 class _TasksSection extends StatelessWidget {
   final List<Task> tasks;
   final DateTime today;
@@ -1338,13 +1383,13 @@ class _TasksSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline,
-                  size: 14, color: _kTaskAccent),
+              const Icon(Icons.check_box_outlined,
+                  size: 14, color: AppColors.iconInactive),
               const SizedBox(width: 6),
               const Text(
                 'AUFGABEN',
                 style: TextStyle(
-                  color: _kTaskAccent,
+                  color: AppColors.iconInactive,
                   fontSize: 11,
                   letterSpacing: 2,
                   fontWeight: FontWeight.w600,
@@ -1355,7 +1400,8 @@ class _TasksSection extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.checklist, size: 20, color: _kTaskAccent),
+                icon: const Icon(Icons.checklist,
+                    size: 20, color: AppColors.iconInactive),
                 tooltip: 'Alle Aufgaben',
                 onPressed: onOpenOverview,
               ),
@@ -1364,8 +1410,9 @@ class _TasksSection extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: const Icon(Icons.add, size: 20, color: _kTaskAccent),
-                tooltip: 'Aufgabe hinzufügen',
+                icon: const Icon(Icons.add,
+                    size: 20, color: AppColors.iconInactive),
+                tooltip: 'Aufgabe hinzufuegen',
                 onPressed: onAdd,
               ),
             ],
@@ -1380,14 +1427,13 @@ class _TasksSection extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
+                  color: AppColors.paper,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _kTaskAccent.withValues(alpha: 0.25),
-                  ),
+                  border: Border.all(color: AppColors.hairline),
                 ),
                 child: const Text(
-                  'Keine offenen Aufgaben — tippen zum Hinzufügen',
-                  style: TextStyle(color: Colors.white38, fontSize: 13),
+                  'Keine offenen Aufgaben - tippen zum Hinzufuegen',
+                  style: TextStyle(color: AppColors.placeholder, fontSize: 13),
                 ),
               ),
             )
@@ -1404,6 +1450,8 @@ class _TasksSection extends StatelessWidget {
   }
 }
 
+/// Eine Aufgabe im Journal: offenes Kaestchen (gedaempftes Blau), erledigt als
+/// gefuelltes Kaestchen mit Haekchen und durchgestrichenem, grauem Text.
 class _TaskCard extends StatelessWidget {
   final Task task;
   final DateTime today;
@@ -1421,102 +1469,140 @@ class _TaskCard extends StatelessWidget {
     final overdue = task.isOverdue(today);
     final meta = _metaLabel(overdue);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: _kTaskAccent.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border(
-                left: BorderSide(
-                  color: overdue ? Colors.redAccent : _kTaskAccent,
-                  width: 3,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkResponse(
+                onTap: onToggle,
+                radius: 22,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 12, top: 1),
+                  child: Icon(
+                    task.done
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                    color: task.done
+                        ? AppColors.accent
+                        : (overdue
+                            ? AppColors.danger
+                            : AppColors.taskOpenBox),
+                    size: 22,
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Checkbox mit eigenem Tap-Ziel (unabhängig vom Karten-Tap).
-                InkResponse(
-                  onTap: onToggle,
-                  radius: 22,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 10, top: 2),
-                    child: Icon(
-                      task.done
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: _kTaskAccent,
-                      size: 22,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      style: TextStyle(
+                        color: task.done
+                            ? AppColors.taskDoneText
+                            : AppColors.text,
+                        fontSize: 15,
+                        height: 1.3,
+                        decoration: task.done
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        decorationColor: AppColors.taskDoneText,
+                      ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    if (meta != null) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        task.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          height: 1.3,
+                        meta,
+                        style: TextStyle(
+                          color: overdue
+                              ? AppColors.danger
+                              : AppColors.iconInactive,
+                          fontSize: 12,
                         ),
                       ),
-                      if (meta != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          meta,
-                          style: TextStyle(
-                            color:
-                                overdue ? Colors.redAccent : Colors.white38,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      if (task.tags.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: task.tags
-                              .map((t) => _TagChip(label: t))
-                              .toList(),
-                        ),
-                      ],
                     ],
-                  ),
+                    if (task.tags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: task.tags
+                            .map((t) => _TagChip(label: t))
+                            .toList(),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  /// Meta-Zeile unter dem Titel: „Überfällig · TT.MM. [· HH:mm]" (rot),
-  /// sonst die Uhrzeit (falls gesetzt) oder „Ohne Datum". `null` → keine
-  /// Zeile (fällig heute ohne Uhrzeit).
+  /// Meta-Zeile unter dem Titel: "Ueberfaellig ..." (rot), sonst Uhrzeit oder
+  /// "Ohne Datum". `null` -> keine Zeile (faellig heute ohne Uhrzeit).
   String? _metaLabel(bool overdue) {
     String dm(DateTime x) =>
         '${x.day.toString().padLeft(2, '0')}.${x.month.toString().padLeft(2, '0')}.';
     if (overdue) {
-      final base = 'Überfällig · ${dm(task.dueDay!)}';
-      return task.dueTime != null ? '$base · ${task.dueTime}' : base;
+      final base = 'Ueberfaellig - ${dm(task.dueDay!)}';
+      return task.dueTime != null ? '$base - ${task.dueTime}' : base;
     }
     if (task.dueDay == null) return 'Ohne Datum';
-    return task.dueTime; // fällig heute: nur Uhrzeit, sonst null
+    return task.dueTime;
   }
 }
 
-/// Antippbare Datumszeile für das Daily-Info-Sheet.
+/// Leerer Heute-Zustand (Design 6): ein wartender Punkt, ein blauer Cursor und
+/// ein leiser Platzhalter laden zum Schreiben ein. Antippen oeffnet das
+/// Eintrags-Sheet.
+class _EmptyEntryInvitation extends StatelessWidget {
+  final VoidCallback onTap;
+  const _EmptyEntryInvitation({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: const BoxDecoration(
+                color: AppColors.bullet,
+                shape: BoxShape.circle,
+              ),
+            ),
+            Container(
+              width: 2,
+              height: 20,
+              margin: const EdgeInsets.only(right: 10),
+              color: AppColors.accent,
+            ),
+            const Text(
+              'Tippen oder mit dem Stift schreiben ...',
+              style: TextStyle(color: AppColors.placeholder, fontSize: 15),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Antippbare Datumszeile fuer das Daily-Info-Sheet.
 class _DateRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1535,22 +1621,24 @@ class _DateRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white10,
+          color: AppColors.fieldFill,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
             Text(
               label,
-              style: const TextStyle(color: Colors.white38, fontSize: 13),
+              style: const TextStyle(
+                  color: AppColors.iconInactive, fontSize: 13),
             ),
             const Spacer(),
             Text(
               value,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
+              style: const TextStyle(color: AppColors.text, fontSize: 15),
             ),
             const SizedBox(width: 8),
-            const Icon(Icons.calendar_today, size: 15, color: Colors.white38),
+            const Icon(Icons.calendar_today,
+                size: 15, color: AppColors.iconInactive),
           ],
         ),
       ),
@@ -1558,6 +1646,8 @@ class _DateRow extends StatelessWidget {
   }
 }
 
+/// Ein Journal-Eintrag: getippt in neutralem Dunkel, handschriftlich als echte
+/// Tinte (dunkel auf hell). Leichte Karte mit Haarlinien-Rand.
 class _EntryCard extends StatelessWidget {
   final JournalEntry entry;
   final VoidCallback onTap;
@@ -1568,16 +1658,16 @@ class _EntryCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Material(
-        color: const Color(0xFF16213E),
+        color: AppColors.paper,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(color: AppColors.hairline),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1587,14 +1677,15 @@ class _EntryCard extends StatelessWidget {
                     Text(
                       '${entry.timestamp.hour.toString().padLeft(2, '0')}:${entry.timestamp.minute.toString().padLeft(2, '0')}',
                       style: const TextStyle(
-                        color: Colors.white30,
+                        color: AppColors.placeholder,
                         fontSize: 12,
                         letterSpacing: 1.5,
                       ),
                     ),
                     if (entry.isInk) ...[
                       const SizedBox(width: 8),
-                      const Icon(Icons.brush, size: 12, color: Colors.white24),
+                      const Icon(Icons.brush,
+                          size: 12, color: AppColors.placeholder),
                     ],
                   ],
                 ),
@@ -1604,11 +1695,13 @@ class _EntryCard extends StatelessWidget {
                     height: 140,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors.white10,
+                      color: AppColors.paper,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.hairline),
                     ),
                     child: CustomPaint(
-                      painter: InkPreviewPainter(entry.ink!),
+                      painter:
+                          InkPreviewPainter(entry.ink!, color: AppColors.ink),
                       child: const SizedBox.expand(),
                     ),
                   )
@@ -1616,7 +1709,7 @@ class _EntryCard extends StatelessWidget {
                   Text(
                     entry.content,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.text,
                       fontSize: 16,
                       height: 1.5,
                     ),
@@ -1625,6 +1718,7 @@ class _EntryCard extends StatelessWidget {
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 4,
                     children:
                         entry.tags.map((tag) => _TagChip(label: tag)).toList(),
                   ),
@@ -1638,6 +1732,8 @@ class _EntryCard extends StatelessWidget {
   }
 }
 
+/// Tag-Chip im Akzentblau. Der Einstieg in die Tag-Ansicht (Antippen) kommt in
+/// einem eigenen Schritt; hier vorerst reine Darstellung.
 class _TagChip extends StatelessWidget {
   final String label;
   const _TagChip({required this.label});
@@ -1647,16 +1743,99 @@ class _TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white10,
+        color: AppColors.tagChipBg,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         '#$label',
         style: const TextStyle(
-          color: Colors.white54,
+          color: AppColors.accent,
           fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
+    );
+  }
+}
+
+/// Untere Icon-Leiste (Design 8): Journal (heute), Suche, Aufgaben, Neuer
+/// Eintrag. Das Journal-Icon steht als aktiver Tab im Akzentblau, die uebrigen
+/// ruhig in Grau. Vorerst fest unten - die Praxis entscheidet ueber die
+/// endgueltige Position (Design 9).
+class _BottomBar extends StatelessWidget {
+  final VoidCallback onJournal;
+  final VoidCallback onSearch;
+  final VoidCallback onTasks;
+  final VoidCallback onNewEntry;
+  const _BottomBar({
+    required this.onJournal,
+    required this.onSearch,
+    required this.onTasks,
+    required this.onNewEntry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.paper,
+        border: Border(top: BorderSide(color: AppColors.hairline)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 58,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _BottomBarButton(
+                icon: Icons.menu_book_outlined,
+                tooltip: 'Journal',
+                active: true,
+                onTap: onJournal,
+              ),
+              _BottomBarButton(
+                icon: Icons.search,
+                tooltip: 'Suchen',
+                onTap: onSearch,
+              ),
+              _BottomBarButton(
+                icon: Icons.check_box_outlined,
+                tooltip: 'Aufgaben',
+                onTap: onTasks,
+              ),
+              _BottomBarButton(
+                icon: Icons.edit_outlined,
+                tooltip: 'Neuer Eintrag',
+                onTap: onNewEntry,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomBarButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool active;
+  final VoidCallback onTap;
+  const _BottomBarButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon,
+          color: active ? AppColors.accent : AppColors.iconInactive),
+      tooltip: tooltip,
+      onPressed: onTap,
     );
   }
 }
