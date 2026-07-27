@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../data/journal_repository.dart';
+import '../../theme/app_colors.dart';
 import '../../models/task.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/task_sheet.dart';
 
-/// Grüner Akzent für Aufgaben — identisch zum Journal. Provisorisch, solange
-/// die App-Theme-Entscheidung aussteht.
-const Color _kTaskAccent = Color(0xFF5FA86A);
+/// Akzent für Aufgaben — jetzt das eine Akzentblau der App (Design v1.0).
+const Color _kTaskAccent = AppColors.accent;
 
 /// Sortierung der **offenen** Aufgaben in der Übersicht.
 enum _SortMode { day, tag }
@@ -108,19 +108,19 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
     final done = _all.where((t) => t.done).toList()..sort(_openCompare);
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Aufgaben',
           style: TextStyle(
-            color: Colors.white70,
+            color: AppColors.text,
             fontSize: 16,
             fontWeight: FontWeight.w300,
             letterSpacing: 2,
           ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white54),
+        iconTheme: const IconThemeData(color: AppColors.iconInactive),
       ),
       body: _loading
           ? const Center(
@@ -158,8 +158,8 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
       style: ButtonStyle(
         foregroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? const Color(0xFF1A1A2E)
-              : Colors.white54,
+              ? Colors.white
+              : AppColors.iconInactive,
         ),
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
@@ -249,21 +249,21 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
       return _sectionHeader('ERLEDIGT', 0);
     }
     return Theme(
-      // ExpansionTile-Trennlinien entfernen, damit es zum dunklen Look passt.
+      // ExpansionTile-Trennlinien entfernen — passt zum ruhigen hellen Look.
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
         childrenPadding: EdgeInsets.zero,
-        iconColor: Colors.white38,
-        collapsedIconColor: Colors.white38,
+        iconColor: AppColors.iconInactive,
+        collapsedIconColor: AppColors.iconInactive,
         title: Row(
           children: [
-            const Icon(Icons.check_circle, size: 14, color: Colors.white38),
+            const Icon(Icons.check_circle, size: 14, color: AppColors.iconInactive),
             const SizedBox(width: 6),
             Text(
               'ERLEDIGT · ${done.length}',
               style: const TextStyle(
-                color: Colors.white38,
+                color: AppColors.iconInactive,
                 fontSize: 11,
                 letterSpacing: 2,
                 fontWeight: FontWeight.w600,
@@ -305,7 +305,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
       child: Text(
         '$label · $count',
         style: const TextStyle(
-          color: Colors.white54,
+          color: AppColors.iconInactive,
           fontSize: 12,
           letterSpacing: 1,
           fontWeight: FontWeight.w600,
@@ -315,16 +315,11 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
   }
 
   Widget _emptyHint(String text) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _kTaskAccent.withOpacity(0.25)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: Text(
         text,
-        style: const TextStyle(color: Colors.white38, fontSize: 13),
+        style: const TextStyle(color: AppColors.iconInactive, fontSize: 13),
       ),
     );
   }
@@ -364,8 +359,8 @@ class _OverviewTaskCard extends StatelessWidget {
               border: Border(
                 left: BorderSide(
                   color: task.done
-                      ? Colors.white24
-                      : (overdue ? Colors.redAccent : _kTaskAccent),
+                      ? AppColors.taskDoneText
+                      : (overdue ? AppColors.danger : _kTaskAccent),
                   width: 3,
                 ),
               ),
@@ -382,7 +377,7 @@ class _OverviewTaskCard extends StatelessWidget {
                       task.done
                           ? Icons.check_circle
                           : Icons.radio_button_unchecked,
-                      color: task.done ? Colors.white38 : _kTaskAccent,
+                      color: task.done ? AppColors.iconInactive : _kTaskAccent,
                       size: 22,
                     ),
                   ),
@@ -394,7 +389,7 @@ class _OverviewTaskCard extends StatelessWidget {
                       Text(
                         task.title,
                         style: TextStyle(
-                          color: task.done ? Colors.white38 : Colors.white,
+                          color: task.done ? AppColors.taskDoneText : AppColors.text,
                           fontSize: 15,
                           height: 1.3,
                           decoration: task.done
@@ -408,8 +403,8 @@ class _OverviewTaskCard extends StatelessWidget {
                           meta,
                           style: TextStyle(
                             color: (overdue && !task.done)
-                                ? Colors.redAccent
-                                : Colors.white38,
+                                ? AppColors.danger
+                                : AppColors.iconInactive,
                             fontSize: 12,
                           ),
                         ),
@@ -459,12 +454,12 @@ class _TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white10,
+        color: AppColors.tagChipBg,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         '#$label',
-        style: const TextStyle(color: Colors.white54, fontSize: 12),
+        style: const TextStyle(color: AppColors.accent, fontSize: 12),
       ),
     );
   }

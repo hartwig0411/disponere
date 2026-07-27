@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+
+import '../theme/app_colors.dart';
 import '../models/task.dart';
 import '../utils/tag_parser.dart';
 import '../utils/tag_registry.dart';
 import 'tag_autocomplete_field.dart';
 
-/// Grüner Akzent für Aufgaben — identisch zum Journal (`_kTaskAccent` dort).
-/// Provisorisch, solange die App-Theme-Entscheidung aussteht.
-const Color _kTaskAccent = Color(0xFF5FA86A);
+/// Akzent für Aufgaben — jetzt das eine Akzentblau der App (Design v1.0).
+const Color _kTaskAccent = AppColors.accent;
 
 /// Wiederverwendbares Bottom-Sheet zum Erstellen/Bearbeiten einer [Task].
 ///
@@ -39,7 +40,7 @@ Future<void> showTaskSheet({
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: const Color(0xFF16213E),
+    backgroundColor: AppColors.paper,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
@@ -87,7 +88,7 @@ Future<void> showTaskSheet({
                     Text(
                       isEditing ? 'Aufgabe bearbeiten' : 'Neue Aufgabe',
                       style: const TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.iconInactive,
                         fontSize: 14,
                         letterSpacing: 2,
                       ),
@@ -99,12 +100,12 @@ Future<void> showTaskSheet({
                   controller: titleController,
                   autofocus: true,
                   maxLines: 2,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  style: const TextStyle(color: AppColors.text, fontSize: 16),
                   decoration: InputDecoration(
                     hintText: 'Was ist zu tun?',
-                    hintStyle: const TextStyle(color: Colors.white30),
+                    hintStyle: const TextStyle(color: AppColors.placeholder),
                     filled: true,
-                    fillColor: Colors.white10,
+                    fillColor: AppColors.fieldFill,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
@@ -151,7 +152,7 @@ Future<void> showTaskSheet({
                       ),
                       IconButton(
                         tooltip: 'Fälligkeit entfernen',
-                        icon: const Icon(Icons.close, color: Colors.white38),
+                        icon: const Icon(Icons.close, color: AppColors.iconInactive),
                         onPressed: () => setSheetState(() {
                           dueDay = null;
                           dueTime = null; // Uhrzeit ohne Day ergibt keinen Sinn
@@ -194,7 +195,7 @@ Future<void> showTaskSheet({
                         ),
                         IconButton(
                           tooltip: 'Uhrzeit entfernen',
-                          icon: const Icon(Icons.close, color: Colors.white38),
+                          icon: const Icon(Icons.close, color: AppColors.iconInactive),
                           onPressed: () =>
                               setSheetState(() => dueTime = null),
                         ),
@@ -208,7 +209,7 @@ Future<void> showTaskSheet({
                       IconButton(
                         tooltip: 'Löschen',
                         icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
+                            color: AppColors.danger),
                         onPressed: () {
                           Navigator.pop(sheetContext);
                           onDelete(existing.id);
@@ -254,7 +255,7 @@ Future<void> showTaskSheet({
                         child: const Text(
                           'Speichern',
                           style: TextStyle(
-                            color: Color(0xFF1A1A2E),
+                            color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1,
@@ -303,22 +304,22 @@ class _SheetRow extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white10,
+          color: AppColors.fieldFill,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
             Text(
               label,
-              style: const TextStyle(color: Colors.white38, fontSize: 13),
+              style: const TextStyle(color: AppColors.iconInactive, fontSize: 13),
             ),
             const Spacer(),
             Text(
               value,
-              style: const TextStyle(color: Colors.white, fontSize: 15),
+              style: const TextStyle(color: AppColors.text, fontSize: 15),
             ),
             const SizedBox(width: 8),
-            Icon(icon, size: 15, color: Colors.white38),
+            Icon(icon, size: 15, color: AppColors.iconInactive),
           ],
         ),
       ),

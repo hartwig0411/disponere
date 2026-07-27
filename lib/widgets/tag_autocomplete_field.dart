@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+
 /// Tag-Eingabefeld mit Autocomplete.
 ///
 /// Zeigt unter dem Feld passende, bereits bekannte Tags als antippbare Chips.
@@ -109,12 +111,12 @@ class _TagAutocompleteFieldState extends State<TagAutocompleteField> {
       children: [
         TextField(
           controller: widget.controller,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: const TextStyle(color: AppColors.text, fontSize: 14),
           decoration: InputDecoration(
             hintText: 'Tags mit #  ·  z.B. #MBS #ValSys',
-            hintStyle: const TextStyle(color: Colors.white30),
+            hintStyle: const TextStyle(color: AppColors.placeholder),
             filled: true,
-            fillColor: Colors.white10,
+            fillColor: AppColors.fieldFill,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -128,7 +130,7 @@ class _TagAutocompleteFieldState extends State<TagAutocompleteField> {
               padding: EdgeInsets.only(bottom: 4, left: 4),
               child: Text(
                 'Meintest du …?',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: AppColors.iconInactive, fontSize: 12),
               ),
             ),
           Wrap(
@@ -161,7 +163,7 @@ class _SuggestionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white10,
+      color: AppColors.tagChipBg,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -170,7 +172,7 @@ class _SuggestionChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Text(
             '#$label',
-            style: const TextStyle(color: Color(0xFF4A90D9), fontSize: 13),
+            style: const TextStyle(color: AppColors.accent, fontSize: 13),
           ),
         ),
       ),

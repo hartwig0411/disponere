@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../data/journal_repository.dart';
+import '../../theme/app_colors.dart';
 import '../../models/search_hit.dart';
 
 /// Volltextsuche über die Journal-Einträge (Architektur §9).
@@ -98,27 +99,27 @@ class _SearchScreenState extends State<SearchScreen> {
     final query = _controller.text.trim();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.paper,
         title: TextField(
           controller: _controller,
           focusNode: _focusNode,
           autofocus: true,
           textInputAction: TextInputAction.search,
           onChanged: _onQueryChanged,
-          style: const TextStyle(color: Colors.white, fontSize: 17),
-          cursorColor: const Color(0xFF4A90D9),
+          style: const TextStyle(color: AppColors.text, fontSize: 17),
+          cursorColor: AppColors.accent,
           decoration: const InputDecoration(
             hintText: 'Einträge durchsuchen',
-            hintStyle: TextStyle(color: Colors.white24, fontSize: 17),
+            hintStyle: TextStyle(color: AppColors.placeholder, fontSize: 17),
             border: InputBorder.none,
           ),
         ),
         actions: [
           if (query.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.close, color: Colors.white54),
+              icon: const Icon(Icons.close, color: AppColors.iconInactive),
               tooltip: 'Leeren',
               onPressed: _clear,
             ),
@@ -147,7 +148,7 @@ class _SearchScreenState extends State<SearchScreen> {
             height: 22,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Color(0xFF4A90D9),
+              color: AppColors.accent,
             ),
           ),
         );
@@ -166,7 +167,7 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Text(
             _hits.length == 1 ? '1 Treffer' : '${_hits.length} Treffer',
             style: const TextStyle(
-              color: Colors.white38,
+              color: AppColors.iconInactive,
               fontSize: 12,
               letterSpacing: 1.5,
             ),
@@ -204,13 +205,13 @@ class _SearchHint extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: Colors.white12),
+            Icon(icon, size: 40, color: AppColors.placeholder),
             const SizedBox(height: 16),
             Text(
               text,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Colors.white38,
+                color: AppColors.iconInactive,
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -232,7 +233,7 @@ class _HitCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: const Color(0xFF16213E),
+        color: AppColors.fieldFill,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -241,7 +242,6 @@ class _HitCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white10),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,14 +251,14 @@ class _HitCard extends StatelessWidget {
                     Text(
                       _formatStamp(hit.timestamp),
                       style: const TextStyle(
-                        color: Colors.white30,
+                        color: AppColors.placeholder,
                         fontSize: 12,
                         letterSpacing: 1.2,
                       ),
                     ),
                     if (hit.isInk) ...[
                       const SizedBox(width: 8),
-                      const Icon(Icons.brush, size: 12, color: Colors.white24),
+                      const Icon(Icons.brush, size: 12, color: AppColors.placeholder),
                     ],
                     const Spacer(),
                     // Ein Treffer in der Maschinenerkennung wird als solcher
@@ -269,13 +269,13 @@ class _HitCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.white10,
+                          color: AppColors.tagChipBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
                           'erkannter Text',
                           style: TextStyle(
-                            color: Colors.white38,
+                            color: AppColors.iconInactive,
                             fontSize: 11,
                           ),
                         ),
@@ -288,7 +288,7 @@ class _HitCard extends StatelessWidget {
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.text,
                     fontSize: 15,
                     height: 1.4,
                   ),

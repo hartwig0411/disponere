@@ -270,36 +270,52 @@ class _JournalScreenState extends State<JournalScreen> {
                 knownTags: _tagRegistry.allTags,
               ),
               const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              Row(
+                children: [
+                  // Loeschen nur beim Bearbeiten. Ohne Rueckfrage — bewusst,
+                  // damit sich Test-Eintraege zuegig von Hand wegraeumen lassen
+                  // (gleicher Schnitt wie im Aufgaben-Sheet).
+                  if (isEditing)
+                    IconButton(
+                      tooltip: 'Loeschen',
+                      icon: const Icon(Icons.delete_outline,
+                          color: AppColors.danger),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _deleteEntry(existing.id);
+                      },
+                    ),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        final content = contentController.text.trim();
+                        if (content.isEmpty) return;
+                        final tags = parseTags(tagController.text);
+                        if (existing != null) {
+                          _updateEntry(existing.id, content, tags);
+                        } else {
+                          _addEntry(content, tags);
+                        }
+                        Navigator.pop(context);
+                      },
+                      child: const Text(
+                        'Speichern',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          letterSpacing: 1,
+                        ),
+                      ),
                     ),
                   ),
-                  onPressed: () {
-                    final content = contentController.text.trim();
-                    if (content.isEmpty) return;
-                    final tags = parseTags(tagController.text);
-                    if (existing != null) {
-                      _updateEntry(existing.id, content, tags);
-                    } else {
-                      _addEntry(content, tags);
-                    }
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    'Speichern',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
+                ],
               ),
             ],
           ),
@@ -408,6 +424,48 @@ class _JournalScreenState extends State<JournalScreen> {
       _entries[index] = updated;
     });
     _repo.upsert(updated);
+  }
+
+  /// Loescht einen Eintrag (getippt wie Tinte) aus Liste und Datenbank.
+  /// entry_tags folgen per ON DELETE CASCADE.
+  void _deleteEntry(String id) {
+    setState(() {
+      _entries.removeWhere((e) => e.id == id);
+    });
+    _repo.delete(id);
+  }
+
+  /// Langes Druecken auf einen Eintrag -> kurze Rueckfrage, dann loeschen.
+  /// Der eine Weg fuer beide Arten: getippte Eintraege oeffnen zwar ein Sheet
+  /// mit Loeschen-Knopf, Tinten-Eintraege dagegen den Zeichnen-Editor (noch
+  /// ohne Loeschen). Das lange Druecken deckt daher beide ab.
+  Future<void> _confirmDeleteEntry(JournalEntry entry) async {
+    final preview = entry.isInk
+        ? 'Tinten-Eintrag'
+        : (entry.content.trim().split('\n').first);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eintrag loeschen?'),
+        content: Text(
+          preview.isEmpty ? 'Diesen Eintrag loeschen?' : '"$preview"',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Loeschen'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) _deleteEntry(entry.id);
   }
 
   void _updateInkEntry(String id, InkData ink, List<String> tags) {
@@ -998,6 +1056,7 @@ class _JournalScreenState extends State<JournalScreen> {
                 _openEntrySheet(existing: entry);
               }
             },
+            onLongPress: () => _confirmDeleteEntry(entry),
           );
         },
       ),
@@ -1261,11 +1320,6 @@ class _EventsSection extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.paper,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.hairline),
-              ),
               child: const Text(
                 'Heute keine Termine',
                 style: TextStyle(color: AppColors.placeholder, fontSize: 13),
@@ -1426,11 +1480,6 @@ class _TasksSection extends StatelessWidget {
                 width: double.infinity,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: AppColors.paper,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.hairline),
-                ),
                 child: const Text(
                   'Keine offenen Aufgaben - tippen zum Hinzufuegen',
                   style: TextStyle(color: AppColors.placeholder, fontSize: 13),
@@ -1647,11 +1696,16 @@ class _DateRow extends StatelessWidget {
 }
 
 /// Ein Journal-Eintrag: getippt in neutralem Dunkel, handschriftlich als echte
-/// Tinte (dunkel auf hell). Leichte Karte mit Haarlinien-Rand.
+/// Tinte (dunkel auf hell). Rahmenlos auf Papier — Text und Tinte stehen frei.
 class _EntryCard extends StatelessWidget {
   final JournalEntry entry;
   final VoidCallback onTap;
-  const _EntryCard({required this.entry, required this.onTap});
+  final VoidCallback onLongPress;
+  const _EntryCard({
+    required this.entry,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1663,12 +1717,9 @@ class _EntryCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Container(
             padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.hairline),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1697,7 +1748,6 @@ class _EntryCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.paper,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.hairline),
                     ),
                     child: CustomPaint(
                       painter:

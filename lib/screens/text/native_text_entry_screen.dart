@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../theme/app_colors.dart';
 import '../../utils/tag_parser.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 
@@ -47,16 +48,16 @@ class _NativeTextEntryScreenState extends State<NativeTextEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Stift-Eintrag',
-          style: TextStyle(color: Colors.white70, fontSize: 16),
+          style: TextStyle(color: AppColors.text, fontSize: 16),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
+            icon: const Icon(Icons.check, color: AppColors.accent),
             tooltip: 'Übernehmen',
             onPressed: _confirm,
           ),
