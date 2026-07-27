@@ -16,6 +16,7 @@ import '../../widgets/ink_painter.dart';
 import '../../widgets/task_sheet.dart';
 import '../../screens/search/search_screen.dart';
 import '../../screens/tags/tag_management_screen.dart';
+import '../../screens/tags/tag_view_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
 import '../../screens/settings/calendar_settings_screen.dart';
 import '../../screens/settings/claude_settings_screen.dart';
@@ -1782,26 +1783,33 @@ class _EntryCard extends StatelessWidget {
   }
 }
 
-/// Tag-Chip im Akzentblau. Der Einstieg in die Tag-Ansicht (Antippen) kommt in
-/// einem eigenen Schritt; hier vorerst reine Darstellung.
+/// Tag-Chip im Akzentblau. Antippen öffnet die Tag-Ansicht — „alles zu diesem
+/// Tag über alle Tage". Der Chip navigiert über seinen eigenen `context`, damit
+/// die Karten (Eintrag, Termin, Aufgabe) nichts durchreichen müssen.
 class _TagChip extends StatelessWidget {
   final String label;
   const _TagChip({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.tagChipBg,
+    return Material(
+      color: AppColors.tagChipBg,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
         borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '#$label',
-        style: const TextStyle(
-          color: AppColors.accent,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => TagViewScreen(tag: label)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Text(
+            '#$label',
+            style: const TextStyle(
+              color: AppColors.accent,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
       ),
     );

@@ -340,6 +340,27 @@ class JournalRepository {
     }).toList();
   }
 
+  /// Alle Einträge mit dem gegebenen Tag (case-insensitiv) — getippte **und**
+  /// Tinten-Einträge, denn Tinte ist nur ein Eintrag mit `ink != null`.
+  /// Neu nach alt (`timestamp DESC`). Grundlage der Tag-Ansicht: „alles zu
+  /// einem Tag über alle Tage" (Fahrplan-Schritt 2). Gegenstück zu
+  /// [tasksForTag] und [calendarEventsForTag].
+  Future<List<JournalEntry>> entriesForTag(String tag) async {
+    final db = await _database();
+    final rows = await db.rawQuery(
+      '''
+      SELECT e.* FROM entries e
+      JOIN entry_tags et ON et.entry_id = e.id
+      WHERE et.tag_key = ?
+      ORDER BY e.timestamp DESC
+      ''',
+      [tag.toLowerCase()],
+    );
+    // `allTags: false` (Default) lädt die Tag-Tabelle nur für die getroffenen
+    // Ids — genau richtig für einen Ausschnitt statt aller Einträge.
+    return _hydrateEntries(db, rows);
+  }
+
   // ---------------------------------------------------------------------------
   // Schreiben — Einträge
   // ---------------------------------------------------------------------------
@@ -567,6 +588,32 @@ class JournalRepository {
     final db = await _database();
     final rows = await db.query('daily_info', orderBy: 'start_date ASC');
     return rows.map(_dailyInfoFromRow).toList();
+  }
+
+  /// Tagesinfos, die den gegebenen Tag als **Inline-`#Tag` im Text** tragen
+  /// (case-insensitiv), neu nach alt. Bewusst über den Text und nicht über
+  /// eine Tag-Tabelle: eine Tagesinfo kennt (Modell/Schema) keine Tags. So
+  /// taucht „#Urlaub in Italien" trotzdem unter `#Urlaub` auf, ohne
+  /// Schema-Eingriff. Für die Tag-Ansicht (Fahrplan-Schritt 2).
+  Future<List<DailyInfo>> dailyInfosForTag(String tag) async {
+    final db = await _database();
+    final rows = await db.query('daily_info', orderBy: 'start_date DESC');
+    final key = tag.toLowerCase();
+    return rows
+        .map(_dailyInfoFromRow)
+        .where((info) => textContainsTag(info.text, key))
+        .toList();
+  }
+
+  /// Erkennt Inline-`#Tags` in Freitext. Greift den ganzen Tag-Token, damit
+  /// `#Urlaub` **nicht** `#Urlaubsplanung` trifft. Unicode, damit Umlaute
+  /// (deutsche Nomen) mitzählen. [tagKeyLower] muss bereits lowercase sein.
+  static final RegExp _inlineTag = RegExp(r'#([\p{L}\p{N}_]+)', unicode: true);
+  static bool textContainsTag(String text, String tagKeyLower) {
+    for (final m in _inlineTag.allMatches(text)) {
+      if (m.group(1)!.toLowerCase() == tagKeyLower) return true;
+    }
+    return false;
   }
 
   /// Legt eine Tagesinfo an oder aktualisiert sie.
