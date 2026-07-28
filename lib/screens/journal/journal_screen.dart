@@ -34,7 +34,19 @@ class JournalScreen extends StatefulWidget {
   State<JournalScreen> createState() => _JournalScreenState();
 }
 
-class _JournalScreenState extends State<JournalScreen> {
+class _JournalScreenState extends State<JournalScreen>
+    with WidgetsBindingObserver {
+  /// Schluessel fuer das Oeffnen des Heute-Panels (endDrawer) aus der AppBar.
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  /// Kalendertag (`yyyy-MM-dd`), auf dem die Heute-Daten (_todayInfos/
+  /// _todayTasks/_todayEvents und der Datumskopf) aktuell stehen. Wechselt der
+  /// echte Tag ueber Mitternacht oder kehrt die App aus dem Hintergrund zurueck,
+  /// werden die Heute-Daten neu geladen und dieser Schluessel nachgezogen
+  /// (siehe [_refreshToday]). Frueher hingen diese Listen vom Vortag nach, weil
+  /// sie nur in [initState] geladen wurden.
+  String _shownDay = _dayKey(DateTime.now());
+
   final List<JournalEntry> _entries = [];
 
   /// Tagesinfos, die den **heutigen** Tag betreffen (oben im Journal).
@@ -62,7 +74,26 @@ class _JournalScreenState extends State<JournalScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Beim App-Resume die Heute-Daten neu laden — sonst haengen Tagesinfo,
+  /// Termine und Aufgaben des Vortags nach. Deckt auch den Mitternachtswechsel
+  /// ab, wenn die App im Hintergrund lag. (Den Fall, dass die App im Vordergrund
+  /// ueber Mitternacht offen bleibt, faengt zusaetzlich die Datumswaechter-
+  /// Pruefung in [build] ab.)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshToday();
+    }
   }
 
   /// Startsequenz: Einmal-Migration aus shared_preferences (falls nötig),
@@ -77,6 +108,7 @@ class _JournalScreenState extends State<JournalScreen> {
     final events = await _repo.calendarEventsForDay(_dayKey(DateTime.now()));
     if (!mounted) return;
     setState(() {
+      _shownDay = _dayKey(DateTime.now());
       _entries
         ..clear()
         ..addAll(loaded);
@@ -163,6 +195,30 @@ class _JournalScreenState extends State<JournalScreen> {
         ..addAll(events);
     });
     _rebuildTagRegistry();
+  }
+
+  /// Laedt die **Heute-Daten** (Tagesinfo, Aufgaben, Termine) neu und zieht den
+  /// [_shownDay] nach. Aufgerufen bei App-Resume und beim Mitternachtswechsel.
+  /// Bewusst ohne `_entries`/Register-Neuaufbau: der Schreibstrom aendert sich
+  /// durch einen Datumssprung nicht, nur die heute auftauchenden Elemente.
+  Future<void> _refreshToday() async {
+    final now = DateTime.now();
+    final infos = await _repo.dailyInfosForDay(now);
+    final surfaced = await _repo.surfacedTasksForDay(now);
+    final events = await _repo.calendarEventsForDay(_dayKey(now));
+    if (!mounted) return;
+    setState(() {
+      _shownDay = _dayKey(now);
+      _todayInfos
+        ..clear()
+        ..addAll(infos);
+      _todayTasks
+        ..clear()
+        ..addAll(surfaced);
+      _todayEvents
+        ..clear()
+        ..addAll(events);
+    });
   }
 
   /// Kalendertag als `yyyy-MM-dd` — dasselbe Format, in dem `calendar_events`
@@ -744,12 +800,29 @@ class _JournalScreenState extends State<JournalScreen> {
     await _reloadTasks();
   }
 
-  /// Hakt eine Aufgabe ab bzw. wieder auf. Erledigte fallen aus der heutigen
-  /// Liste (bleiben in der DB) — sichtbar wird das über [_reloadTasks].
-  Future<void> _toggleTaskDone(Task task) async {
+  /// Hakt eine Aufgabe **im Heute-Panel** ab bzw. wieder auf. Anders als ein
+  /// Neuladen aus dem Repository (das nur offene Aufgaben liefert) wird der
+  /// Eintrag hier an Ort und Stelle aktualisiert — so bleibt die eben erledigte
+  /// Aufgabe im offenen Panel durchgestrichen sichtbar, statt sofort zu
+  /// verschwinden. Beim naechsten frischen Aufbau (Panel erneut oeffnen,
+  /// Resume, Tageswechsel) faellt eine erledigte Aufgabe dann heraus. Das
+  /// Register/die Zaehler (`_allTasks`) werden im Hintergrund nachgezogen.
+  Future<void> _togglePanelTask(Task task) async {
     final updated = task.copyWith(done: !task.done);
     await _repo.upsertTask(updated);
-    await _reloadTasks();
+    if (!mounted) return;
+    setState(() {
+      final i = _todayTasks.indexWhere((t) => t.id == updated.id);
+      if (i != -1) _todayTasks[i] = updated;
+    });
+    final allTasks = await _repo.loadAllTasks();
+    if (!mounted) return;
+    setState(() {
+      _allTasks
+        ..clear()
+        ..addAll(allTasks);
+    });
+    _rebuildTagRegistry();
   }
 
   Future<void> _deleteTask(String id) async {
@@ -935,8 +1008,23 @@ class _JournalScreenState extends State<JournalScreen> {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
+    // Datumswaechter: Bleibt die App ueber Mitternacht im Vordergrund offen,
+    // springt der Datumskopf (frisches now() je build), die Heute-Listen aber
+    // nicht. Faellt der Tag ab, nach dem aktuellen Frame die Heute-Daten neu
+    // laden. Idempotent: _refreshToday zieht _shownDay nach, danach greift der
+    // Waechter nicht mehr.
+    if (_dayKey(today) != _shownDay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshToday();
+      });
+    }
     final entryCount = _entries.isEmpty ? 1 : _entries.length;
+    // Badge am Panel-Umschalter: heutige Termine + offene Aufgaben. Erledigte
+    // (im offenen Panel durchgestrichen liegengebliebene) zaehlen nicht mit.
+    final openTaskCount = _todayTasks.where((t) => !t.done).length;
+    final agendaCount = _todayEvents.length + openTaskCount;
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.paper,
       appBar: AppBar(
         backgroundColor: AppColors.paper,
@@ -994,7 +1082,8 @@ class _JournalScreenState extends State<JournalScreen> {
             ),
           ],
         ),
-        // Oben rechts: das Funkel-Symbol (Claude). Design 8.
+        // Oben rechts: Funkel-Symbol (Claude) und der Sidebar-Umschalter, der
+        // das Heute-Panel oeffnet und das Agenda-Badge traegt (Design 5/9).
         actions: [
           IconButton(
             icon: const Icon(Icons.auto_awesome_outlined,
@@ -1002,15 +1091,22 @@ class _JournalScreenState extends State<JournalScreen> {
             tooltip: 'Claude',
             onPressed: _openClaudeSettings,
           ),
+          _PanelToggleButton(
+            count: agendaCount,
+            onTap: () => _scaffoldKey.currentState?.openEndDrawer(),
+          ),
           const SizedBox(width: 4),
         ],
       ),
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        // Feste Kopf-Bereiche (4): Datumskopf, Tagesinfo, Termine, Aufgaben.
-        // Danach die Eintraege - oder, solange keiner da ist, die leise
-        // Einladung zum Schreiben (leerer Heute-Zustand, Design 6).
-        itemCount: 4 + entryCount,
+        // Feste Kopf-Bereiche (2): Datumskopf und Tagesinfo-Band. Termine und
+        // Aufgaben von heute stehen bewusst NICHT mehr in der Spalte, sondern
+        // im Heute-Panel (endDrawer, Design 4a/5) — der Schreibraum bleibt
+        // frei. Danach die Eintraege chronologisch (neu nach alt) — oder,
+        // solange keiner da ist, die leise Einladung zum Schreiben (leerer
+        // Heute-Zustand, Design 7).
+        itemCount: 2 + entryCount,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _DateHeader(
@@ -1025,29 +1121,10 @@ class _JournalScreenState extends State<JournalScreen> {
               onTapInfo: (info) => _openDailyInfoSheet(existing: info),
             );
           }
-          if (index == 2) {
-            return _EventsSection(
-              events: _todayEvents,
-              day: _dayKey(today),
-              // Ohne aktivierten Kalender bleibt die Sektion unsichtbar.
-              visible: _calendarSources.any((c) => c.enabled),
-              onOpenSettings: _openCalendarSettings,
-            );
-          }
-          if (index == 3) {
-            return _TasksSection(
-              tasks: _todayTasks,
-              today: today,
-              onAdd: () => _openTaskSheet(),
-              onToggle: _toggleTaskDone,
-              onTapTask: (task) => _openTaskSheet(existing: task),
-              onOpenOverview: _openTaskOverview,
-            );
-          }
           if (_entries.isEmpty) {
             return _EmptyEntryInvitation(onTap: () => _openEntrySheet());
           }
-          final entry = _entries[index - 4];
+          final entry = _entries[index - 2];
           return _EntryCard(
             entry: entry,
             onTap: () {
@@ -1060,6 +1137,18 @@ class _JournalScreenState extends State<JournalScreen> {
             onLongPress: () => _confirmDeleteEntry(entry),
           );
         },
+      ),
+      // Heute-Panel: Overlay von rechts (beide Lagen, ein Layout-Pfad), haelt
+      // die Journalspalte frei und zeigt Termine + Aufgaben von heute. Standard
+      // geschlossen; Rechtswisch oder der Umschalter oben rechts oeffnet es.
+      endDrawer: _TodayPanel(
+        events: _todayEvents,
+        tasks: _todayTasks,
+        today: today,
+        day: _dayKey(today),
+        calendarEnabled: _calendarSources.any((c) => c.enabled),
+        onToggleTask: _togglePanelTask,
+        onAddTask: () => _openTaskSheet(),
       ),
       bottomNavigationBar: _BottomBar(
         onJournal: () {},
@@ -1261,79 +1350,6 @@ class _DailyInfoCard extends StatelessWidget {
   }
 }
 
-/// Die heute anstehenden Kalendertermine, gespiegelt aus Google Calendar.
-///
-/// Bewusst nicht editierbar: Termine gehoeren dem Kalender, nicht dem Journal.
-/// Kein Plus, kein Bearbeiten-Sheet - nur der Weg in die Einstellungen. Die
-/// Sektion verschwindet ganz, solange kein Kalender aktiviert ist ([visible]).
-class _EventsSection extends StatelessWidget {
-  final List<CalendarEvent> events;
-
-  /// Der dargestellte Kalendertag als `yyyy-MM-dd`.
-  final String day;
-
-  final bool visible;
-  final VoidCallback onOpenSettings;
-
-  const _EventsSection({
-    required this.events,
-    required this.day,
-    required this.visible,
-    required this.onOpenSettings,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!visible) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.event_outlined,
-                  size: 14, color: AppColors.iconInactive),
-              const SizedBox(width: 6),
-              const Text(
-                'TERMINE',
-                style: TextStyle(
-                  color: AppColors.iconInactive,
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.tune,
-                    size: 18, color: AppColors.iconInactive),
-                tooltip: 'Kalender und Sync',
-                onPressed: onOpenSettings,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (events.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: const Text(
-                'Heute keine Termine',
-                style: TextStyle(color: AppColors.placeholder, fontSize: 13),
-              ),
-            )
-          else
-            ...events.map((event) => _EventCard(event: event, day: day)),
-        ],
-      ),
-    );
-  }
-}
-
 /// Eine Terminkarte: blaues Kalender-Icon, Zeit, Titel, optional Ort, Tags.
 class _EventCard extends StatelessWidget {
   final CalendarEvent event;
@@ -1411,107 +1427,21 @@ class _EventCard extends StatelessWidget {
   }
 }
 
-/// Die heute erscheinenden Aufgaben plus ein dezenter Einstieg zum Anlegen.
-class _TasksSection extends StatelessWidget {
-  final List<Task> tasks;
-  final DateTime today;
-  final VoidCallback onAdd;
-  final void Function(Task) onToggle;
-  final void Function(Task) onTapTask;
-  final VoidCallback onOpenOverview;
-
-  const _TasksSection({
-    required this.tasks,
-    required this.today,
-    required this.onAdd,
-    required this.onToggle,
-    required this.onTapTask,
-    required this.onOpenOverview,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.check_box_outlined,
-                  size: 14, color: AppColors.iconInactive),
-              const SizedBox(width: 6),
-              const Text(
-                'AUFGABEN',
-                style: TextStyle(
-                  color: AppColors.iconInactive,
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.checklist,
-                    size: 20, color: AppColors.iconInactive),
-                tooltip: 'Alle Aufgaben',
-                onPressed: onOpenOverview,
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: const Icon(Icons.add,
-                    size: 20, color: AppColors.iconInactive),
-                tooltip: 'Aufgabe hinzufuegen',
-                onPressed: onAdd,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (tasks.isEmpty)
-            InkWell(
-              onTap: onAdd,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: const Text(
-                  'Keine offenen Aufgaben - tippen zum Hinzufuegen',
-                  style: TextStyle(color: AppColors.placeholder, fontSize: 13),
-                ),
-              ),
-            )
-          else
-            ...tasks.map((task) => _TaskCard(
-                  task: task,
-                  today: today,
-                  onToggle: () => onToggle(task),
-                  onTap: () => onTapTask(task),
-                )),
-        ],
-      ),
-    );
-  }
-}
-
-/// Eine Aufgabe im Journal: offenes Kaestchen (gedaempftes Blau), erledigt als
-/// gefuelltes Kaestchen mit Haekchen und durchgestrichenem, grauem Text.
+/// Eine Aufgabe im Heute-Panel: offenes Kaestchen (gedaempftes Blau), erledigt
+/// als gefuelltes Kaestchen mit Haekchen und durchgestrichenem, grauem Text.
+/// [onToggle] hakt ab/auf — im Panel das einzige interaktive Element der Zeile.
+/// [onTap] ist optional; ist er null, ist die Zeile bewusst nicht antippbar
+/// (Design 5: „nur Abhaken, kein Oeffnen").
 class _TaskCard extends StatelessWidget {
   final Task task;
   final DateTime today;
   final VoidCallback onToggle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _TaskCard({
     required this.task,
     required this.today,
     required this.onToggle,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
@@ -1895,5 +1825,210 @@ class _BottomBarButton extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onTap,
     );
+  }
+}
+
+/// Umschalter fuer das Heute-Panel (Design 5/9): ein Sidebar-Symbol mit einem
+/// leisen Zahl-Badge im Akzentblau. Die Zahl = heutige Termine + offene
+/// Aufgaben; ist sie 0, erscheint kein Badge (Leerfall, Design 5).
+class _PanelToggleButton extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+  const _PanelToggleButton({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.view_sidebar_outlined,
+              color: AppColors.iconInactive),
+          tooltip: 'Heute-Agenda',
+          onPressed: onTap,
+        ),
+        if (count > 0)
+          Positioned(
+            right: 4,
+            top: 6,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              decoration: BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  height: 1.0,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Heute-Panel (Design 5): Overlay-Drawer von rechts mit der heutigen Agenda —
+/// Termine und Aufgaben. Haelt die Journalspalte frei (Design 4a). Aufgaben
+/// sind direkt abhakbar (das einzige interaktive Element der Zeile, Design 5:
+/// „nur Abhaken"); Termine sind reine Anzeige. Ein „+" im Kopf legt eine neue
+/// Aufgabe an — der verbliebene Anlege-Einstieg, seit die Aufgaben aus der
+/// Journalspalte gewandert sind. Leerfall: „Heute nichts geplant".
+class _TodayPanel extends StatelessWidget {
+  final List<CalendarEvent> events;
+  final List<Task> tasks;
+  final DateTime today;
+  final String day;
+  final bool calendarEnabled;
+  final void Function(Task) onToggleTask;
+  final VoidCallback onAddTask;
+
+  const _TodayPanel({
+    required this.events,
+    required this.tasks,
+    required this.today,
+    required this.day,
+    required this.calendarEnabled,
+    required this.onToggleTask,
+    required this.onAddTask,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Termine nur mit aktivem Kalender; Aufgaben unabhaengig davon.
+    final hasEvents = calendarEnabled && events.isNotEmpty;
+    final hasTasks = tasks.isNotEmpty;
+    final nothingPlanned = !hasEvents && !hasTasks;
+
+    return Drawer(
+      backgroundColor: AppColors.paper,
+      shape: const RoundedRectangleBorder(),
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Kopf: „HEUTE" + Datum, rechts „+" (neue Aufgabe) und Schliessen.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 8, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'HEUTE',
+                          style: TextStyle(
+                            color: AppColors.weekday,
+                            fontSize: 11,
+                            letterSpacing: 2,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _headerDate(today),
+                          style: const TextStyle(
+                            color: AppColors.dateLarge,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.add,
+                        color: AppColors.iconInactive, size: 22),
+                    tooltip: 'Aufgabe hinzufuegen',
+                    onPressed: onAddTask,
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close,
+                        color: AppColors.iconInactive, size: 22),
+                    tooltip: 'Schliessen',
+                    onPressed: () => Scaffold.of(context).closeEndDrawer(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: AppColors.hairline),
+            Expanded(
+              child: nothingPlanned
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Heute nichts geplant',
+                          style: TextStyle(
+                              color: AppColors.placeholder, fontSize: 14),
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 16, 24),
+                      children: [
+                        if (hasEvents) ...[
+                          _sectionLabel(Icons.event_outlined, 'TERMINE'),
+                          const SizedBox(height: 12),
+                          ...events.map((e) => _EventCard(event: e, day: day)),
+                          if (hasTasks) const SizedBox(height: 20),
+                        ],
+                        if (hasTasks) ...[
+                          _sectionLabel(Icons.check_box_outlined, 'AUFGABEN'),
+                          const SizedBox(height: 12),
+                          ...tasks.map(
+                            (t) => _TaskCard(
+                              task: t,
+                              today: today,
+                              onToggle: () => onToggleTask(t),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Kleiner Abschnittskopf im Panel (Termine / Aufgaben), im Stil der
+  /// frueheren Sektionskoepfe.
+  Widget _sectionLabel(IconData icon, String label) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: AppColors.iconInactive),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.iconInactive,
+            fontSize: 11,
+            letterSpacing: 2,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _headerDate(DateTime d) {
+    const months = [
+      'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+      'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+    ];
+    return '${d.day}. ${months[d.month - 1]}';
   }
 }
