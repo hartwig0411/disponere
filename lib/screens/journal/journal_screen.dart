@@ -24,6 +24,7 @@ import 'widgets/daily_info.dart';
 import 'widgets/entry_card.dart';
 import 'widgets/bottom_bar.dart';
 import 'widgets/today_panel.dart';
+import 'widgets/past_day.dart';
 
 // Farben leben ab dem hellen Theme zentral in AppColors
 // (lib/theme/app_colors.dart). Die frueheren provisorischen Akzente
@@ -70,6 +71,15 @@ class _JournalScreenState extends State<JournalScreen>
 
   /// Gespiegelte Kalendertermine, die den **heutigen** Tag berühren.
   final List<CalendarEvent> _todayEvents = [];
+
+  /// Rohdaten der **vergangenen** Tage (Design 4b). Aufgaben mit Fälligkeit in
+  /// der Vergangenheit (offen UND erledigt), Termine und Tagesinfos, die die
+  /// Vergangenheit berühren. Die vergangenen **Einträge** kommen aus [_entries]
+  /// (bereits vollständig geladen, in-place gepflegt) — deshalb hier nicht
+  /// gespiegelt. Aus diesen Listen baut [build] pro Tag die Tagesgeschichte.
+  final List<Task> _pastTasks = [];
+  final List<CalendarEvent> _pastEvents = [];
+  final List<DailyInfo> _pastInfos = [];
 
   final TagRegistry _tagRegistry = TagRegistry();
   final JournalRepository _repo = JournalRepository();
@@ -132,6 +142,35 @@ class _JournalScreenState extends State<JournalScreen>
         ..addAll(calendarSources);
     });
     _rebuildTagRegistry();
+    await _reloadPastAgenda();
+  }
+
+  /// Lädt Aufgaben, Termine und Tagesinfos der **Vergangenheit** neu (Design
+  /// 4b). Grundlage der Tages-Gruppierung im Journal. Bewusst eine breite
+  /// Zeitspanne (ab einem festen Boden bis gestern) — so wird jeder vergangene
+  /// Tag erfasst, egal welcher Inhaltstyp ihn trägt; die Datenmenge eines
+  /// Einzelnutzers macht das billig. Wird nach jeder relevanten Mutation
+  /// aufgerufen, damit „Abhaken streicht alle Vorkommen" über den Neuaufbau
+  /// aus dem Repository trägt (kein Widget-Cache, Design 4b).
+  Future<void> _reloadPastAgenda() async {
+    final now = DateTime.now();
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final floor = DateTime(2000, 1, 1);
+    final tasks = await _repo.tasksInRange(floor, yesterday);
+    final events = await _repo.calendarEventsInRange(floor, yesterday);
+    final infos = await _repo.dailyInfosInRange(floor, yesterday);
+    if (!mounted) return;
+    setState(() {
+      _pastTasks
+        ..clear()
+        ..addAll(tasks);
+      _pastEvents
+        ..clear()
+        ..addAll(events);
+      _pastInfos
+        ..clear()
+        ..addAll(infos);
+    });
   }
 
   /// Baut das Tag-Register aus **Einträgen, Aufgaben und Kalender-Quellen** auf.
@@ -159,6 +198,7 @@ class _JournalScreenState extends State<JournalScreen>
         ..clear()
         ..addAll(infos);
     });
+    await _reloadPastAgenda();
   }
 
   /// Lädt die Aufgaben neu (nach jeder Mutation): die heute sichtbaren *und*
@@ -178,6 +218,7 @@ class _JournalScreenState extends State<JournalScreen>
         ..addAll(allTasks);
     });
     _rebuildTagRegistry();
+    await _reloadPastAgenda();
   }
 
   /// Lädt die Kalender-Quellen neu (nach Rückkehr aus den Kalender-
@@ -198,6 +239,7 @@ class _JournalScreenState extends State<JournalScreen>
         ..addAll(events);
     });
     _rebuildTagRegistry();
+    await _reloadPastAgenda();
   }
 
   /// Laedt die **Heute-Daten** (Tagesinfo, Aufgaben, Termine) neu und zieht den
@@ -222,6 +264,7 @@ class _JournalScreenState extends State<JournalScreen>
         ..clear()
         ..addAll(events);
     });
+    await _reloadPastAgenda();
   }
 
   /// Kalendertag als `yyyy-MM-dd` — dasselbe Format, in dem `calendar_events`
@@ -826,6 +869,7 @@ class _JournalScreenState extends State<JournalScreen>
         ..addAll(allTasks);
     });
     _rebuildTagRegistry();
+    await _reloadPastAgenda();
   }
 
   Future<void> _deleteTask(String id) async {
@@ -1021,11 +1065,68 @@ class _JournalScreenState extends State<JournalScreen>
         if (mounted) _refreshToday();
       });
     }
-    final entryCount = _entries.isEmpty ? 1 : _entries.length;
     // Badge am Panel-Umschalter: heutige Termine + offene Aufgaben. Erledigte
     // (im offenen Panel durchgestrichen liegengebliebene) zaehlen nicht mit.
     final openTaskCount = _todayTasks.where((t) => !t.done).length;
     final agendaCount = _todayEvents.length + openTaskCount;
+
+    // Heute vs. Vergangenheit trennen. Heute (Design 4a) bleibt freie
+    // Schreibflaeche: Datumskopf, Tagesinfo, eigene Eintraege (Termine und
+    // Aufgaben liegen im Heute-Panel). Vergangene Tage (Design 4b) werden je
+    // Tag nach `#Tag` gruppiert und stehen darunter, neu nach alt.
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+    final todayEntries =
+        _entries.where((e) => !e.timestamp.isBefore(todayMidnight)).toList();
+    final pastEntries =
+        _entries.where((e) => e.timestamp.isBefore(todayMidnight)).toList();
+    final pastDays = PastDay.buildTimeline(
+      pastEntries: pastEntries,
+      pastTasks: _pastTasks,
+      pastEvents: _pastEvents,
+      pastInfos: _pastInfos,
+      today: todayMidnight,
+    );
+
+    // Eine flache Widget-Liste fuer die ListView. Die Widget-Objekte sind
+    // billige Konfiguration; die teuren Element-/Render-Baeume baut der
+    // ListView.builder weiterhin traege beim Scrollen (kein eager Aufbau).
+    final rows = <Widget>[
+      DateHeader(weekday: _weekdayName(today), date: _formatDate(today)),
+      DailyInfoSection(
+        infos: _todayInfos,
+        onAdd: () => _openDailyInfoSheet(),
+        onTapInfo: (info) => _openDailyInfoSheet(existing: info),
+      ),
+      if (todayEntries.isEmpty)
+        EmptyEntryInvitation(onTap: () => _openEntrySheet())
+      else
+        for (final entry in todayEntries)
+          EntryCard(
+            entry: entry,
+            onTap: () {
+              if (entry.isInk) {
+                _openInkEditorEdit(entry);
+              } else {
+                _openEntrySheet(existing: entry);
+              }
+            },
+            onLongPress: () => _confirmDeleteEntry(entry),
+          ),
+      for (final pd in pastDays)
+        PastDayView(
+          pastDay: pd,
+          onTapEntry: (entry) {
+            if (entry.isInk) {
+              _openInkEditorEdit(entry);
+            } else {
+              _openEntrySheet(existing: entry);
+            }
+          },
+          onLongPressEntry: (entry) => _confirmDeleteEntry(entry),
+          onToggleTask: _togglePanelTask,
+          onTapInfo: (info) => _openDailyInfoSheet(existing: info),
+        ),
+    ];
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppColors.paper,
@@ -1101,45 +1202,14 @@ class _JournalScreenState extends State<JournalScreen>
           const SizedBox(width: 4),
         ],
       ),
+      // Heute oben (Design 4a), darunter die vergangenen Tage nach `#Tag`
+      // gruppiert (Design 4b). Termine und Aufgaben von heute stehen bewusst
+      // NICHT in der Spalte, sondern im Heute-Panel (endDrawer, Design 4a/5) —
+      // der Schreibraum bleibt frei.
       body: ListView.builder(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        // Feste Kopf-Bereiche (2): Datumskopf und Tagesinfo-Band. Termine und
-        // Aufgaben von heute stehen bewusst NICHT mehr in der Spalte, sondern
-        // im Heute-Panel (endDrawer, Design 4a/5) — der Schreibraum bleibt
-        // frei. Danach die Eintraege chronologisch (neu nach alt) — oder,
-        // solange keiner da ist, die leise Einladung zum Schreiben (leerer
-        // Heute-Zustand, Design 7).
-        itemCount: 2 + entryCount,
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            return DateHeader(
-              weekday: _weekdayName(today),
-              date: _formatDate(today),
-            );
-          }
-          if (index == 1) {
-            return DailyInfoSection(
-              infos: _todayInfos,
-              onAdd: () => _openDailyInfoSheet(),
-              onTapInfo: (info) => _openDailyInfoSheet(existing: info),
-            );
-          }
-          if (_entries.isEmpty) {
-            return EmptyEntryInvitation(onTap: () => _openEntrySheet());
-          }
-          final entry = _entries[index - 2];
-          return EntryCard(
-            entry: entry,
-            onTap: () {
-              if (entry.isInk) {
-                _openInkEditorEdit(entry);
-              } else {
-                _openEntrySheet(existing: entry);
-              }
-            },
-            onLongPress: () => _confirmDeleteEntry(entry),
-          );
-        },
+        itemCount: rows.length,
+        itemBuilder: (context, index) => rows[index],
       ),
       // Heute-Panel: Overlay von rechts (beide Lagen, ein Layout-Pfad), haelt
       // die Journalspalte frei und zeigt Termine + Aufgaben von heute. Standard
