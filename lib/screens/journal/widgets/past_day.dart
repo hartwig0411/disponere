@@ -274,8 +274,7 @@ class PastDayView extends StatelessWidget {
         // Tagesinfo-Band: nur wenn vorhanden. Vergangene Tage zeigen keine
         // Einladung zum Hinzufuegen — nur die Infos selbst, antippbar.
         if (pastDay.infos.isNotEmpty) ...[
-          for (final info in pastDay.infos)
-            DailyInfoCard(info: info, onTap: () => onTapInfo(info)),
+          DailyInfoWrap(infos: pastDay.infos, onTapInfo: onTapInfo),
           const SizedBox(height: 8),
         ],
         // Tag-lose Notizen oben.

@@ -68,12 +68,55 @@ class DailyInfoSection extends StatelessWidget {
               ),
             )
           else
-            ...infos.map((info) => DailyInfoCard(
-                  info: info,
-                  onTap: () => onTapInfo(info),
-                )),
+            DailyInfoWrap(infos: infos, onTapInfo: onTapInfo),
         ],
       ),
+    );
+  }
+}
+
+/// Legt mehrere Tagesinfos **nebeneinander** statt gestapelt (Design v2.0 §4a):
+/// drei gleich breite Karten pro Zeile; ab der vierten bricht es in die naechste
+/// Zeile um. Gemeinsam genutzt von heute (`DailyInfoSection`) und vergangenen
+/// Tagen (`PastDayView`), damit das Band ueberall gleich aussieht.
+class DailyInfoWrap extends StatelessWidget {
+  final List<DailyInfo> infos;
+  final void Function(DailyInfo) onTapInfo;
+
+  const DailyInfoWrap({required this.infos, required this.onTapInfo});
+
+  /// Abstand zwischen den Karten - waagerecht wie senkrecht gleich, damit ein
+  /// sauberes Raster entsteht.
+  static const double _gap = 8;
+
+  /// Feste Spaltenzahl: drei pro Zeile. Aendert man das hier, verschiebt sich
+  /// der Umbruchpunkt entsprechend (Design nennt "ab der vierten").
+  static const int _columns = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Drei gleich breite Karten pro Zeile. Die (_columns - 1) Zwischenraeume
+        // werden vor der Division abgezogen, damit die Zeile exakt aufgeht und
+        // die vierte Karte zuverlaessig umbricht.
+        final cardWidth =
+            (constraints.maxWidth - _gap * (_columns - 1)) / _columns;
+        return Wrap(
+          spacing: _gap,
+          runSpacing: _gap,
+          children: [
+            for (final info in infos)
+              SizedBox(
+                width: cardWidth,
+                child: DailyInfoCard(
+                  info: info,
+                  onTap: () => onTapInfo(info),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -85,40 +128,37 @@ class DailyInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Material(
-        color: AppColors.dailyInfoBand,
+    return Material(
+      color: AppColors.dailyInfoBand,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (info.isRange) ...[
-                  Text(
-                    _rangeLabel(info),
-                    style: const TextStyle(
-                      color: AppColors.dailyInfoText,
-                      fontSize: 11,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (info.isRange) ...[
                 Text(
-                  info.text,
+                  _rangeLabel(info),
                   style: const TextStyle(
                     color: AppColors.dailyInfoText,
-                    fontSize: 15,
-                    height: 1.4,
+                    fontSize: 11,
+                    letterSpacing: 1,
                   ),
                 ),
+                const SizedBox(height: 6),
               ],
-            ),
+              Text(
+                info.text,
+                style: const TextStyle(
+                  color: AppColors.dailyInfoText,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+              ),
+            ],
           ),
         ),
       ),
