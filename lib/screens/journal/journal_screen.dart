@@ -1098,10 +1098,17 @@ class _JournalScreenState extends State<JournalScreen>
         onTapInfo: (info) => _openDailyInfoSheet(existing: info),
       ),
       if (todayEntries.isEmpty)
-        EmptyEntryInvitation(onTap: () => _openEntrySheet())
+        // Eindeutige Keys, damit Flutter beim Wechsel von der Einladung zur
+        // ersten EntryCard (gleiche Listenposition) das Element NICHT recycelt
+        // und keinen InkWell-Highlight uebertraegt (Bug 4: grauer Hintergrund
+        // beim allerersten Eintrag).
+        EmptyEntryInvitation(
+            key: const ValueKey('today-empty-invitation'),
+            onTap: () => _openEntrySheet())
       else
         for (final entry in todayEntries)
           EntryCard(
+            key: ValueKey(entry.id),
             entry: entry,
             onTap: () {
               if (entry.isInk) {

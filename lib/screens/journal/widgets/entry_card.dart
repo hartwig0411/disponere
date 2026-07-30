@@ -11,6 +11,7 @@ class EntryCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   const EntryCard({
+    super.key,
     required this.entry,
     required this.onTap,
     required this.onLongPress,
@@ -96,15 +97,19 @@ class EntryCard extends StatelessWidget {
 /// Eintrags-Sheet.
 class EmptyEntryInvitation extends StatelessWidget {
   final VoidCallback onTap;
-  const EmptyEntryInvitation({required this.onTap});
+  const EmptyEntryInvitation({super.key, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
+      // Luft nach oben zum Tagesinfo-Band (Bug 3): nur im leeren Zustand
+      // sichtbar, da dieses Widget nur dann gerendert wird. Sobald der erste
+      // Eintrag steht, ersetzt eine EntryCard diese Einladung und der Abstand
+      // faellt automatisch weg.
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.only(top: 20, bottom: 6),
         child: Row(
           children: [
             Container(
