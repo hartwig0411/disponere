@@ -5,10 +5,12 @@ import '../../services/claude_service.dart';
 import '../../services/week_context.dart';
 import '../settings/claude_settings_screen.dart';
 
-const Color _kBg = Color(0xFF1A1A2E);
-const Color _kCard = Color(0xFF16213E);
-const Color _kAccent = Color(0xFF4A90D9);
-const Color _kError = Color(0xFFD96A6A);
+import '../../theme/app_colors.dart';
+
+const Color _kBg = AppColors.paper;
+const Color _kCard = AppColors.fieldFill;
+const Color _kAccent = AppColors.accent;
+const Color _kError = AppColors.danger;
 
 /// Wochenauswertung durch Claude (Architektur §8).
 ///
@@ -122,7 +124,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
 
   void _snack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: _kCard),
+      SnackBar(content: Text(message), backgroundColor: AppColors.text),
     );
   }
 
@@ -134,15 +136,15 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: _kCard,
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Auswertung fehlgeschlagen',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: AppColors.text, fontSize: 16),
         ),
         content: SingleChildScrollView(
           child: Text(
             '${e.message}\n\nEs wurde nichts gespeichert.',
-            style: const TextStyle(color: Colors.white70, height: 1.4),
+            style: const TextStyle(color: AppColors.iconInactive, height: 1.4),
           ),
         ),
         actions: [
@@ -150,7 +152,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text(
               'Schließen',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppColors.iconInactive),
             ),
           ),
           if (toSettings)
@@ -178,11 +180,11 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
       backgroundColor: _kBg,
       appBar: AppBar(
         backgroundColor: _kBg,
-        iconTheme: const IconThemeData(color: Colors.white54),
+        iconTheme: const IconThemeData(color: AppColors.iconInactive),
         title: const Text(
           'WOCHENAUSWERTUNG',
           style: TextStyle(
-            color: Colors.white70,
+            color: AppColors.iconInactive,
             fontSize: 14,
             fontWeight: FontWeight.w300,
             letterSpacing: 2,
@@ -192,7 +194,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
       body: Column(
         children: [
           _buildHeader(),
-          const Divider(height: 1, color: Colors.white12),
+          const Divider(height: 1, color: AppColors.hairline),
           Expanded(child: _buildBody()),
           if (_result != null) _buildResultActions(),
         ],
@@ -211,7 +213,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            color: Colors.white70,
+            color: AppColors.iconInactive,
             tooltip: 'Eine Woche zurück',
             onPressed: () => _shift(-1),
           ),
@@ -222,7 +224,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
                   _window.label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.text,
                     fontSize: 15,
                     letterSpacing: 1,
                   ),
@@ -233,7 +235,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
                     '${WeekWindow.formatFull(_window.lastDay)}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: Colors.white38,
+                      color: AppColors.iconInactive,
                       fontSize: 11,
                     ),
                   ),
@@ -242,7 +244,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            color: forward ? Colors.white70 : Colors.white12,
+            color: forward ? AppColors.iconInactive : AppColors.hairline,
             tooltip: forward ? 'Eine Woche vor' : 'Aktuellste Woche',
             onPressed: forward ? () => _shift(1) : null,
           ),
@@ -285,7 +287,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Theme(
-        // Die Trennlinien der ExpansionTile passen nicht zum dunklen Kasten.
+        // Die Trennlinien der ExpansionTile passen nicht zum hellen Kasten.
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           // Neuer Schlüssel je Woche: Beim Blättern wird die Kachel neu
@@ -294,22 +296,22 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
           key: ValueKey(_window.monday),
           initiallyExpanded: _contextExpanded,
           onExpansionChanged: (v) => _contextExpanded = v,
-          iconColor: Colors.white54,
-          collapsedIconColor: Colors.white38,
+          iconColor: AppColors.iconInactive,
+          collapsedIconColor: AppColors.iconInactive,
           title: const Text(
             'Kontext anzeigen',
-            style: TextStyle(color: Colors.white70, fontSize: 14),
+            style: TextStyle(color: AppColors.iconInactive, fontSize: 14),
           ),
           subtitle: Text(
             '${text.length} Zeichen',
-            style: const TextStyle(color: Colors.white30, fontSize: 11),
+            style: const TextStyle(color: AppColors.weekday, fontSize: 11),
           ),
           childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
             SelectableText(
               text,
               style: const TextStyle(
-                color: Colors.white60,
+                color: AppColors.iconInactive,
                 fontSize: 12,
                 height: 1.5,
                 fontFamily: 'monospace',
@@ -339,14 +341,14 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
               SizedBox(width: 12),
               Text(
                 'Claude liest die Woche …',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: AppColors.iconInactive),
               ),
             ],
           ),
           SizedBox(height: 8),
           Text(
             'Das kann bis zu zwei Minuten dauern.',
-            style: TextStyle(color: Colors.white30, fontSize: 12),
+            style: TextStyle(color: AppColors.weekday, fontSize: 12),
           ),
         ],
       );
@@ -377,7 +379,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
       child: SelectableText(
         text,
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.text,
           fontSize: 15,
           height: 1.6,
         ),
@@ -391,7 +393,7 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
       decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.white12)),
+        border: Border(top: BorderSide(color: AppColors.hairline)),
       ),
       child: Row(
         children: [

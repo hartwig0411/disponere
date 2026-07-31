@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/ink_data.dart';
+import '../theme/app_colors.dart';
 
 /// Live-Painter für den Tinten-Editor.
 /// Zeichnet die Striche 1:1 im Canvas-Koordinatensystem.
@@ -10,7 +11,7 @@ class InkLivePainter extends CustomPainter {
 
   InkLivePainter(
     this.strokes, {
-    this.color = Colors.white,
+    this.color = AppColors.ink,
     this.strokeWidth = 3.0,
   });
 
@@ -57,7 +58,7 @@ class InkPreviewPainter extends CustomPainter {
 
   InkPreviewPainter(
     this.ink, {
-    this.color = Colors.white,
+    this.color = AppColors.ink,
     this.strokeWidth = 2.0,
   });
 

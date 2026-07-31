@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_colors.dart';
+
 /// Tag-Verwaltung: zeigt alle bekannten Tags mit Nutzungszähler und erlaubt
 /// das **Umbenennen** (kanonische Schreibweise selbst festlegen).
 ///
@@ -71,18 +73,18 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF16213E),
+          backgroundColor: AppColors.paper,
           title: const Text('Tag umbenennen',
-              style: TextStyle(color: Colors.white)),
+              style: TextStyle(color: AppColors.text)),
           content: TextField(
             controller: controller,
             autofocus: true,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: const TextStyle(color: AppColors.text, fontSize: 16),
             decoration: InputDecoration(
               prefixText: '#',
-              prefixStyle: const TextStyle(color: Colors.white54, fontSize: 16),
+              prefixStyle: const TextStyle(color: AppColors.iconInactive, fontSize: 16),
               filled: true,
-              fillColor: Colors.white10,
+              fillColor: AppColors.fieldFill,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
@@ -94,12 +96,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Abbrechen',
-                  style: TextStyle(color: Colors.white54)),
+                  style: TextStyle(color: AppColors.iconInactive)),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, controller.text),
               child: const Text('Umbenennen',
-                  style: TextStyle(color: Color(0xFF4A90D9))),
+                  style: TextStyle(color: AppColors.accent)),
             ),
           ],
         );
@@ -141,39 +143,39 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        leading: const BackButton(color: Colors.white),
+        backgroundColor: AppColors.paper,
+        leading: const BackButton(color: AppColors.iconInactive),
         title: const Text(
           'Tags verwalten',
-          style: TextStyle(color: Colors.white70, fontSize: 16),
+          style: TextStyle(color: AppColors.iconInactive, fontSize: 16),
         ),
       ),
       body: _tags.isEmpty
           ? const Center(
               child: Text(
                 'Noch keine Tags',
-                style: TextStyle(color: Colors.white38, fontSize: 16),
+                style: TextStyle(color: AppColors.iconInactive, fontSize: 16),
               ),
             )
           : ListView.separated(
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: _tags.length,
               separatorBuilder: (_, __) =>
-                  const Divider(height: 1, color: Colors.white10),
+                  const Divider(height: 1, color: AppColors.hairline),
               itemBuilder: (context, index) {
                 final tag = _tags[index];
                 return ListTile(
                   title: Text(
                     '#$tag',
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    style: const TextStyle(color: AppColors.text, fontSize: 16),
                   ),
                   subtitle: Text(
                     _subtitleFor(tag),
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: const TextStyle(color: AppColors.iconInactive, fontSize: 12),
                   ),
-                  trailing: const Icon(Icons.edit, color: Colors.white38),
+                  trailing: const Icon(Icons.edit, color: AppColors.iconInactive),
                   onTap: () => _rename(tag),
                 );
               },

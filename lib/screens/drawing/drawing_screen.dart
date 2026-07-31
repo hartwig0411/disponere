@@ -9,6 +9,8 @@ import '../../widgets/ink_painter.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../settings/claude_settings_screen.dart';
 
+import '../../theme/app_colors.dart';
+
 /// Rückgabe des Tinten-Editors: die Striche (mit Canvas-Größe) + Tags.
 class InkResult {
   final InkData ink;
@@ -287,10 +289,10 @@ class _DrawingScreenState extends State<DrawingScreen> {
     return showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Erkannter Text',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: AppColors.text, fontSize: 16),
         ),
         content: SizedBox(
           width: 520,
@@ -298,7 +300,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
             child: SelectableText(
               text,
               style: const TextStyle(
-                color: Colors.white70,
+                color: AppColors.iconInactive,
                 fontSize: 14,
                 height: 1.5,
               ),
@@ -310,12 +312,12 @@ class _DrawingScreenState extends State<DrawingScreen> {
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
               'Verwerfen',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppColors.iconInactive),
             ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4A90D9),
+              backgroundColor: AppColors.accent,
             ),
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Übernehmen'),
@@ -329,26 +331,26 @@ class _DrawingScreenState extends State<DrawingScreen> {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Kein API-Schlüssel',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: AppColors.text, fontSize: 16),
         ),
         content: const Text(
           'Für die Auswertung braucht Disponere deinen Anthropic-Schlüssel.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.iconInactive),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text(
               'Später',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppColors.iconInactive),
             ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF4A90D9),
+              backgroundColor: AppColors.accent,
             ),
             onPressed: () {
               Navigator.pop(dialogContext);
@@ -374,15 +376,15 @@ class _DrawingScreenState extends State<DrawingScreen> {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Auswertung fehlgeschlagen',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: AppColors.text, fontSize: 16),
         ),
         content: SingleChildScrollView(
           child: Text(
             '${e.message}\n\nEs wurde nichts gespeichert.',
-            style: const TextStyle(color: Colors.white70, height: 1.4),
+            style: const TextStyle(color: AppColors.iconInactive, height: 1.4),
           ),
         ),
         actions: [
@@ -390,13 +392,13 @@ class _DrawingScreenState extends State<DrawingScreen> {
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text(
               'Schließen',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppColors.iconInactive),
             ),
           ),
           if (toSettings)
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90D9),
+                backgroundColor: AppColors.accent,
               ),
               onPressed: () {
                 Navigator.pop(dialogContext);
@@ -419,7 +421,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(text),
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: AppColors.text,
       ),
     );
   }
@@ -439,7 +441,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF16213E),
+        color: AppColors.fieldFill,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Theme(
@@ -449,12 +451,12 @@ class _DrawingScreenState extends State<DrawingScreen> {
           initiallyExpanded: _inkTextExpanded,
           key: ValueKey(_inkTextAt),
           tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-          iconColor: Colors.white38,
-          collapsedIconColor: Colors.white38,
+          iconColor: AppColors.iconInactive,
+          collapsedIconColor: AppColors.iconInactive,
           title: const Text(
             'ERKANNTER TEXT',
             style: TextStyle(
-              color: Colors.white54,
+              color: AppColors.iconInactive,
               fontSize: 11,
               letterSpacing: 1.5,
             ),
@@ -462,7 +464,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
           subtitle: at != null
               ? Text(
                   'Ausgewertet am ${_formatStamp(at)}',
-                  style: const TextStyle(color: Colors.white24, fontSize: 11),
+                  style: const TextStyle(color: AppColors.placeholder, fontSize: 11),
                 )
               : null,
           children: [
@@ -474,7 +476,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
                 child: SelectableText(
                   text,
                   style: const TextStyle(
-                    color: Colors.white70,
+                    color: AppColors.text,
                     fontSize: 13,
                     height: 1.5,
                   ),
@@ -491,12 +493,12 @@ class _DrawingScreenState extends State<DrawingScreen> {
   Widget build(BuildContext context) {
     final alreadyTranscribed = _inkText != null && _inkText!.isNotEmpty;
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Tinte',
-          style: TextStyle(color: Colors.white70, fontSize: 16),
+          style: TextStyle(color: AppColors.iconInactive, fontSize: 16),
         ),
         actions: [
           // Nur im Editor eines **bestehenden** Eintrags. Ein neuer Eintrag hat
@@ -510,14 +512,14 @@ class _DrawingScreenState extends State<DrawingScreen> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFF4A90D9),
+                      color: AppColors.accent,
                     ),
                   )
                 : Icon(
                     Icons.auto_awesome,
                     color: alreadyTranscribed
-                        ? const Color(0xFF4A90D9)
-                        : Colors.white,
+                        ? AppColors.accent
+                        : AppColors.iconInactive,
                   ),
             tooltip: alreadyTranscribed
                 ? 'Erneut auswerten'
@@ -527,23 +529,23 @@ class _DrawingScreenState extends State<DrawingScreen> {
           IconButton(
             icon: Icon(
               Icons.cleaning_services,
-              color: _erasing ? const Color(0xFF4A90D9) : Colors.white,
+              color: _erasing ? AppColors.accent : AppColors.iconInactive,
             ),
             tooltip: _erasing ? 'Radierer aktiv' : 'Radieren',
             onPressed: () => setState(() => _erasing = !_erasing),
           ),
           IconButton(
-            icon: const Icon(Icons.undo, color: Colors.white),
+            icon: const Icon(Icons.undo, color: AppColors.iconInactive),
             tooltip: 'Letzten Strich zurück',
             onPressed: _strokes.isEmpty ? null : _undo,
           ),
           IconButton(
-            icon: const Icon(Icons.clear, color: Colors.white),
+            icon: const Icon(Icons.clear, color: AppColors.iconInactive),
             tooltip: 'Alles löschen',
             onPressed: _strokes.isEmpty ? null : _clear,
           ),
           IconButton(
-            icon: const Icon(Icons.check, color: Color(0xFF4A90D9)),
+            icon: const Icon(Icons.check, color: AppColors.accent),
             tooltip: 'Übernehmen',
             onPressed: _strokes.isEmpty ? null : _confirm,
           ),

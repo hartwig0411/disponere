@@ -8,10 +8,11 @@ import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 
-/// Kühles Blau wie im Journal. Provisorisch, solange die App-Theme-
-/// Entscheidung aussteht.
-const Color _kAccent = Color(0xFF4A90D9);
-const Color _kBg = Color(0xFF1A1A2E);
+import '../../theme/app_colors.dart';
+
+/// Lokale Kurznamen fuer die beiden am haeufigsten genutzten Theme-Farben.
+const Color _kAccent = AppColors.accent;
+const Color _kBg = AppColors.paper;
 
 /// Einstellungen → Google Calendar.
 ///
@@ -234,7 +235,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     final saved = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF16213E),
+      backgroundColor: AppColors.paper,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -253,7 +254,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
               Text(
                 source.displayName,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.text,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -261,7 +262,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
               const SizedBox(height: 4),
               const Text(
                 'Tags, die jeder Termin dieses Kalenders erbt.',
-                style: TextStyle(color: Colors.white38, fontSize: 12),
+                style: TextStyle(color: AppColors.iconInactive, fontSize: 12),
               ),
               const SizedBox(height: 16),
               TagAutocompleteField(
@@ -311,11 +312,11 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
       backgroundColor: _kBg,
       appBar: AppBar(
         backgroundColor: _kBg,
-        iconTheme: const IconThemeData(color: Colors.white54),
+        iconTheme: const IconThemeData(color: AppColors.iconInactive),
         title: const Text(
           'GOOGLE CALENDAR',
           style: TextStyle(
-            color: Colors.white70,
+            color: AppColors.iconInactive,
             fontSize: 16,
             fontWeight: FontWeight.w300,
             letterSpacing: 2,
@@ -329,14 +330,14 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
             children: [
               Icon(
                 _signedIn ? Icons.check_circle_outline : Icons.link_off,
-                color: _signedIn ? _kAccent : Colors.white38,
+                color: _signedIn ? _kAccent : AppColors.iconInactive,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Text(
                 _signedIn ? 'Konto verbunden' : 'Kein Konto verbunden',
                 style: TextStyle(
-                  color: _signedIn ? Colors.white70 : Colors.white38,
+                  color: _signedIn ? AppColors.text : AppColors.iconInactive,
                   fontSize: 15,
                 ),
               ),
@@ -345,7 +346,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
           const SizedBox(height: 8),
           const Text(
             'Disponere liest deinen Kalender nur — es schreibt nichts zurück.',
-            style: TextStyle(color: Colors.white30, fontSize: 12),
+            style: TextStyle(color: AppColors.weekday, fontSize: 12),
           ),
           const SizedBox(height: 32),
           if (_busy)
@@ -418,11 +419,11 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
               _eventCount == 0
                   ? 'Noch keine Termine gespiegelt.'
                   : '$_eventCount Termine lokal gespeichert.',
-              style: const TextStyle(color: Colors.white30, fontSize: 12),
+              style: const TextStyle(color: AppColors.weekday, fontSize: 12),
             ),
             const SizedBox(height: 12),
             TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.white38),
+              style: TextButton.styleFrom(foregroundColor: AppColors.iconInactive),
               onPressed: _signOut,
               icon: const Icon(Icons.logout),
               label: const Text('Konto trennen'),
@@ -433,18 +434,18 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: (_messageIsError ? Colors.red : _kAccent)
+                color: (_messageIsError ? AppColors.danger : _kAccent)
                     .withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: (_messageIsError ? Colors.red : _kAccent)
+                  color: (_messageIsError ? AppColors.danger : _kAccent)
                       .withValues(alpha: 0.4),
                 ),
               ),
               child: SelectableText(
                 _message!,
                 style: TextStyle(
-                  color: _messageIsError ? Colors.red.shade200 : Colors.white70,
+                  color: _messageIsError ? AppColors.danger : AppColors.accent,
                   fontSize: 13,
                 ),
               ),
@@ -456,13 +457,13 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
               const Text(
                 'Noch keine Kalender geladen. Tippe auf '
                 '„Kalender laden/aktualisieren".',
-                style: TextStyle(color: Colors.white24, fontSize: 12),
+                style: TextStyle(color: AppColors.placeholder, fontSize: 12),
               )
             else ...[
               const Text(
                 'KALENDER',
                 style: TextStyle(
-                  color: Colors.white38,
+                  color: AppColors.iconInactive,
                   fontSize: 12,
                   letterSpacing: 2,
                 ),
@@ -499,12 +500,12 @@ class _CalendarTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: AppColors.fieldFill,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: source.enabled
               ? _kAccent.withValues(alpha: 0.4)
-              : Colors.white.withValues(alpha: 0.08),
+              : AppColors.hairline,
         ),
       ),
       child: Column(
@@ -516,7 +517,7 @@ class _CalendarTile extends StatelessWidget {
                 child: Text(
                   source.displayName,
                   style: TextStyle(
-                    color: source.enabled ? Colors.white : Colors.white54,
+                    color: source.enabled ? AppColors.text : AppColors.iconInactive,
                     fontSize: 15,
                   ),
                 ),
@@ -536,7 +537,7 @@ class _CalendarTile extends StatelessWidget {
                 child: source.tags.isEmpty
                     ? const Text(
                         'Keine Tags',
-                        style: TextStyle(color: Colors.white24, fontSize: 12),
+                        style: TextStyle(color: AppColors.placeholder, fontSize: 12),
                       )
                     : Wrap(
                         spacing: 6,
@@ -576,7 +577,7 @@ class _TagPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: _kAccent.withValues(alpha: 0.15),
+        color: AppColors.tagChipBg,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

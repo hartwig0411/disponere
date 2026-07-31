@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/claude_service.dart';
-
-/// Kühles Blau wie im Journal. Provisorisch, solange die App-Theme-
-/// Entscheidung nicht umgesetzt ist.
-const Color _kAccent = Color(0xFF4A90D9);
-const Color _kBg = Color(0xFF1A1A2E);
+import '../../theme/app_colors.dart';
 
 /// Einstellungen → Claude.
 ///
@@ -82,30 +78,30 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
+        backgroundColor: AppColors.paper,
         title: const Text(
           'Schlüssel löschen?',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: AppColors.text),
         ),
         content: const Text(
           'Die Tinten-Auswertung steht danach nicht mehr zur Verfügung, bis '
           'ein neuer Schlüssel hinterlegt ist. Bereits erkannte Texte bleiben '
           'erhalten.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.iconInactive),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text(
               'Abbrechen',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: AppColors.iconInactive),
             ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text(
               'Löschen',
-              style: TextStyle(color: Color(0xFFD96A6A)),
+              style: TextStyle(color: AppColors.danger),
             ),
           ),
         ],
@@ -140,14 +136,14 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.paper,
       appBar: AppBar(
-        backgroundColor: _kBg,
-        iconTheme: const IconThemeData(color: Colors.white54),
+        backgroundColor: AppColors.paper,
+        iconTheme: const IconThemeData(color: AppColors.iconInactive),
         title: const Text(
           'CLAUDE',
           style: TextStyle(
-            color: Colors.white70,
+            color: AppColors.iconInactive,
             fontSize: 16,
             fontWeight: FontWeight.w300,
             letterSpacing: 2,
@@ -161,14 +157,14 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             children: [
               Icon(
                 _hasKey ? Icons.check_circle_outline : Icons.link_off,
-                color: _hasKey ? _kAccent : Colors.white38,
+                color: _hasKey ? AppColors.accent : AppColors.iconInactive,
                 size: 20,
               ),
               const SizedBox(width: 12),
               Text(
                 _hasKey ? 'Schlüssel hinterlegt' : 'Kein Schlüssel hinterlegt',
                 style: TextStyle(
-                  color: _hasKey ? Colors.white70 : Colors.white38,
+                  color: _hasKey ? AppColors.text : AppColors.iconInactive,
                   fontSize: 15,
                 ),
               ),
@@ -179,7 +175,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             'Der Schlüssel liegt verschlüsselt auf diesem Gerät und wird nur '
             'an api.anthropic.com geschickt. Aufrufe laufen über dein eigenes '
             'Anthropic-Konto.',
-            style: TextStyle(color: Colors.white30, fontSize: 12),
+            style: TextStyle(color: AppColors.weekday, fontSize: 12),
           ),
           const SizedBox(height: 32),
           if (_busy)
@@ -191,7 +187,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: _kAccent,
+                    color: AppColors.accent,
                   ),
                 ),
               ),
@@ -200,7 +196,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             Text(
               _hasKey ? 'Schlüssel ersetzen' : 'Schlüssel eintragen',
               style: const TextStyle(
-                color: Colors.white54,
+                color: AppColors.iconInactive,
                 fontSize: 12,
                 letterSpacing: 1.5,
               ),
@@ -211,12 +207,12 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
               obscureText: _obscure,
               autocorrect: false,
               enableSuggestions: false,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: const TextStyle(color: AppColors.text, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'sk-ant-…',
-                hintStyle: const TextStyle(color: Colors.white24),
+                hintStyle: const TextStyle(color: AppColors.placeholder),
                 filled: true,
-                fillColor: const Color(0xFF16213E),
+                fillColor: AppColors.fieldFill,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
@@ -224,7 +220,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
                 suffixIcon: IconButton(
                   icon: Icon(
                     _obscure ? Icons.visibility_off : Icons.visibility,
-                    color: Colors.white38,
+                    color: AppColors.iconInactive,
                     size: 20,
                   ),
                   tooltip: _obscure ? 'Anzeigen' : 'Verbergen',
@@ -236,11 +232,14 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             const Text(
               'Am bequemsten aus der Zwischenablage einfügen — hundert Zeichen '
               'auf dem Tablet abzutippen ist keine Bedienung.',
-              style: TextStyle(color: Colors.white24, fontSize: 11),
+              style: TextStyle(color: AppColors.placeholder, fontSize: 11),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: _kAccent),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+              ),
               onPressed: _save,
               icon: const Icon(Icons.save_outlined),
               label: const Text('Speichern'),
@@ -249,8 +248,10 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: _kAccent,
-                  side: BorderSide(color: _kAccent.withValues(alpha: 0.5)),
+                  foregroundColor: AppColors.accent,
+                  side: BorderSide(
+                    color: AppColors.accent.withValues(alpha: 0.5),
+                  ),
                 ),
                 onPressed: _testing ? null : _test,
                 icon: _testing
@@ -259,7 +260,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: _kAccent,
+                          color: AppColors.accent,
                         ),
                       )
                     : const Icon(Icons.wifi_tethering),
@@ -268,7 +269,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
               const SizedBox(height: 12),
               TextButton.icon(
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFD96A6A),
+                  foregroundColor: AppColors.danger,
                 ),
                 onPressed: _delete,
                 icon: const Icon(Icons.delete_outline),
@@ -281,30 +282,26 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: (_messageIsError
-                        ? const Color(0xFFD96A6A)
-                        : const Color(0xFF4A90D9))
+                color: (_messageIsError ? AppColors.danger : AppColors.accent)
                     .withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _message!,
                 style: TextStyle(
-                  color: _messageIsError
-                      ? const Color(0xFFD96A6A)
-                      : Colors.white70,
+                  color: _messageIsError ? AppColors.danger : AppColors.accent,
                   fontSize: 13,
                 ),
               ),
             ),
           ],
           const SizedBox(height: 32),
-          const Divider(color: Colors.white12),
+          const Divider(color: AppColors.hairline),
           const SizedBox(height: 16),
           const Text(
             'WAS CLAUDE HIER TUT',
             style: TextStyle(
-              color: Colors.white38,
+              color: AppColors.iconInactive,
               fontSize: 11,
               letterSpacing: 1.5,
             ),
@@ -317,7 +314,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
             'geschickt und kommt als Text zurück. Die Tinte selbst bleibt '
             'unverändert.',
             style: TextStyle(
-              color: Colors.white38,
+              color: AppColors.iconInactive,
               fontSize: 12,
               height: 1.5,
             ),
@@ -325,7 +322,7 @@ class _ClaudeSettingsScreenState extends State<ClaudeSettingsScreen> {
           const SizedBox(height: 16),
           Text(
             'Modell: ${ClaudeService.model}',
-            style: const TextStyle(color: Colors.white24, fontSize: 11),
+            style: const TextStyle(color: AppColors.placeholder, fontSize: 11),
           ),
         ],
       ),
