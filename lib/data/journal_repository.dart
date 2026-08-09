@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../models/attachment.dart';
 import '../models/calendar_event.dart';
 import '../models/calendar_source.dart';
 import '../models/daily_info.dart';
@@ -35,6 +36,11 @@ import '../models/task.dart';
 ///                   Grundlage für die „alles zu einem Tag"-Ansicht.
 /// - `calendar_sources` / `calendar_source_tags` — die ausgewählten Google-
 ///                   Kalender und ihre Tag-Zuordnung (Session 20).
+/// - `attachments` — Bild-Anhänge zu Einträgen (Session A, Schema v7). Ein
+///                   Anhang pro Zeile mit `entry_id` (ON DELETE CASCADE) und
+///                   `ord`; das Bild selbst liegt app-privat, in der Zeile
+///                   steht nur der Pfad. 1:n angelegt (mehrere Bilder je
+///                   Eintrag möglich), auch wenn die UI vorerst eins zulässt.
 /// - `calendar_events` / `event_tags` — die gespiegelten Termine (Session 21).
 ///                   Zeitspanne als `yyyy-MM-dd` in `start_day`/`end_day`
 ///                   (Endtag **inklusiv**), Uhrzeit als `HH:mm` in lokaler
@@ -51,9 +57,10 @@ class JournalRepository {
   /// Schema-Version. v2 (Session 15) ergänzt `daily_info`, v3 (Session 16)
   /// ergänzt `tasks` + `task_tags`, v4 (Session 20) ergänzt `calendar_sources`
   /// + `calendar_source_tags`, v5 ergänzt `calendar_events` + `event_tags`;
-  /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at` —
+  /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at`;
+  /// v7 (Session A) ergänzt die `attachments`-Tabelle (Bild-Anhänge) —
   /// jeweils via [_onUpgrade].
-  static const _dbVersion = 6;
+  static const _dbVersion = 7;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -114,6 +121,7 @@ class JournalRepository {
     await _createTaskTables(db);
     await _createCalendarSourceTables(db);
     await _createCalendarEventTables(db);
+    await _createAttachmentTable(db);
   }
 
   /// Schema-Migrationen. Jede Stufe ist idempotent gedacht und baut auf der
@@ -133,6 +141,9 @@ class JournalRepository {
     }
     if (oldVersion < 6) {
       await _addInkTextColumns(db);
+    }
+    if (oldVersion < 7) {
+      await _createAttachmentTable(db);
     }
   }
 
@@ -274,6 +285,31 @@ class JournalRepository {
     await db.execute('ALTER TABLE entries ADD COLUMN ink_text_at TEXT');
   }
 
+  /// Legt die `attachments`-Tabelle an (Schema v7; genutzt von [_onCreate] und
+  /// [_onUpgrade], damit Neuinstallation und Migration dasselbe Schema teilen).
+  ///
+  /// `file_path` hält den app-privaten Pfad des Bildes; `thumb_path` ist für
+  /// eine spätere separate Miniatur reserviert und bleibt vorerst NULL.
+  /// `ON DELETE CASCADE` räumt beim Löschen eines Eintrags die Zeilen weg — die
+  /// **Dateien** räumt [delete] gesondert (SQLite kennt das Dateisystem nicht).
+  Future<void> _createAttachmentTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE attachments (
+        id         TEXT    NOT NULL PRIMARY KEY,
+        entry_id   TEXT    NOT NULL,
+        file_path  TEXT    NOT NULL,
+        thumb_path TEXT,
+        mime_type  TEXT,
+        created_at TEXT    NOT NULL,
+        ord        INTEGER NOT NULL,
+        FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_attachments_entry ON attachments(entry_id)',
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Lesen — Einträge
   // ---------------------------------------------------------------------------
@@ -321,6 +357,28 @@ class JournalRepository {
       (tagsByEntry[id] ??= <String>[]).add(row['tag'] as String);
     }
 
+    // Anhänge analog zu den Tags laden — bei [allTags] die ganze Tabelle,
+    // sonst nur für die getroffenen Ids. `ord ASC` hält die Reihenfolge stabil.
+    final List<Map<String, Object?>> attachmentRows;
+    if (allTags) {
+      attachmentRows = await db.query('attachments', orderBy: 'ord ASC');
+    } else {
+      final ids = rows.map((r) => r['id'] as String).toList();
+      final placeholders = List.filled(ids.length, '?').join(',');
+      attachmentRows = await db.query(
+        'attachments',
+        where: 'entry_id IN ($placeholders)',
+        whereArgs: ids,
+        orderBy: 'ord ASC',
+      );
+    }
+
+    final attachmentsByEntry = <String, List<Attachment>>{};
+    for (final row in attachmentRows) {
+      final att = _attachmentFromRow(row);
+      (attachmentsByEntry[att.entryId] ??= <Attachment>[]).add(att);
+    }
+
     return rows.map((row) {
       final id = row['id'] as String;
       final inkJson = row['ink'] as String?;
@@ -336,8 +394,21 @@ class JournalRepository {
         inkText: row['ink_text'] as String?,
         inkTextAt:
             inkTextAtRaw != null ? DateTime.tryParse(inkTextAtRaw) : null,
+        attachments: attachmentsByEntry[id] ?? const <Attachment>[],
       );
     }).toList();
+  }
+
+  /// Baut ein [Attachment] aus einer `attachments`-Zeile.
+  Attachment _attachmentFromRow(Map<String, Object?> row) {
+    return Attachment(
+      id: row['id'] as String,
+      entryId: row['entry_id'] as String,
+      filePath: row['file_path'] as String,
+      thumbPath: row['thumb_path'] as String?,
+      mimeType: row['mime_type'] as String?,
+      createdAt: DateTime.parse(row['created_at'] as String),
+    );
   }
 
   /// Alle Einträge mit dem gegebenen Tag (case-insensitiv) — getippte **und**
@@ -415,13 +486,54 @@ class JournalRepository {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
+
+    // Anhänge des Eintrags neu setzen — dieselbe Löschen-dann-Einfügen-Logik
+    // wie bei den Tags. Es werden nur die **Zeilen** geschrieben; die Dateien
+    // liegen bereits app-privat (über den AttachmentStore), und verwaiste
+    // Dateien beim Ersetzen räumt der Aufrufer weg (die Transaktion kennt das
+    // Dateisystem nicht).
+    await txn
+        .delete('attachments', where: 'entry_id = ?', whereArgs: [entry.id]);
+    for (var i = 0; i < entry.attachments.length; i++) {
+      final a = entry.attachments[i];
+      await txn.insert(
+        'attachments',
+        {
+          'id': a.id,
+          'entry_id': entry.id,
+          'file_path': a.filePath,
+          'thumb_path': a.thumbPath,
+          'mime_type': a.mimeType,
+          'created_at': a.createdAt.toIso8601String(),
+          'ord': i,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
 
-  /// Löscht einen Eintrag samt seiner Tags (entry_tags via ON DELETE CASCADE).
-  /// Noch kein Aufrufer in der UI — Grundlage für späteres Eintrag-Löschen.
-  Future<void> delete(String id) async {
+  /// Löscht einen Eintrag samt seiner Tags und Anhang-Zeilen (beide via
+  /// ON DELETE CASCADE) und gibt die **Dateipfade** der dadurch verwaisten
+  /// Bild-Anhänge zurück. Der Aufrufer löscht die Dateien anschließend über den
+  /// `AttachmentStore` — die Datenbank kennt das Dateisystem nicht, ein
+  /// CASCADE räumt nur Zeilen weg.
+  Future<List<String>> delete(String id) async {
     final db = await _database();
+    final attachmentRows = await db.query(
+      'attachments',
+      columns: ['file_path', 'thumb_path'],
+      where: 'entry_id = ?',
+      whereArgs: [id],
+    );
+    final orphaned = <String>[];
+    for (final row in attachmentRows) {
+      final fp = row['file_path'] as String?;
+      final tp = row['thumb_path'] as String?;
+      if (fp != null && fp.isNotEmpty) orphaned.add(fp);
+      if (tp != null && tp.isNotEmpty) orphaned.add(tp);
+    }
     await db.delete('entries', where: 'id = ?', whereArgs: [id]);
+    return orphaned;
   }
 
   /// Schreibt den von Claude erkannten Text zu einem Tinten-Eintrag und

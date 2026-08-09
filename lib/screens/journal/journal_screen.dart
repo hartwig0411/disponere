@@ -1,12 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../theme/app_colors.dart';
 import '../../data/journal_repository.dart';
+import '../../models/attachment.dart';
 import '../../models/journal_entry.dart';
 import '../../models/daily_info.dart';
 import '../../models/task.dart';
 import '../../models/ink_data.dart';
 import '../../models/calendar_event.dart';
 import '../../models/calendar_source.dart';
+import '../../services/attachment_store.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
@@ -83,6 +88,8 @@ class _JournalScreenState extends State<JournalScreen>
 
   final TagRegistry _tagRegistry = TagRegistry();
   final JournalRepository _repo = JournalRepository();
+  final AttachmentStore _attachmentStore = AttachmentStore();
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -285,6 +292,15 @@ class _JournalScreenState extends State<JournalScreen>
     final tagController = TextEditingController(
         text: existing != null ? formatTags(existing.tags) : '');
 
+    // Bild-Zustand des Sheets (Session A). Außerhalb des Builders, damit er
+    // über StatefulBuilder-Neuaufbauten hinweg bestehen bleibt.
+    //  - [pickedImage]    ein frisch gewähltes, noch **nicht** importiertes Bild
+    //                     (Import erst beim Speichern — bricht der Nutzer ab,
+    //                     entsteht keine verwaiste Datei).
+    //  - [removeExisting] der Nutzer hat das bestehende Bild entfernt.
+    XFile? pickedImage;
+    bool removeExisting = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -293,138 +309,347 @@ class _JournalScreenState extends State<JournalScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final showPicked = pickedImage != null;
+            final showExisting = !showPicked &&
+                existing != null &&
+                existing.hasImage &&
+                !removeExisting;
+            final hasPreview = showPicked || showExisting;
+            final previewPath = showPicked
+                ? pickedImage!.path
+                : (showExisting ? existing!.attachments.first.filePath : null);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isEditing ? 'Eintrag bearbeiten' : 'Neuer Eintrag',
+                    style: const TextStyle(
+                      color: AppColors.iconInactive,
+                      fontSize: 14,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: contentController,
+                          autofocus: true,
+                          maxLines: 4,
+                          style: const TextStyle(
+                              color: AppColors.text, fontSize: 16),
+                          decoration: InputDecoration(
+                            hintText: 'Was ist gerade wichtig?',
+                            hintStyle:
+                                const TextStyle(color: AppColors.placeholder),
+                            filled: true,
+                            fillColor: AppColors.fieldFill,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Stift-Eingabe nur beim Neuanlegen: das native Feld kann
+                      // (noch) nicht vorbefuellt werden -> Bearbeiten via Tastatur.
+                      if (!isEditing) ...[
+                        const SizedBox(width: 12),
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: AppColors.accent),
+                          tooltip: 'Mit Stift schreiben (Text)',
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            final result =
+                                await Navigator.push<NativeTextResult>(
+                              this.context,
+                              MaterialPageRoute(
+                                builder: (_) => NativeTextEntryScreen(
+                                    knownTags: _tagRegistry.allTags),
+                              ),
+                            );
+                            if (result != null && result.text.isNotEmpty) {
+                              _addEntry(result.text, result.tags);
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon:
+                              const Icon(Icons.brush, color: AppColors.accent),
+                          tooltip: 'Mit Stift zeichnen (Tinte)',
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _openInkEditorNew();
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Bild-Anhang (Session A): Vorschau mit Entfernen-Knopf oder,
+                  // wenn kein Bild dranhängt, ein Knopf zum Hinzufügen.
+                  if (hasPreview && previewPath != null)
+                    Stack(
+                      children: [
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 160),
+                          width: double.infinity,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Image.file(
+                            File(previewPath),
+                            fit: BoxFit.cover,
+                            cacheWidth: 1080,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              height: 100,
+                              alignment: Alignment.center,
+                              color: AppColors.fieldFill,
+                              child: const Text(
+                                'Bild nicht gefunden',
+                                style: TextStyle(color: AppColors.placeholder),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 6,
+                          right: 6,
+                          child: Material(
+                            color: Colors.black54,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: () => setSheetState(() {
+                                if (showPicked) {
+                                  pickedImage = null;
+                                } else {
+                                  removeExisting = true;
+                                }
+                              }),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4),
+                                child: Icon(Icons.close,
+                                    size: 18, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await _pickImage(context);
+                          if (picked != null) {
+                            setSheetState(() {
+                              pickedImage = picked;
+                              removeExisting = false;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.image_outlined,
+                            color: AppColors.accent, size: 20),
+                        label: const Text('Bild hinzufügen',
+                            style: TextStyle(color: AppColors.accent)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  TagAutocompleteField(
+                    controller: tagController,
+                    knownTags: _tagRegistry.allTags,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      // Loeschen nur beim Bearbeiten. Ohne Rueckfrage — bewusst,
+                      // damit sich Test-Eintraege zuegig von Hand wegraeumen
+                      // lassen (gleicher Schnitt wie im Aufgaben-Sheet).
+                      if (isEditing)
+                        IconButton(
+                          tooltip: 'Loeschen',
+                          icon: const Icon(Icons.delete_outline,
+                              color: AppColors.danger),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _deleteEntry(existing.id);
+                          },
+                        ),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => _saveEntryFromSheet(
+                            context: context,
+                            existing: existing,
+                            content: contentController.text.trim(),
+                            tagText: tagController.text,
+                            pickedImage: pickedImage,
+                            removeExisting: removeExisting,
+                          ),
+                          child: const Text(
+                            'Speichern',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Öffnet einen kleinen Auswahldialog (Galerie / Kamera) und liefert das
+  /// gewählte Bild als [XFile] — oder `null`, wenn abgebrochen wurde.
+  ///
+  /// `maxWidth` + `imageQuality` verkleinern/komprimieren schon beim Auswählen:
+  /// ein Journal braucht keine 12-Megapixel-Originale, und kleinere Dateien
+  /// halten den App-privaten Speicher schlank.
+  Future<XFile?> _pickImage(BuildContext sheetContext) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: sheetContext,
+      backgroundColor: AppColors.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                isEditing ? 'Eintrag bearbeiten' : 'Neuer Eintrag',
-                style: const TextStyle(
-                  color: AppColors.iconInactive,
-                  fontSize: 14,
-                  letterSpacing: 2,
-                ),
+              ListTile(
+                leading:
+                    const Icon(Icons.photo_library_outlined, color: AppColors.accent),
+                title: const Text('Galerie',
+                    style: TextStyle(color: AppColors.text)),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: contentController,
-                      autofocus: true,
-                      maxLines: 4,
-                      style:
-                          const TextStyle(color: AppColors.text, fontSize: 16),
-                      decoration: InputDecoration(
-                        hintText: 'Was ist gerade wichtig?',
-                        hintStyle:
-                            const TextStyle(color: AppColors.placeholder),
-                        filled: true,
-                        fillColor: AppColors.fieldFill,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Stift-Eingabe nur beim Neuanlegen: das native Feld kann
-                  // (noch) nicht vorbefuellt werden -> Bearbeiten via Tastatur.
-                  if (!isEditing) ...[
-                    const SizedBox(width: 12),
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: AppColors.accent),
-                      tooltip: 'Mit Stift schreiben (Text)',
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        final result = await Navigator.push<NativeTextResult>(
-                          this.context,
-                          MaterialPageRoute(
-                            builder: (_) => NativeTextEntryScreen(
-                                knownTags: _tagRegistry.allTags),
-                          ),
-                        );
-                        if (result != null && result.text.isNotEmpty) {
-                          _addEntry(result.text, result.tags);
-                        }
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.brush, color: AppColors.accent),
-                      tooltip: 'Mit Stift zeichnen (Tinte)',
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _openInkEditorNew();
-                      },
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 12),
-              TagAutocompleteField(
-                controller: tagController,
-                knownTags: _tagRegistry.allTags,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  // Loeschen nur beim Bearbeiten. Ohne Rueckfrage — bewusst,
-                  // damit sich Test-Eintraege zuegig von Hand wegraeumen lassen
-                  // (gleicher Schnitt wie im Aufgaben-Sheet).
-                  if (isEditing)
-                    IconButton(
-                      tooltip: 'Loeschen',
-                      icon: const Icon(Icons.delete_outline,
-                          color: AppColors.danger),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _deleteEntry(existing.id);
-                      },
-                    ),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      onPressed: () {
-                        final content = contentController.text.trim();
-                        if (content.isEmpty) return;
-                        final tags = parseTags(tagController.text);
-                        if (existing != null) {
-                          _updateEntry(existing.id, content, tags);
-                        } else {
-                          _addEntry(content, tags);
-                        }
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Speichern',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          letterSpacing: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: AppColors.accent),
+                title: const Text('Kamera',
+                    style: TextStyle(color: AppColors.text)),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
             ],
           ),
         );
       },
     );
+    if (source == null) return null;
+    try {
+      return await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 2560,
+        imageQuality: 88,
+      );
+    } catch (_) {
+      // z.B. verweigerte Kamera-Berechtigung: still abbrechen, kein Absturz.
+      return null;
+    }
+  }
+
+  /// Wertet den Speichern-Knopf des Eintrags-Sheets aus: löst den Bild-Anhang
+  /// auf (neu importieren / behalten / entfernen), schreibt den Eintrag und
+  /// räumt verdrängte Bilddateien weg. Async, weil der Import Bytes kopiert.
+  Future<void> _saveEntryFromSheet({
+    required BuildContext context,
+    required JournalEntry? existing,
+    required String content,
+    required String tagText,
+    required XFile? pickedImage,
+    required bool removeExisting,
+  }) async {
+    final keepingExisting = existing != null &&
+        existing.hasImage &&
+        !removeExisting &&
+        pickedImage == null;
+    final willHaveImage = pickedImage != null || keepingExisting;
+
+    // Nichts zu speichern: weder Text noch Bild.
+    if (content.isEmpty && !willHaveImage) return;
+
+    final navigator = Navigator.of(context);
+    final entryId =
+        existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final tags = parseTags(tagText);
+
+    final orphaned = <String>[];
+    List<Attachment> attachments;
+
+    if (pickedImage != null) {
+      // Neues Bild importieren; ein vorhandenes wird dadurch verdrängt.
+      final imported = await _attachmentStore.importImage(
+        entryId: entryId,
+        sourcePath: pickedImage.path,
+        mimeType: pickedImage.mimeType,
+      );
+      attachments = [imported];
+      if (existing != null) {
+        for (final a in existing.attachments) {
+          orphaned.add(a.filePath);
+          if (a.thumbPath != null) orphaned.add(a.thumbPath!);
+        }
+      }
+    } else if (keepingExisting) {
+      attachments = existing!.attachments;
+    } else {
+      attachments = const [];
+      if (existing != null && removeExisting) {
+        for (final a in existing.attachments) {
+          orphaned.add(a.filePath);
+          if (a.thumbPath != null) orphaned.add(a.thumbPath!);
+        }
+      }
+    }
+
+    if (existing != null) {
+      _updateEntry(entryId, content, tags, attachments: attachments);
+    } else {
+      _addEntry(content, tags, id: entryId, attachments: attachments);
+    }
+
+    if (orphaned.isNotEmpty) {
+      await _attachmentStore.deleteFiles(orphaned);
+    }
+    navigator.pop();
   }
 
   /// Tinten-Editor für einen neuen Tinten-Eintrag.
@@ -486,13 +711,19 @@ class _JournalScreenState extends State<JournalScreen>
     return at;
   }
 
-  void _addEntry(String content, List<String> tags) {
+  void _addEntry(
+    String content,
+    List<String> tags, {
+    String? id,
+    List<Attachment> attachments = const [],
+  }) {
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       timestamp: DateTime.now(),
       content: content,
       tags: canonicalTags,
+      attachments: attachments,
     );
     setState(() {
       _entries.insert(0, entry);
@@ -515,13 +746,21 @@ class _JournalScreenState extends State<JournalScreen>
     _repo.upsert(entry);
   }
 
-  void _updateEntry(String id, String content, List<String> tags) {
+  void _updateEntry(
+    String id,
+    String content,
+    List<String> tags, {
+    List<Attachment>? attachments,
+  }) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
+    // attachments == null lässt die bestehenden Anhänge unangetastet
+    // (copyWith-Semantik); das Sheet übergibt stets eine konkrete Liste.
     final updated = _entries[index].copyWith(
       content: content,
       tags: canonicalTags,
+      attachments: attachments,
     );
     setState(() {
       _entries[index] = updated;
@@ -530,12 +769,18 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   /// Loescht einen Eintrag (getippt wie Tinte) aus Liste und Datenbank.
-  /// entry_tags folgen per ON DELETE CASCADE.
+  /// entry_tags **und** attachments folgen per ON DELETE CASCADE; die
+  /// Bild-Dateien der verwaisten Anhänge räumt der AttachmentStore weg
+  /// (die Datenbank kennt das Dateisystem nicht).
   void _deleteEntry(String id) {
     setState(() {
       _entries.removeWhere((e) => e.id == id);
     });
-    _repo.delete(id);
+    _repo.delete(id).then((orphaned) {
+      if (orphaned.isNotEmpty) {
+        _attachmentStore.deleteFiles(orphaned);
+      }
+    });
   }
 
   /// Langes Druecken auf einen Eintrag -> kurze Rueckfrage, dann loeschen.

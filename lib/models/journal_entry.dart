@@ -1,3 +1,4 @@
+import 'attachment.dart';
 import 'ink_data.dart';
 
 class JournalEntry {
@@ -5,6 +6,11 @@ class JournalEntry {
   final DateTime timestamp;
   final String content;
   final List<String> tags;
+
+  /// Bild-Anhänge des Eintrags (Schema v7, Session A). Leere Liste = kein Bild.
+  /// Das Modell trägt bewusst eine Liste (1:n), auch wenn die Oberfläche zurzeit
+  /// nur ein Bild pro Eintrag zulässt — siehe [Attachment].
+  final List<Attachment> attachments;
 
   /// Tinten-Körper. `null` → Text-Eintrag; gesetzt → Tinten-Eintrag.
   /// Ein Eintrag ist genau einer der beiden Modi (Session 10).
@@ -29,10 +35,14 @@ class JournalEntry {
     this.ink,
     this.inkText,
     this.inkTextAt,
+    this.attachments = const [],
   });
 
   /// True, wenn der Eintrag im Tinten-Modus vorliegt (Striche statt Text).
   bool get isInk => ink != null;
+
+  /// True, wenn dem Eintrag mindestens ein Bild anhängt.
+  bool get hasImage => attachments.isNotEmpty;
 
   /// True, wenn zu diesem Eintrag ein erkannter Text vorliegt.
   bool get hasInkText => inkText != null && inkText!.isNotEmpty;
@@ -53,6 +63,7 @@ class JournalEntry {
     InkData? ink,
     String? inkText,
     DateTime? inkTextAt,
+    List<Attachment>? attachments,
   }) {
     return JournalEntry(
       id: id ?? this.id,
@@ -62,6 +73,7 @@ class JournalEntry {
       ink: ink ?? this.ink,
       inkText: inkText ?? this.inkText,
       inkTextAt: inkTextAt ?? this.inkTextAt,
+      attachments: attachments ?? this.attachments,
     );
   }
 }
