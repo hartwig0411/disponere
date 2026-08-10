@@ -12,6 +12,7 @@ import '../../models/ink_data.dart';
 import '../../models/calendar_event.dart';
 import '../../models/calendar_source.dart';
 import '../../services/attachment_store.dart';
+import '../../services/share_receiver.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
@@ -90,18 +91,42 @@ class _JournalScreenState extends State<JournalScreen>
   final JournalRepository _repo = JournalRepository();
   final AttachmentStore _attachmentStore = AttachmentStore();
   final ImagePicker _imagePicker = ImagePicker();
+  final ShareReceiver _shareReceiver = ShareReceiver();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Empfang geteilter Inhalte (ACTION_SEND, Feature 2). Laufzeit-Shares
+    // oeffnen direkt das Eintrags-Sheet; ein Kaltstart-Share wird nach dem
+    // ersten Frame einmalig abgeholt und ebenso ins Sheet gereicht.
+    _shareReceiver.onText = _handleSharedText;
+    _shareReceiver.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final shared = await _shareReceiver.getInitialSharedText();
+      if (shared != null && mounted) {
+        _openEntrySheet(initialContent: shared);
+      }
+    });
     _init();
   }
 
   @override
   void dispose() {
+    _shareReceiver.stop();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Ein zur Laufzeit (App bereits offen) via ACTION_SEND geteilter Text:
+  /// oeffnet das bestehende Eintrags-Sheet, vorbefuellt mit dem Inhalt. Tags
+  /// ergaenzt der Nutzer; Speichern laeuft den gewoehnlichen Weg
+  /// (_saveEntryFromSheet -> _addEntry) -> der Eintrag landet als ganz
+  /// normaler Eintrag im heutigen Journal.
+  void _handleSharedText(String text) {
+    if (!mounted) return;
+    _openEntrySheet(initialContent: text);
   }
 
   /// Beim App-Resume die Heute-Daten neu laden — sonst haengen Tagesinfo,
@@ -285,10 +310,13 @@ class _JournalScreenState extends State<JournalScreen>
   /// Öffnet das Text-Eingabe-Sheet.
   /// [existing] == null -> Neuer (Text-)Eintrag.
   /// [existing] != null -> Bestehenden Text-Eintrag bearbeiten.
-  void _openEntrySheet({JournalEntry? existing}) {
+  /// [initialContent] befuellt bei einem **neuen** Eintrag das Textfeld vor —
+  /// so dient dasselbe Sheet als Landeblatt fuer geteilte Inhalte (Feature 2).
+  /// Bei [existing] != null bleibt es wirkungslos (der Bestand gewinnt).
+  void _openEntrySheet({JournalEntry? existing, String? initialContent}) {
     final isEditing = existing != null;
     final contentController =
-        TextEditingController(text: existing?.content ?? '');
+        TextEditingController(text: existing?.content ?? initialContent ?? '');
     final tagController = TextEditingController(
         text: existing != null ? formatTags(existing.tags) : '');
 

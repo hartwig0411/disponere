@@ -28,6 +28,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Empfangsziel fuer geteilte Inhalte (Teilen & Bilder, Feature 2).
+                 Text/URL kommen als ACTION_SEND mit text/plain; der geteilte
+                 Text landet ueber den nativen Kanal (MainActivity) im heutigen
+                 Journal. Bilder (image/*) folgen als eigener kleiner Nachzug. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
         <meta-data
             android:name="flutterEmbedding"
