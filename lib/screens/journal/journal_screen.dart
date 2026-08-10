@@ -13,6 +13,7 @@ import '../../models/calendar_event.dart';
 import '../../models/calendar_source.dart';
 import '../../services/attachment_store.dart';
 import '../../services/share_receiver.dart';
+import '../../services/share_service.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
@@ -844,6 +845,65 @@ class _JournalScreenState extends State<JournalScreen>
     if (ok == true) _deleteEntry(entry.id);
   }
 
+  /// Langes Druecken auf einen Eintrag oeffnet ein kleines Aktions-Blatt:
+  /// Teilen oder Loeschen. Frueher fuehrte das lange Druecken direkt zur
+  /// Lösch-Rueckfrage; mit Feature 3 teilen sich beide Aktionen eine Geste
+  /// (eine Geste, ein Menue — kein zusaetzliches Icon auf der Karte). Der
+  /// Lösch-Pfad dahinter (die Rueckfrage) ist unveraendert.
+  void _showEntryActions(JournalEntry entry) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading:
+                    const Icon(Icons.share_outlined, color: AppColors.accent),
+                title: const Text('Teilen',
+                    style: TextStyle(color: AppColors.text)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _shareEntry(entry);
+                },
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.delete_outline, color: AppColors.danger),
+                title: const Text('Loeschen',
+                    style: TextStyle(color: AppColors.danger)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _confirmDeleteEntry(entry);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Gibt den Eintrag ueber den nativen Teilen-Dialog nach aussen (Feature 3).
+  /// Was hinausgeht, entscheidet [ShareService] nach Eintragsart. Erwartbare
+  /// Fehler (nichts zu teilen, Tinte nicht renderbar) landen als kurzer
+  /// Hinweis, nicht als Absturz.
+  Future<void> _shareEntry(JournalEntry entry) async {
+    try {
+      await ShareService.shareEntry(entry);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
   void _updateInkEntry(String id, InkData ink, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
@@ -1390,7 +1450,7 @@ class _JournalScreenState extends State<JournalScreen>
                 _openEntrySheet(existing: entry);
               }
             },
-            onLongPress: () => _confirmDeleteEntry(entry),
+            onLongPress: () => _showEntryActions(entry),
           ),
       for (final pd in pastDays)
         PastDayView(
@@ -1402,7 +1462,7 @@ class _JournalScreenState extends State<JournalScreen>
               _openEntrySheet(existing: entry);
             }
           },
-          onLongPressEntry: (entry) => _confirmDeleteEntry(entry),
+          onLongPressEntry: (entry) => _showEntryActions(entry),
           onToggleTask: _togglePanelTask,
           onTapInfo: (info) => _openDailyInfoSheet(existing: info),
         ),
