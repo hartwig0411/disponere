@@ -3788,14 +3788,16 @@ Nachzug. Seither (Sessions 28–40) hat sich der Kern-Status verschoben:
 ### Offen / als Naechstes
 - **Block „Teilen & Bilder“ abgeschlossen** (1 -> 2 -> 3 fertig): Bilder als
   Inhalt, Empfang, Senden stehen.
+- **Als Naechstes: Aufgaben am Faelligkeitstag** (Anforderungen v6.1) —
+  Umsetzung wie vereinbart nach dem Block; die naechste echte Coding-Session.
 - **Bilder als Empfang** (`image/*`, kleiner Nachzug zu Feature 2) — baut auf
   Feature 1 auf; offen.
-- **Aufgaben am Faelligkeitstag** (Anforderungen v6.1) — Umsetzung wie
-  vereinbart als Naechstes nach dem Block.
-- **Fable-Review** — Kohaerenz gegen `disponere_design_v2_0.md`, als reine
-  Chat-Session.
 - (weiterhin) Kleinkram: `native_text_test_screen.dart`, ungeklaerter
   `stop_reason: max_tokens`-Randfall; Tag-Ansicht-Miniatur (aus Session A).
+- **Zum Schluss: Fable-Review** — vollstaendige Kohaerenzpruefung des Codes
+  gegen `disponere_design_v2_0.md`, als reine Chat-Session. Bewusst **am Ende**
+  (nach der restlichen geplanten Arbeit), damit sie einen moeglichst finalen
+  Stand prueft.
 
 ### Anforderungsdokument
 - **Unveraendert (v6.1).** Feature 3 war im Block „Teilen & Bilder“ (v6.0)
