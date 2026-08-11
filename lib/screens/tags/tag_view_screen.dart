@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../data/journal_repository.dart';
@@ -600,7 +602,7 @@ class _EntryTile extends StatelessWidget {
                 child: const SizedBox.expand(),
               ),
             )
-          else
+          else if (entry.content.isNotEmpty)
             Text(
               entry.content,
               style: const TextStyle(
@@ -609,12 +611,55 @@ class _EntryTile extends StatelessWidget {
                 height: 1.5,
               ),
             ),
+          // Bild-Anhang (Session A): Miniatur direkt aus der Bilddatei. Ein
+          // reiner Bild-Eintrag (leerer Inhalt, keine Tinte) zeigt nur die
+          // Miniatur — der leere Text oben fällt dann weg.
+          if (entry.hasImage) ...[
+            const SizedBox(height: 8),
+            _EntryImage(path: entry.attachments.first.filePath),
+          ],
           _OtherTags(
             tags: entry.tags,
             currentTag: currentTag,
             onTagTap: onTagTap,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Bild-Miniatur einer Eintrags-Kachel. Rendert direkt aus der Bilddatei
+/// ([Attachment.filePath]) — ein separates Thumbnail gibt es (noch) nicht,
+/// `thumbPath` ist ungenutzt. In der Höhe begrenzt und mit `cacheWidth`
+/// sparsam dekodiert; dieselbe Vorschau wie im Journal, hier rein zum Ansehen.
+class _EntryImage extends StatelessWidget {
+  final String path;
+  const _EntryImage({required this.path});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 160),
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        cacheWidth: 720,
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 100,
+          alignment: Alignment.center,
+          color: AppColors.fieldFill,
+          child: const Text(
+            'Bild nicht gefunden',
+            style: TextStyle(color: AppColors.placeholder),
+          ),
+        ),
       ),
     );
   }

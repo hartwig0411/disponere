@@ -65,6 +65,15 @@ class ClaudeService {
   static const String _apiVersion = '2023-06-01';
   static const String _apiKeyKey = 'anthropic_api_key';
 
+  /// Sichtbarer Hinweis, wenn die API-Antwort am Token-Limit endet
+  /// (`stop_reason: max_tokens`). Wird an den bereits erkannten Text
+  /// **angehängt**, statt ihn stillschweigend gekürzt zurückzugeben oder ganz
+  /// zu verwerfen — bei langer Handschrift ist der erkannte Anfang wertvoll,
+  /// der Nutzer muss aber wissen, dass hinten etwas fehlt.
+  static const String _truncationNote =
+      '\n\n[Hinweis: Die Antwort hat das Laengenlimit erreicht und ist hier '
+      'abgeschnitten.]';
+
   /// Zeitlimit der Tinten-Auswertung (Architektur §7).
   static const Duration inkTimeout = Duration(seconds: 60);
 
@@ -272,12 +281,19 @@ class ClaudeService {
       }
     }
 
-    final text = buffer.toString().trim();
+    var text = buffer.toString().trim();
     if (text.isEmpty && !allowEmpty) {
       throw const ClaudeException(
         ClaudeErrorKind.response,
         'Die Antwort enthielt keinen Text. Es wurde nichts gespeichert.',
       );
+    }
+
+    // Am Token-Limit gestoppt: Der Text ist unvollständig. Einen sichtbaren
+    // Hinweis anhängen, damit die Kürzung nicht unbemerkt bleibt. Beim
+    // Verbindungstest (allowEmpty) ist der Inhalt gleichgültig — dort nicht.
+    if (!allowEmpty && decoded['stop_reason'] == 'max_tokens') {
+      text = '$text$_truncationNote';
     }
     return text;
   }
