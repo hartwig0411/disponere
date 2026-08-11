@@ -99,16 +99,24 @@ class _JournalScreenState extends State<JournalScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Empfang geteilter Inhalte (ACTION_SEND, Feature 2). Laufzeit-Shares
+    // Empfang geteilter Inhalte (ACTION_SEND: Text und Bild). Laufzeit-Shares
     // oeffnen direkt das Eintrags-Sheet; ein Kaltstart-Share wird nach dem
     // ersten Frame einmalig abgeholt und ebenso ins Sheet gereicht.
     _shareReceiver.onText = _handleSharedText;
+    _shareReceiver.onImage = _handleSharedImage;
     _shareReceiver.start();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final shared = await _shareReceiver.getInitialSharedText();
-      if (shared != null && mounted) {
-        _openEntrySheet(initialContent: shared);
+      final sharedText = await _shareReceiver.getInitialSharedText();
+      if (sharedText != null && mounted) {
+        _openEntrySheet(initialContent: sharedText);
+      }
+      // Ein Intent ist entweder Text oder Bild; hoechstens einer der beiden
+      // Puffer ist gesetzt. Beide zu ziehen leert sie sauber (Consume-once) und
+      // oeffnet nur fuer den tatsaechlich vorhandenen Inhalt ein Sheet.
+      final sharedImage = await _shareReceiver.getInitialSharedImage();
+      if (sharedImage != null && mounted) {
+        _handleSharedImage(sharedImage);
       }
     });
     _init();
@@ -129,6 +137,20 @@ class _JournalScreenState extends State<JournalScreen>
   void _handleSharedText(String text) {
     if (!mounted) return;
     _openEntrySheet(initialContent: text);
+  }
+
+  /// Ein zur Laufzeit oder beim Kaltstart via ACTION_SEND geteiltes Bild:
+  /// oeffnet das bestehende Eintrags-Sheet mit dem Bild bereits gestaged und
+  /// einer etwaigen Bildunterschrift im Inhaltsfeld. Speichern laeuft den
+  /// gewoehnlichen Weg (_saveEntryFromSheet importiert das Bild in den
+  /// App-privaten Speicher und haengt es als Attachment an den heutigen
+  /// Eintrag).
+  void _handleSharedImage(SharedImage image) {
+    if (!mounted) return;
+    _openEntrySheet(
+      initialImage: XFile(image.path, mimeType: image.mimeType),
+      initialContent: image.caption,
+    );
   }
 
   /// Beim App-Resume die Heute-Daten neu laden — sonst haengen Tagesinfo,
@@ -315,7 +337,8 @@ class _JournalScreenState extends State<JournalScreen>
   /// [initialContent] befuellt bei einem **neuen** Eintrag das Textfeld vor —
   /// so dient dasselbe Sheet als Landeblatt fuer geteilte Inhalte (Feature 2).
   /// Bei [existing] != null bleibt es wirkungslos (der Bestand gewinnt).
-  void _openEntrySheet({JournalEntry? existing, String? initialContent}) {
+  void _openEntrySheet(
+      {JournalEntry? existing, String? initialContent, XFile? initialImage}) {
     final isEditing = existing != null;
     final contentController =
         TextEditingController(text: existing?.content ?? initialContent ?? '');
@@ -328,7 +351,10 @@ class _JournalScreenState extends State<JournalScreen>
     //                     (Import erst beim Speichern — bricht der Nutzer ab,
     //                     entsteht keine verwaiste Datei).
     //  - [removeExisting] der Nutzer hat das bestehende Bild entfernt.
-    XFile? pickedImage;
+    // Vorbelegung [initialImage]: ein via ACTION_SEND empfangenes Bild startet
+    // bereits gestaged (wie frisch gewaehlt) — der Import laeuft ebenso erst
+    // beim Speichern.
+    XFile? pickedImage = initialImage;
     bool removeExisting = false;
 
     showModalBottomSheet(

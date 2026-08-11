@@ -28,14 +28,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Empfangsziel fuer geteilte Inhalte (Teilen & Bilder, Feature 2).
-                 Text/URL kommen als ACTION_SEND mit text/plain; der geteilte
-                 Text landet ueber den nativen Kanal (MainActivity) im heutigen
-                 Journal. Bilder (image/*) folgen als eigener kleiner Nachzug. -->
+            <!-- Empfangsziel fuer geteilte Inhalte (Teilen & Bilder, Feature 2
+                 + Bild-Nachzug). Text/URL kommen als ACTION_SEND mit text/plain,
+                 Bilder als ACTION_SEND mit image/* (Einzelbild; eine etwaige
+                 Bildunterschrift in EXTRA_TEXT wird mitgenommen). Alles laeuft
+                 ueber den nativen Kanal (MainActivity) und landet im heutigen
+                 Journal. Bewusst KEIN ACTION_SEND_MULTIPLE: das Eintrags-Sheet
+                 fuehrt genau ein Bild; Mehrbild-Empfang waere ein spaeterer
+                 Nachzug zusammen mit einem Mehrbild-Sheet. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="text/plain"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
             </intent-filter>
         </activity>
         <meta-data
