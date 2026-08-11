@@ -31,6 +31,7 @@ import 'widgets/daily_info.dart';
 import 'widgets/entry_card.dart';
 import 'widgets/bottom_bar.dart';
 import 'widgets/today_panel.dart';
+import 'widgets/today_due_tasks.dart';
 import 'widgets/past_day.dart';
 
 // Farben leben ab dem hellen Theme zentral in AppColors
@@ -1420,6 +1421,18 @@ class _JournalScreenState extends State<JournalScreen>
       today: todayMidnight,
     );
 
+    // Heute faellige, offene Aufgaben fuer den Heute-Block (v6.1, §2): die
+    // EINZIGE zugelassene Ergaenzung der freien Schreibflaeche. Streng
+    // gefiltert auf Faelligkeitstag == heute; ueberfaellige und Aufgaben ohne
+    // Datum bleiben draussen (nur im Heute-Panel). `!done` sorgt dafuer, dass
+    // eine eben abgehakte Aufgabe durch `_togglePanelTask` SOFORT aus dem Block
+    // faellt (die Karte bleibt derweil im Panel durchgestrichen sichtbar).
+    final todayDueTasks = _todayTasks.where((t) {
+      final due = t.dueDay;
+      if (due == null || t.done) return false;
+      return Task.dayOnly(due) == todayMidnight;
+    }).toList();
+
     // Eine flache Widget-Liste fuer die ListView. Die Widget-Objekte sind
     // billige Konfiguration; die teuren Element-/Render-Baeume baut der
     // ListView.builder weiterhin traege beim Scrollen (kein eager Aufbau).
@@ -1429,6 +1442,14 @@ class _JournalScreenState extends State<JournalScreen>
         infos: _todayInfos,
         onAdd: () => _openDailyInfoSheet(),
         onTapInfo: (info) => _openDailyInfoSheet(existing: info),
+      ),
+      // Direkt unter dem Tagesinfo-Band, ueber den eigenen Eintraegen: was
+      // heute zaehlt, steht zusammen oben; die Schreibflaeche flieszt darunter.
+      // Rendert sich selbst nur, wenn etwas offen und heute faellig ist.
+      TodayDueTasks(
+        tasks: todayDueTasks,
+        onToggleTask: _togglePanelTask,
+        onOpenTask: (task) => _openTaskSheet(existing: task),
       ),
       if (todayEntries.isEmpty)
         // Eindeutige Keys, damit Flutter beim Wechsel von der Einladung zur
