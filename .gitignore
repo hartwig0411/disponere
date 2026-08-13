@@ -126,3 +126,6 @@ lib/config/google_config.dart
 
 # Debug-Mitschnitte
 logcat.txt
+
+# Ideen-Eingang: Bilder lokal, nicht committen
+docs/bilder/
