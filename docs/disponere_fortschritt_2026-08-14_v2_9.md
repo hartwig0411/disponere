@@ -4241,4 +4241,99 @@ Sicht des Zweit-Blicks sauber durch.
 
 ---
 
+## Session 51 — 14. August 2026 (Datierter Eintrag — Anzeige-Day, Schema v8; Cowork-Session)
+
+### Erledigt — Datierter Eintrag (aus der Praxis, v6.2 -> v6.3)
+- **Ein Eintrag laesst sich jetzt fuer einen kuenftigen Tag vormerken.** Neues,
+  optionales `displayDay` am Eintrag; ueberall, wo ein Eintrag einem Kalendertag
+  zugeordnet wird — Journal (heute/vergangen), Tag-Ansicht, Wochenauswertung —,
+  zaehlt nun `journalDay` (= `displayDay` falls gesetzt, sonst der Zeitstempel-Tag).
+  So liegt ein Eintrag ueberall an genau einem Tag. Kein Abhaken, keine Checkbox —
+  er ist keine Aufgabe.
+- **Anzeige-Semantik: nur am gewaehlten Tag** — die in v6.2 offen gelassene
+  Gabelung, hier mit Steffen geschlossen. Ein auf die Zukunft datierter Eintrag
+  faellt aus Heute- und Vergangenheits-Liste und wartet still, bis sein Tag kommt;
+  am Erstelltag ist er nicht sichtbar. Loest den Rezept-Fall: heute mit Bild
+  anlegen, erst am Kochtag sehen.
+- **Schema-Migration v7 -> v8:** neue Spalte `entries.display_day`; kein Umbau an
+  `Task` oder `attachments`. Migration auf dem MatePad bestaetigt — bestehende
+  Eintraege, Bilder, Tinte und Tags nach dem Update unveraendert.
+- **Sheet:** unter dem Tag-Feld „Fuer einen Tag vormerken" (Material-Datumsdialog,
+  kein Abhaken). Datum laesst sich setzen, aendern und wieder entfernen — `copyWith`
+  kann `displayDay` gezielt loeschen (nicht nur ueberschreiben).
+- **Karte:** ein leises Kalender-Icon kennzeichnet einen vorgemerkten Eintrag —
+  dieselbe Zurueckhaltung wie das Tinten-Icon. Die angezeigte Uhrzeit bleibt die
+  Notiz-Uhrzeit (wann geschrieben, nicht wann er auftaucht).
+- **Deutsch durchgaengig:** `flutter_localizations` mit `Locale('de')` ergaenzt,
+  damit der Material-Datumsdialog (und alle Standard-Widgets) deutsch erscheinen.
+- **Randfall geklammert:** beim Bearbeiten eines bereits datierten Eintrags, dessen
+  Tag weit zurueckliegt, wurden `firstDate`/`lastDate` des Dialogs sicher geklammert
+  (sonst Assertion-Absturz, wenn `initialDate` ausserhalb liegt).
+- **Toter Code raus:** `_nextDay` entfiel mit der Umstellung der Wochenfenster-
+  Abfrage (einziger Aufrufer) und wurde entfernt.
+- **Auf dem MatePad bestaetigt:** Rezept-Fall (heute unsichtbar, am Zieltag im
+  Heute-Block, danach im Vergangenheitsblock des Zieltags), Datum aendern/entfernen,
+  Tag-Ansicht unter dem Anzeige-Tag, Datumsdialog deutsch, Kalender-Icon sichtbar.
+
+### Entscheidungen (mit Steffen bestaetigt)
+- **Nur am gewaehlten Tag** (Anzeige-Semantik) — die zentrale, vor dem Coden
+  geklaerte Gabelung.
+- **Tag-Ansicht und Wochenauswertung ordnen datierte Eintraege ebenfalls dem
+  Anzeige-Tag zu** (COALESCE auf `display_day`), damit ein Eintrag ueberall an genau
+  einem Tag liegt — konsistent mit dem Journal.
+- **Sortierung am Anzeige-Tag** nach der Notiz-Uhrzeit (aelter -> weiter unten im
+  Heute-Block).
+
+### Reversible Ermessensentscheidungen (markiert)
+- **`flutter_localizations` + `Locale('de')` app-weit** — noetig fuer den deutschen
+  Datumsdialog; macht nebenbei alle Standard-Widgets deutsch. Umkehrbar.
+- **Karten-Kennzeichnung nur ein Icon, kein Text.**
+
+### Angefasste Dateien
+- Geaendert: `lib/models/journal_entry.dart` (`displayDay`, `isDated`, `journalDay`,
+  `copyWith` mit gezieltem Loeschen des Datums).
+- Geaendert: `lib/data/journal_repository.dart` (Schema-Bump v8, Spalte
+  `display_day` lesen/schreiben, Wochenfenster-Abfrage auf Anzeige-Tag; `_nextDay`
+  entfernt).
+- Geaendert: `lib/screens/journal/journal_screen.dart` (Zuordnung heute/vergangen
+  nach `journalDay`; Datums-Waehler im Sheet; `_saveEntryFromSheet`/`_addEntry`/
+  `_updateEntry` tragen den Anzeige-Tag; `_dateWithWeekday`; Dialog-Grenzen
+  geklammert).
+- Geaendert: `lib/screens/journal/widgets/past_day.dart` (Timeline nach `journalDay`
+  einsortieren).
+- Geaendert: `lib/screens/journal/widgets/entry_card.dart` (Kalender-Icon).
+- Geaendert: `lib/screens/tags/tag_view_screen.dart` (Gruppierung nach `journalDay`).
+- Geaendert: `lib/services/week_context.dart` (Wochen-Buckets nach `journalDay`).
+- Geaendert: `lib/main.dart` + `pubspec.yaml` (`flutter_localizations`, `Locale('de')`).
+
+### Offen / als Naechstes (unveraendert aus den beiden Reviews)
+- **Fix-Session (klein + mittel):** F1/N1 (DST-Off-by-one im
+  `google_calendar_service.dart`, `Duration` -> `DateTime(y,m,d)`-Helfer, Z. 221/262)
+  + M1 (Tag-Umbenennen erfasst `calendar_source_tags`/`event_tags` nicht; dabei das
+  fehlende `await` mitnehmen). Passen zusammen in eine fokussierte Session.
+- **`docs:`-Durchgang:** N3/F2/F3 (Status-Drift, Design §4a, `app_colors`-Kommentar)
+  und die bewusste Dunkel-Chrome-Ausnahme.
+- **Nach Ermessen:** N2 (`huawei_ml_text` raus), N4 (Starttag-Zuordnung dokumentieren),
+  N5 (Kaltstart-Race), Trivia, F4/F5/F6.
+
+### Anforderungsdokument
+- **v6.3** — datierter Eintrag umgesetzt, Anzeige-Semantik „nur am gewaehlten Tag"
+  als geklaert geschlossen, Schema-v8-Notiz. (v6.2 hatte die Anforderung aufgenommen
+  und die Gabelung bewusst offen gelassen.)
+
+### Hinweis zum Session-Charakter (Cowork)
+- Diese Session lief in **Cowork**; Code kam als Patch statt als komplette Dateien,
+  und der Doku-Abschluss (Fortschritt-Block einsetzen) ging beim manuellen
+  Copy-Paste verloren — `f33378e` committete eine leere `v2_9` (Kopie von `v2_8`).
+  Dieser Block ist die **Rekonstruktion** aus Protokoll, v6.3 und der Dateiliste des
+  feat-Commits; er ersetzt den leeren Inhalt der `v2_9`.
+
+### Commits (heute)
+- `7dadfea` - feat: dated entry - optional display day surfaces on chosen day (schema v8)
+- `97951bd` - docs: Anforderungen v6.3 - datierter Eintrag umgesetzt, Anzeige-Semantik nur am gewaehlten Tag
+- `3a8fddd` - docs: Fortschritt Session 50 (Nachtrag; zitiert 15744d1)
+- `docs:` - Fortschritt Session 51 - Block eingesetzt, korrigiert leere v2_9 (zitiert 7dadfea)
+
+---
+
 *Wird nach jeder Session aktualisiert.*
