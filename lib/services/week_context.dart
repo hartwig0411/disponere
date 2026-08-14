@@ -213,8 +213,12 @@ class WeekContext {
       final dayTasks = tasks
           .where((t) => t.dueDay != null && WeekWindow.dateKey(t.dueDay!) == key)
           .toList();
+      // Nach `journalDay` (Anzeige-Tag bei datierten Eintraegen, sonst
+      // Zeitstempel-Tag) — dieselbe Zuordnung wie im Journal und in der
+      // Bereichsabfrage `entriesInRange`. So steht ein datierter Eintrag in der
+      // Wochenauswertung an dem Tag, an dem er im Journal auftaucht.
       final dayEntries = included
-          .where((e) => WeekWindow.dateKey(e.timestamp) == key)
+          .where((e) => WeekWindow.dateKey(e.journalDay) == key)
           .toList();
 
       buffer.writeln();

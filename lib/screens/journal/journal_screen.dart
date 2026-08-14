@@ -357,6 +357,13 @@ class _JournalScreenState extends State<JournalScreen>
     XFile? pickedImage = initialImage;
     bool removeExisting = false;
 
+    // Datierter Eintrag (Schema v8): optionaler Anzeige-Tag. `null` = normaler
+    // Eintrag (erscheint heute). Gesetzt = der Eintrag surft an diesem Tag auf
+    // und nur dort. Beim Bearbeiten mit dem vorhandenen Anzeige-Tag vorbelegt;
+    // er lässt sich hier setzen, ändern und wieder entfernen. Außerhalb des
+    // Builders, damit er StatefulBuilder-Neuaufbauten übersteht (wie pickedImage).
+    DateTime? pickedDisplayDay = existing?.displayDay;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -376,6 +383,41 @@ class _JournalScreenState extends State<JournalScreen>
             final previewPath = showPicked
                 ? pickedImage!.path
                 : (showExisting ? existing!.attachments.first.filePath : null);
+
+            // Öffnet den (deutschen) Material-Datumsdialog und übernimmt den
+            // gewählten Tag als date-only Anzeige-Tag. Ein weiter Bereich
+            // (−1 bis +5 Jahre) verhindert, dass ein bereits vergangener
+            // Anzeige-Tag beim Bearbeiten außerhalb der Grenzen läge.
+            Future<void> pickDisplayDay() async {
+              final now = DateTime.now();
+              final initial =
+                  pickedDisplayDay ?? DateTime(now.year, now.month, now.day);
+              // Grenzen so klemmen, dass `initial` immer dazwischen liegt —
+              // sonst würde das Bearbeiten eines weit zurückliegenden (oder
+              // sehr fernen) Anzeige-Tags die Zusicherung firstDate <= initial
+              // <= lastDate verletzen.
+              var firstDate = DateTime(now.year - 1);
+              if (initial.isBefore(firstDate)) {
+                firstDate = DateTime(initial.year, initial.month, initial.day);
+              }
+              var lastDate = DateTime(now.year + 5);
+              if (initial.isAfter(lastDate)) {
+                lastDate = DateTime(initial.year, initial.month, initial.day);
+              }
+              final chosen = await showDatePicker(
+                context: context,
+                initialDate: initial,
+                firstDate: firstDate,
+                lastDate: lastDate,
+                helpText: 'Tag wählen, an dem der Eintrag erscheint',
+              );
+              if (chosen != null) {
+                setSheetState(() {
+                  pickedDisplayDay =
+                      DateTime(chosen.year, chosen.month, chosen.day);
+                });
+              }
+            }
 
             return Padding(
               padding: EdgeInsets.only(
@@ -538,6 +580,63 @@ class _JournalScreenState extends State<JournalScreen>
                     controller: tagController,
                     knownTags: _tagRegistry.allTags,
                   ),
+                  const SizedBox(height: 12),
+                  // Datierter Eintrag (v6.2): optionaler Anzeige-Tag. Kein
+                  // Abhaken, keine Checkbox — der Eintrag ist keine Aufgabe,
+                  // sondern vorbereiteter Inhalt, der an dem gewählten Tag im
+                  // Journal auftaucht (und nur dort).
+                  if (pickedDisplayDay != null)
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.fieldFill,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.event_available,
+                              color: AppColors.accent, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Erscheint am ${_dateWithWeekday(pickedDisplayDay!)}',
+                              style: const TextStyle(
+                                  color: AppColors.text, fontSize: 14),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: pickDisplayDay,
+                            child: const Text('Ändern',
+                                style: TextStyle(color: AppColors.accent)),
+                          ),
+                          IconButton(
+                            tooltip: 'Datum entfernen',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.close,
+                                size: 18, color: AppColors.iconInactive),
+                            onPressed: () =>
+                                setSheetState(() => pickedDisplayDay = null),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: pickDisplayDay,
+                        icon: const Icon(Icons.event_outlined,
+                            color: AppColors.accent, size: 20),
+                        label: const Text('Für einen Tag vormerken',
+                            style: TextStyle(color: AppColors.accent)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   Row(
                     children: [
@@ -570,6 +669,7 @@ class _JournalScreenState extends State<JournalScreen>
                             tagText: tagController.text,
                             pickedImage: pickedImage,
                             removeExisting: removeExisting,
+                            displayDay: pickedDisplayDay,
                           ),
                           child: const Text(
                             'Speichern',
@@ -652,6 +752,7 @@ class _JournalScreenState extends State<JournalScreen>
     required String tagText,
     required XFile? pickedImage,
     required bool removeExisting,
+    required DateTime? displayDay,
   }) async {
     final keepingExisting = existing != null &&
         existing.hasImage &&
@@ -697,9 +798,11 @@ class _JournalScreenState extends State<JournalScreen>
     }
 
     if (existing != null) {
-      _updateEntry(entryId, content, tags, attachments: attachments);
+      _updateEntry(entryId, content, tags,
+          attachments: attachments, displayDay: displayDay);
     } else {
-      _addEntry(content, tags, id: entryId, attachments: attachments);
+      _addEntry(content, tags,
+          id: entryId, attachments: attachments, displayDay: displayDay);
     }
 
     if (orphaned.isNotEmpty) {
@@ -772,6 +875,7 @@ class _JournalScreenState extends State<JournalScreen>
     List<String> tags, {
     String? id,
     List<Attachment> attachments = const [],
+    DateTime? displayDay,
   }) {
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
@@ -780,6 +884,7 @@ class _JournalScreenState extends State<JournalScreen>
       content: content,
       tags: canonicalTags,
       attachments: attachments,
+      displayDay: displayDay,
     );
     setState(() {
       _entries.insert(0, entry);
@@ -807,16 +912,25 @@ class _JournalScreenState extends State<JournalScreen>
     String content,
     List<String> tags, {
     List<Attachment>? attachments,
+    DateTime? displayDay,
   }) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     // attachments == null lässt die bestehenden Anhänge unangetastet
     // (copyWith-Semantik); das Sheet übergibt stets eine konkrete Liste.
+    //
+    // [displayDay] trägt den vom Sheet gewünschten **Endzustand**: gesetzt =
+    // datierter Eintrag an diesem Tag, `null` = kein Anzeige-Tag mehr. Deshalb
+    // `clearDisplayDay: displayDay == null` — nur so wird ein zuvor datierter
+    // Eintrag wieder zu einem normalen (copyWith kann `null` sonst nicht von
+    // „nicht ändern" unterscheiden).
     final updated = _entries[index].copyWith(
       content: content,
       tags: canonicalTags,
       attachments: attachments,
+      displayDay: displayDay,
+      clearDisplayDay: displayDay == null,
     );
     setState(() {
       _entries[index] = updated;
@@ -1434,11 +1548,18 @@ class _JournalScreenState extends State<JournalScreen>
     // Schreibflaeche: Datumskopf, Tagesinfo, eigene Eintraege (Termine und
     // Aufgaben liegen im Heute-Panel). Vergangene Tage (Design 4b) werden je
     // Tag nach `#Tag` gruppiert und stehen darunter, neu nach alt.
+    //
+    // Zugeordnet wird nach `journalDay` (Anzeige-Tag bei datierten Eintraegen,
+    // sonst Zeitstempel-Tag): so surft ein datierter Eintrag an seinem
+    // gewaehlten Tag auf — und NUR dort. Ein auf die **Zukunft** datierter
+    // Eintrag faellt aus beiden Listen (journalDay weder heute noch vor heute)
+    // und wartet still, bis sein Tag kommt (Anforderungen v6.2, „nur am
+    // gewaehlten Tag").
     final todayMidnight = DateTime(today.year, today.month, today.day);
     final todayEntries =
-        _entries.where((e) => !e.timestamp.isBefore(todayMidnight)).toList();
+        _entries.where((e) => e.journalDay == todayMidnight).toList();
     final pastEntries =
-        _entries.where((e) => e.timestamp.isBefore(todayMidnight)).toList();
+        _entries.where((e) => e.journalDay.isBefore(todayMidnight)).toList();
     final pastDays = PastDay.buildTimeline(
       pastEntries: pastEntries,
       pastTasks: _pastTasks,
@@ -1638,5 +1759,16 @@ class _JournalScreenState extends State<JournalScreen>
       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
     ];
     return '${date.day}. ${months[date.month - 1]} ${date.year}';
+  }
+
+  /// Datum mit vorangestelltem, klein geschriebenem Wochentag, z.B.
+  /// „Freitag, 15. August 2026" — für die Anzeige des Anzeige-Tags im
+  /// Eintrags-Sheet (der Datumskopf nutzt weiter das laute Großformat).
+  String _dateWithWeekday(DateTime date) {
+    const names = [
+      'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
+      'Freitag', 'Samstag', 'Sonntag'
+    ];
+    return '${names[date.weekday - 1]}, ${_formatDate(date)}';
   }
 }

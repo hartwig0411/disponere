@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   shared_preferences: ^2.3.2
   huawei_ml_text: ^3.4.0+300
   path_provider: ^2.1.4

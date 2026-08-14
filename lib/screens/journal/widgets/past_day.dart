@@ -117,11 +117,16 @@ class PastDay {
       (buckets[key] ??= <JournalItem>[]).add(item);
     }
 
-    // Eintraege — nach ihrem Kalendertag.
+    // Eintraege — nach ihrem `journalDay` (Anzeige-Tag bei datierten
+    // Eintraegen, sonst Zeitstempel-Tag). Ein datierter Eintrag liegt damit im
+    // Block seines gewaehlten Tages; seine Sortier-Uhrzeit ist die Notiz-
+    // Uhrzeit, projiziert auf diesen Tag ([_entryTime]) — sonst wuerde ein am
+    // Vortag notiertes Rezept im Freitags-Cluster mit einer Vortags-Uhrzeit
+    // einsortiert.
     for (final e in pastEntries) {
-      final day = DateTime(e.timestamp.year, e.timestamp.month, e.timestamp.day);
+      final day = e.journalDay;
       if (!day.isBefore(today)) continue;
-      add(_dayKey(day), JournalItem.entry(e, e.timestamp));
+      add(_dayKey(day), JournalItem.entry(e, _entryTime(e)));
     }
 
     // Aufgaben — nach ihrem Faelligkeitstag (offen und erledigt).
@@ -193,6 +198,18 @@ class PastDay {
     // Neu nach alt: j-uengster vergangener Tag zuerst (direkt unter heute).
     days.sort((a, b) => b.day.compareTo(a.day));
     return days;
+  }
+
+  /// Sortier-Uhrzeit eines Eintrags innerhalb seines Tages: die Notiz-Uhrzeit
+  /// ([JournalEntry.timestamp]), projiziert auf den [JournalEntry.journalDay].
+  /// Für gewöhnliche Einträge ist das der Zeitstempel selbst (journalDay ==
+  /// Zeitstempel-Tag); für datierte Einträge die Notiz-Uhrzeit am Anzeige-Tag,
+  /// damit sie im richtigen Tages-Cluster an einer stabilen Stelle stehen.
+  static DateTime _entryTime(JournalEntry e) {
+    final d = e.journalDay;
+    final t = e.timestamp;
+    return DateTime(d.year, d.month, d.day, t.hour, t.minute, t.second,
+        t.millisecond, t.microsecond);
   }
 
   static DateTime _taskTime(Task t, DateTime day) =>

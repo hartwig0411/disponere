@@ -58,9 +58,10 @@ class JournalRepository {
   /// ergänzt `tasks` + `task_tags`, v4 (Session 20) ergänzt `calendar_sources`
   /// + `calendar_source_tags`, v5 ergänzt `calendar_events` + `event_tags`;
   /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at`;
-  /// v7 (Session A) ergänzt die `attachments`-Tabelle (Bild-Anhänge) —
-  /// jeweils via [_onUpgrade].
-  static const _dbVersion = 7;
+  /// v7 (Session A) ergänzt die `attachments`-Tabelle (Bild-Anhänge);
+  /// v8 (datierter Eintrag) ergänzt `entries.display_day` — jeweils via
+  /// [_onUpgrade].
+  static const _dbVersion = 8;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -97,11 +98,15 @@ class JournalRepository {
         content     TEXT NOT NULL,
         ink         TEXT,
         ink_text    TEXT,
-        ink_text_at TEXT
+        ink_text_at TEXT,
+        display_day TEXT
       )
     ''');
     await db.execute(
       'CREATE INDEX idx_entries_timestamp ON entries(timestamp)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_entries_display_day ON entries(display_day)',
     );
     await db.execute('''
       CREATE TABLE entry_tags (
@@ -144,6 +149,9 @@ class JournalRepository {
     }
     if (oldVersion < 7) {
       await _createAttachmentTable(db);
+    }
+    if (oldVersion < 8) {
+      await _addDisplayDayColumn(db);
     }
   }
 
@@ -285,6 +293,22 @@ class JournalRepository {
     await db.execute('ALTER TABLE entries ADD COLUMN ink_text_at TEXT');
   }
 
+  /// Ergänzt die Spalte für den optionalen Anzeige-Tag (Schema v8, „datierter
+  /// Eintrag"). `_onCreate` legt sie direkt in der `CREATE TABLE entries` mit
+  /// an — dieselbe Doppelung wie bei den übrigen Stufen, damit Neuinstallation
+  /// und Migration dasselbe Schema erzeugen.
+  ///
+  /// `ADD COLUMN` ist in SQLite billig; bestehende Zeilen bekommen NULL — also
+  /// „kein Anzeige-Tag", was für alle Alt-Einträge genau stimmt (sie leben
+  /// weiter an ihrem Zeitstempel-Tag). Der Index stützt die Wochenfenster-
+  /// Abfrage, die künftig auch nach `display_day` gruppiert.
+  Future<void> _addDisplayDayColumn(Database db) async {
+    await db.execute('ALTER TABLE entries ADD COLUMN display_day TEXT');
+    await db.execute(
+      'CREATE INDEX idx_entries_display_day ON entries(display_day)',
+    );
+  }
+
   /// Legt die `attachments`-Tabelle an (Schema v7; genutzt von [_onCreate] und
   /// [_onUpgrade], damit Neuinstallation und Migration dasselbe Schema teilen).
   ///
@@ -383,6 +407,7 @@ class JournalRepository {
       final id = row['id'] as String;
       final inkJson = row['ink'] as String?;
       final inkTextAtRaw = row['ink_text_at'] as String?;
+      final displayDayRaw = row['display_day'] as String?;
       return JournalEntry(
         id: id,
         timestamp: DateTime.parse(row['timestamp'] as String),
@@ -395,6 +420,8 @@ class JournalRepository {
         inkTextAt:
             inkTextAtRaw != null ? DateTime.tryParse(inkTextAtRaw) : null,
         attachments: attachmentsByEntry[id] ?? const <Attachment>[],
+        displayDay:
+            displayDayRaw != null ? DateTime.parse(displayDayRaw) : null,
       );
     }).toList();
   }
@@ -454,9 +481,10 @@ class JournalRepository {
   }
 
   Future<void> _upsertInTxn(Transaction txn, JournalEntry entry) async {
-    // `replace` schreibt die **ganze** Zeile neu — deshalb müssen `ink_text`
-    // und `ink_text_at` hier mitfahren. Fehlten sie, würde jedes Speichern
-    // eines bearbeiteten Eintrags die Auswertung stillschweigend löschen.
+    // `replace` schreibt die **ganze** Zeile neu — deshalb müssen `ink_text`,
+    // `ink_text_at` und `display_day` hier mitfahren. Fehlten sie, würde jedes
+    // Speichern eines bearbeiteten Eintrags die Auswertung bzw. den Anzeige-Tag
+    // stillschweigend löschen.
     await txn.insert(
       'entries',
       {
@@ -466,6 +494,8 @@ class JournalRepository {
         'ink': entry.ink != null ? jsonEncode(entry.ink!.toJson()) : null,
         'ink_text': entry.inkText,
         'ink_text_at': entry.inkTextAt?.toIso8601String(),
+        'display_day':
+            entry.displayDay != null ? _dateKey(entry.displayDay!) : null,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -1187,21 +1217,20 @@ class JournalRepository {
   // Bereichsabfragen für die Wochenauswertung (Session 26)
   // ---------------------------------------------------------------------------
 
-  /// Der Kalendertag **nach** [d]. Bewusst über `DateTime(y, m, d + 1)` statt
-  /// `add(Duration(days: 1))`: Die Konstruktor-Variante rollt über Monats- und
-  /// Jahresgrenzen korrekt und landet **immer** auf Mitternacht. Ein
-  /// `Duration` verschiebt dagegen die absolute Zeit — beim Umstellen von
-  /// Sommer- auf Winterzeit käme 23:00 des Vortages heraus und der
-  /// Datums-Schlüssel wäre um einen Tag daneben.
-  static DateTime _nextDay(DateTime d) => DateTime(d.year, d.month, d.day + 1);
-
   /// Einträge eines Kalendertag-Bereichs, **älteste zuerst** — die Reihenfolge,
   /// in der eine Woche gelesen wird (Gegenstück zu [loadAll], das für das
   /// Journal absteigend liefert). [toInclusive] zählt als ganzer Tag mit.
   ///
-  /// `timestamp` ist ISO-8601 und damit lexikographisch vergleichbar; die
-  /// obere Grenze ist Mitternacht des Folgetages, exklusiv — so fällt kein
-  /// Eintrag vom Sonntagabend heraus.
+  /// Gefiltert wird nach dem **Anzeige-Tag** des Eintrags, nicht nach seiner
+  /// Notiz-Uhrzeit: `COALESCE(display_day, <Tag des timestamp>)`. Ein datierter
+  /// Eintrag (z.B. ein am Montag vorbereitetes Rezept für Freitag) gehört in
+  /// die Woche, in der er im Journal **auftaucht** — dieselbe Regel wie im
+  /// Journal selbst ([JournalEntry.journalDay]). Für gewöhnliche Einträge ist
+  /// `display_day` NULL, dann greift der Tag des Zeitstempels wie bisher.
+  ///
+  /// `substr(timestamp, 1, 10)` schneidet das `yyyy-MM-dd` aus dem ISO-8601-
+  /// Zeitstempel — beide Vergleichswerte sind damit Tages-Keys, lexikographisch
+  /// vergleichbar. `orderBy` bleibt der Zeitstempel (Lesereihenfolge der Woche).
   Future<List<JournalEntry>> entriesInRange(
     DateTime from,
     DateTime toInclusive,
@@ -1209,11 +1238,9 @@ class JournalRepository {
     final db = await _database();
     final rows = await db.query(
       'entries',
-      where: 'timestamp >= ? AND timestamp < ?',
-      whereArgs: [
-        '${_dateKey(from)}T00:00:00.000',
-        '${_dateKey(_nextDay(toInclusive))}T00:00:00.000',
-      ],
+      where: 'COALESCE(display_day, substr(timestamp, 1, 10)) >= ? '
+          'AND COALESCE(display_day, substr(timestamp, 1, 10)) <= ?',
+      whereArgs: [_dateKey(from), _dateKey(toInclusive)],
       orderBy: 'timestamp ASC',
     );
     return _hydrateEntries(db, rows);

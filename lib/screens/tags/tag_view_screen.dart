@@ -92,7 +92,10 @@ class _TagViewScreenState extends State<TagViewScreen> {
       (due == null ? undated : groupFor(_dayOnly(due))).tasks.add(task);
     }
     for (final entry in entries) {
-      groupFor(_dayOnly(entry.timestamp)).entries.add(entry);
+      // Nach `journalDay` (Anzeige-Tag bei datierten Eintraegen, sonst
+      // Zeitstempel-Tag) — dieselbe Zuordnung wie im Journal, damit ein Eintrag
+      // auch hier an genau einem Tag liegt.
+      groupFor(entry.journalDay).entries.add(entry);
     }
 
     final dated = byDay.values.toList()

@@ -51,6 +51,16 @@ class EntryCard extends StatelessWidget {
                       const Icon(Icons.brush,
                           size: 12, color: AppColors.placeholder),
                     ],
+                    // Datierter Eintrag (v6.2): ein leises Kalender-Icon
+                    // kennzeichnet einen vorgemerkten Eintrag — er liegt an
+                    // seinem Anzeige-Tag vor, statt zur gezeigten Uhrzeit
+                    // geschrieben worden zu sein. Bewusst nur das Icon (kein
+                    // Text), gleiche Zurückhaltung wie beim Tinten-Icon.
+                    if (entry.isDated) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.event_available,
+                          size: 12, color: AppColors.placeholder),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),
