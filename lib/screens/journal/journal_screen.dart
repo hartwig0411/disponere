@@ -20,6 +20,7 @@ import '../../utils/tag_parser.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../../widgets/task_sheet.dart';
+import '../../widgets/bridge_sheet.dart';
 import '../../screens/search/search_screen.dart';
 import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
@@ -1013,6 +1014,19 @@ class _JournalScreenState extends State<JournalScreen>
                   _shareEntry(entry);
                 },
               ),
+              // Bruecke Eintrag -> Aufgabe (Session 53): derselbe Gesten-Ort
+              // wie Teilen/Loeschen. Oeffnet das winzige Sheet mit vorbefuelltem,
+              // kuerzbarem Titel + Datum; die Aufgabe erbt die Tags des Eintrags.
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline,
+                    color: AppColors.accent),
+                title: const Text('Zu Aufgabe machen',
+                    style: TextStyle(color: AppColors.text)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _entryToTask(entry);
+                },
+              ),
               ListTile(
                 leading:
                     const Icon(Icons.delete_outline, color: AppColors.danger),
@@ -1043,6 +1057,47 @@ class _JournalScreenState extends State<JournalScreen>
         SnackBar(content: Text(e.toString())),
       );
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bruecke Eintrag <-> Aufgabe (Session 53, Anforderungen v6.4)
+  // ---------------------------------------------------------------------------
+
+  /// Eintrag -> Aufgabe: oeffnet das winzige Sheet (vorbefuellter, kuerzbarer
+  /// Titel + optionales Datum). Die neue Aufgabe erbt die Tags des Eintrags
+  /// (Verbindung = geteilter Tag); der Eintrag bleibt unveraendert. Persistenz
+  /// und Neuladen liegen hier — wie beim Aufgaben-Sheet.
+  Future<void> _entryToTask(JournalEntry entry) async {
+    await showEntryToTaskSheet(
+      context: context,
+      entry: entry,
+      onCreate: (task) async {
+        await _repo.upsertTask(task);
+        await _reloadTasks();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Als Aufgabe angelegt')),
+        );
+      },
+    );
+  }
+
+  /// Aufgabe -> Eintrag: oeffnet das winzige Sheet (vorbefuellter, kuerzbarer
+  /// Inhalt + erforderliches Datum). Das Datum wird zum Anzeige-Tag: der neue
+  /// Eintrag ist ein datierter Eintrag (Session 51), surft nur am gewaehlten Tag
+  /// auf und erbt die Tags der Aufgabe. Die Aufgabe bleibt unveraendert.
+  Future<void> _taskToEntry(Task task) async {
+    await showTaskToEntrySheet(
+      context: context,
+      task: task,
+      onCreate: (content, tags, displayDay) async {
+        _addEntry(content, tags, displayDay: displayDay);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Als Eintrag vorgemerkt')),
+        );
+      },
+    );
   }
 
   void _updateInkEntry(String id, InkData ink, List<String> tags) {
@@ -1730,6 +1785,7 @@ class _JournalScreenState extends State<JournalScreen>
         calendarEnabled: _calendarSources.any((c) => c.enabled),
         onToggleTask: _togglePanelTask,
         onAddTask: () => _openTaskSheet(),
+        onLongPressTask: _taskToEntry,
       ),
       bottomNavigationBar: BottomBar(
         onJournal: () {},

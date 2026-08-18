@@ -13,11 +13,17 @@ class TaskCard extends StatelessWidget {
   final DateTime today;
   final VoidCallback onToggle;
   final VoidCallback? onTap;
+
+  /// Langes Druecken oeffnet die Bruecke „Als Eintrag vormerken" (Session 53).
+  /// Optional; ist er null, gibt es keine Zusatzgeste (z.B. in vergangenen
+  /// Tagen, wo eine Aufgabe nicht in die Zukunft vorgemerkt wird).
+  final VoidCallback? onLongPress;
   const TaskCard({
     required this.task,
     required this.today,
     required this.onToggle,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -29,6 +35,7 @@ class TaskCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(

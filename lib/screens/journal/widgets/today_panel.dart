@@ -20,6 +20,10 @@ class TodayPanel extends StatelessWidget {
   final void Function(Task) onToggleTask;
   final VoidCallback onAddTask;
 
+  /// Langes Druecken auf eine Aufgabe im Panel: Bruecke „Als Eintrag vormerken"
+  /// (Session 53). Optional — ohne Callback bleibt das lange Druecken wirkungslos.
+  final void Function(Task)? onLongPressTask;
+
   const TodayPanel({
     required this.events,
     required this.tasks,
@@ -28,6 +32,7 @@ class TodayPanel extends StatelessWidget {
     required this.calendarEnabled,
     required this.onToggleTask,
     required this.onAddTask,
+    this.onLongPressTask,
   });
 
   @override
@@ -121,6 +126,9 @@ class TodayPanel extends StatelessWidget {
                               task: t,
                               today: today,
                               onToggle: () => onToggleTask(t),
+                              onLongPress: onLongPressTask == null
+                                  ? null
+                                  : () => onLongPressTask!(t),
                             ),
                           ),
                         ],

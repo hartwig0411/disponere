@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../../data/journal_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../models/task.dart';
+import '../../models/journal_entry.dart';
 import '../../utils/tag_registry.dart';
 import '../../widgets/task_sheet.dart';
+import '../../widgets/bridge_sheet.dart';
 
 /// Akzent für Aufgaben — jetzt das eine Akzentblau der App (Design v1.0).
 const Color _kTaskAccent = AppColors.accent;
@@ -72,6 +74,31 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
       onDelete: (id) async {
         await widget.repo.deleteTask(id);
         await _reload();
+      },
+    );
+  }
+
+  /// Bruecke Aufgabe -> Eintrag (Session 53): langes Druecken auf eine offene
+  /// Aufgabe merkt sie als datierten Eintrag vor. Der Eintrag erbt die Tags
+  /// (Verbindung = geteilter Tag); die Aufgabe bleibt unveraendert und in der
+  /// Uebersicht. Nichts hier neu zu laden — die Uebersicht zeigt nur Aufgaben.
+  Future<void> _taskToEntry(Task task) async {
+    await showTaskToEntrySheet(
+      context: context,
+      task: task,
+      onCreate: (content, tags, displayDay) async {
+        final entry = JournalEntry(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          timestamp: DateTime.now(),
+          content: content,
+          tags: widget.tagRegistry.canonicalizeAll(tags),
+          displayDay: displayDay,
+        );
+        await widget.repo.upsert(entry);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Als Eintrag vorgemerkt')),
+        );
       },
     );
   }
@@ -191,6 +218,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
               today: today,
               onToggle: () => _toggleDone(t),
               onTap: () => _openSheet(t),
+              onLongPress: () => _taskToEntry(t),
             )),
       ];
     }
@@ -229,6 +257,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
             today: today,
             onToggle: () => _toggleDone(t),
             onTap: () => _openSheet(t),
+            onLongPress: () => _taskToEntry(t),
           )));
     }
     if (untagged.isNotEmpty) {
@@ -239,6 +268,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
             today: today,
             onToggle: () => _toggleDone(t),
             onTap: () => _openSheet(t),
+            onLongPress: () => _taskToEntry(t),
           )));
     }
     return widgets;
@@ -333,11 +363,16 @@ class _OverviewTaskCard extends StatelessWidget {
   final DateTime today;
   final VoidCallback onToggle;
   final VoidCallback onTap;
+
+  /// Langes Druecken: Bruecke „Als Eintrag vormerken" (Session 53). Optional —
+  /// erledigte Aufgaben bekommen ihn nicht.
+  final VoidCallback? onLongPress;
   const _OverviewTaskCard({
     required this.task,
     required this.today,
     required this.onToggle,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -352,6 +387,7 @@ class _OverviewTaskCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
