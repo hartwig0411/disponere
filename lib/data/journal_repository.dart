@@ -1173,6 +1173,63 @@ class JournalRepository {
     });
   }
 
+  /// Bildet eine Tag-Liste auf eine neue Schreibweise ab — die **eine**
+  /// Remap-Regel, die für alle Inhaltstypen gilt (Einträge, Aufgaben,
+  /// Kalenderquellen). Genau das hält die Perlenkette zusammen: ein Tag ist
+  /// eine Perle und wird überall nach derselben Regel umbenannt.
+  ///
+  /// [fromKey]/[toKey] sind die kleingeschriebenen Schlüssel, [cleanTo] die
+  /// gewünschte kanonische Schreibweise. Sowohl der alte als auch ein bereits
+  /// vorhandener Ziel-Tag werden auf [cleanTo] vereinheitlicht; dabei
+  /// entstehende Duplikate fallen zusammen (Merge, Reihenfolge des ersten
+  /// Auftretens bleibt erhalten). Gibt `null` zurück, wenn sich nichts ändert.
+  static List<String>? remapTagList(
+    List<String> tags,
+    String fromKey,
+    String toKey,
+    String cleanTo,
+  ) {
+    final newTags = <String>[];
+    final seen = <String>{};
+    var changed = false;
+    for (final t in tags) {
+      final k = t.toLowerCase();
+      final mapped = (k == fromKey || k == toKey) ? cleanTo : t;
+      if (mapped != t) changed = true;
+      if (seen.add(mapped.toLowerCase())) {
+        newTags.add(mapped);
+      } else {
+        changed = true; // Duplikat (Merge) entfernt
+      }
+    }
+    return changed ? newTags : null;
+  }
+
+  /// Benennt einen Tag in **allen Kalenderquellen** um und materialisiert die
+  /// betroffenen Termine (`event_tags`) nach — das Gegenstück zum Umschreiben
+  /// von Einträgen/Aufgaben, damit ein umbenannter Tag nicht an der
+  /// Kalendergrenze zerfällt (Perlenkette).
+  ///
+  /// Nutzt bewusst die getesteten Pfade [loadCalendarSources],
+  /// [upsertCalendarSource] (schreibt `calendar_source_tags` neu) und
+  /// [reapplyCalendarSourceTags] (spiegelt die Quell-Tags auf jeden Termin).
+  /// Umbenennen ist eine seltene, nutzergetriebene Aktion — Verlässlichkeit
+  /// über bekannte Wege schlägt hier eine handgeschriebene Sammel-Transaktion.
+  Future<void> renameCalendarTag(String from, String to) async {
+    final fromKey = from.toLowerCase();
+    final cleanTo = to.trim();
+    if (cleanTo.isEmpty) return;
+    final toKey = cleanTo.toLowerCase();
+
+    final sources = await loadCalendarSources();
+    for (final source in sources) {
+      final newTags = remapTagList(source.tags, fromKey, toKey, cleanTo);
+      if (newTags == null) continue; // Quelle unberührt
+      await upsertCalendarSource(source.copyWith(tags: newTags));
+      await reapplyCalendarSourceTags(source.calendarId, newTags);
+    }
+  }
+
   /// Alle Termine, die einen Kalendertag berühren ([day] als `yyyy-MM-dd`) —
   /// nur aus **aktivierten** Kalendern. Bereichsabfrage wie bei `daily_info`
   /// (Endtag ist inklusiv gespeichert). Ganztägige zuerst, danach nach

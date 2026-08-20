@@ -1452,40 +1452,28 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
-  /// Benennt einen Tag in allen Einträgen **und Aufgaben** um (case-insensitiv
-  /// erkannt). Trifft die Zielschreibweise einen bestehenden Tag, werden beide
-  /// zusammengeführt. Nach dem Umschreiben wird das Register neu aufgebaut und
-  /// nur die tatsächlich geänderten Einträge/Aufgaben werden persistiert.
-  void _renameTag(String from, String to) {
+  /// Benennt einen Tag in allen Einträgen, **Aufgaben und Kalenderquellen** um
+  /// (case-insensitiv erkannt). Trifft die Zielschreibweise einen bestehenden
+  /// Tag, werden beide zusammengeführt. Nach dem Umschreiben wird das Register
+  /// neu aufgebaut und nur die tatsächlich geänderten Einträge/Aufgaben werden
+  /// persistiert; die Kalenderquellen (und die daraus materialisierten
+  /// `event_tags`) zieht [JournalRepository.renameCalendarTag] still nach.
+  ///
+  /// Alle Inhaltstypen nutzen dieselbe Remap-Regel
+  /// ([JournalRepository.remapTagList]) — der Tag ist eine Perle und wird
+  /// überall zugleich umbenannt.
+  Future<void> _renameTag(String from, String to) async {
     final fromKey = from.toLowerCase();
     final cleanTo = to.trim();
     if (cleanTo.isEmpty || cleanTo == from) return;
     final toKey = cleanTo.toLowerCase();
 
-    // Bildet eine Tag-Liste auf die neue Schreibweise ab (Merge-Duplikate
-    // fallen weg). Gibt null zurück, wenn sich nichts geändert hat.
-    List<String>? remap(List<String> tags) {
-      final newTags = <String>[];
-      final seen = <String>{};
-      var changed = false;
-      for (final t in tags) {
-        final k = t.toLowerCase();
-        final mapped = (k == fromKey || k == toKey) ? cleanTo : t;
-        if (mapped != t) changed = true;
-        if (seen.add(mapped.toLowerCase())) {
-          newTags.add(mapped);
-        } else {
-          changed = true; // Duplikat (Merge) entfernt
-        }
-      }
-      return changed ? newTags : null;
-    }
-
     final changedEntries = <JournalEntry>[];
     final changedTasks = <Task>[];
     setState(() {
       for (int i = 0; i < _entries.length; i++) {
-        final newTags = remap(_entries[i].tags);
+        final newTags =
+            JournalRepository.remapTagList(_entries[i].tags, fromKey, toKey, cleanTo);
         if (newTags != null) {
           final updated = _entries[i].copyWith(tags: newTags);
           _entries[i] = updated;
@@ -1493,7 +1481,8 @@ class _JournalScreenState extends State<JournalScreen>
         }
       }
       for (int i = 0; i < _allTasks.length; i++) {
-        final newTags = remap(_allTasks[i].tags);
+        final newTags =
+            JournalRepository.remapTagList(_allTasks[i].tags, fromKey, toKey, cleanTo);
         if (newTags != null) {
           final updated = _allTasks[i].copyWith(tags: newTags);
           _allTasks[i] = updated;
@@ -1505,14 +1494,20 @@ class _JournalScreenState extends State<JournalScreen>
       }
     });
     // Register neu aufbauen (Einträge + Aufgaben; nach dem Umschreiben ist die
-    // neue Schreibweise überall identisch).
+    // neue Schreibweise überall identisch). Die Kalenderquellen kommen unten
+    // per _reloadCalendarSources mit dem finalen Registeraufbau nach.
     _rebuildTagRegistry();
     if (changedEntries.isNotEmpty) {
-      _repo.upsertAll(changedEntries);
+      await _repo.upsertAll(changedEntries);
     }
     for (final t in changedTasks) {
-      _repo.upsertTask(t);
+      await _repo.upsertTask(t);
     }
+    // Kalenderquellen + materialisierte Termine still nachziehen, dann die
+    // in-memory-Quellen und das Register frisch aus der DB laden.
+    await _repo.renameCalendarTag(from, cleanTo);
+    if (!mounted) return;
+    await _reloadCalendarSources();
   }
 
   /// Öffnet die Kalender-Einstellungen und zieht danach Quellen **und**

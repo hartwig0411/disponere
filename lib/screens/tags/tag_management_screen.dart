@@ -20,8 +20,11 @@ class TagManagementScreen extends StatefulWidget {
   /// Nutzungszähler je Tag über Aufgaben (analog [usage]).
   final Map<String, int> taskUsage;
 
-  /// Wird mit (alteSchreibweise, neueSchreibweise) aufgerufen.
-  final void Function(String from, String to) onRename;
+  /// Wird mit (alteSchreibweise, neueSchreibweise) aufgerufen. Gibt ein
+  /// `Future` zurück, weil das Umschreiben auch die Kalenderquellen und deren
+  /// materialisierte Termine erfasst (asynchron) — hier wird darauf gewartet,
+  /// bevor die Anzeige-Kopie nachgezogen wird.
+  final Future<void> Function(String from, String to) onRename;
 
   const TagManagementScreen({
     super.key,
@@ -113,7 +116,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final cleaned = newTag.replaceAll('#', '').trim().split(RegExp(r'\s+')).first;
     if (cleaned.isEmpty || cleaned == tag) return;
 
-    widget.onRename(tag, cleaned);
+    await widget.onRename(tag, cleaned);
+    if (!mounted) return;
 
     // Anzeige-Kopie nachziehen: alten Tag entfernen, Zähler auf den neuen
     // (kleingeschriebenen) Schlüssel zusammenlegen, neu sortieren.

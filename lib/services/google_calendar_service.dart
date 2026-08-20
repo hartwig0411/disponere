@@ -218,7 +218,9 @@ class GoogleCalendarService {
           endLocal.hour == 0 &&
           endLocal.minute == 0 &&
           endLocal.second == 0) {
-        endDay = _dayKey(endLocal.subtract(const Duration(days: 1)));
+        endDay = _dayKey(
+          DateTime(endLocal.year, endLocal.month, endLocal.day - 1),
+        );
         if (endDay.compareTo(startDay) < 0) endDay = startDay;
       }
     } else {
@@ -259,7 +261,7 @@ class GoogleCalendarService {
   static String _dayBefore(String day) {
     final parsed = DateTime.tryParse(day);
     if (parsed == null) return day;
-    return _dayKey(parsed.subtract(const Duration(days: 1)));
+    return _dayKey(DateTime(parsed.year, parsed.month, parsed.day - 1));
   }
 
   /// RFC-3339 mit Zeitzonen-Offset — von der API für `timeMin`/`timeMax`
