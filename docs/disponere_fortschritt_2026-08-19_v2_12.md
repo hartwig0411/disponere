@@ -1,0 +1,4561 @@
+# Disponere – Fortschritt
+
+---
+
+## Session 1 — 01. Juni 2026
+
+### Erledigt
+- Flutter-Projekt `disponere` angelegt (`E:\disponere`, Plattform: Android)
+- Ordnerstruktur: `lib/models`, `lib/screens/journal`, `lib/widgets`
+- `JournalEntry` Datenmodell (`lib/models/journal_entry.dart`)
+- `JournalScreen` mit Eintrags-Karten und Tag-Chips (`lib/screens/journal/journal_screen.dart`)
+- `main.dart` angepasst — App startet direkt mit JournalScreen
+- App erfolgreich auf dem MatePad (MRDI-W09) deployt und getestet
+- GitHub-Repository: vorhanden, noch nicht verbunden
+
+### Offene Punkte
+- Handschrifterkennung: Huawei ML Kit vs. Tesseract — noch nicht getestet
+- Claude-Integration: Umfang für v1.0 noch offen
+- Google Calendar API: Zugänge noch nicht eingerichtet
+
+---
+
+## Session 2 — 03. Juni 2026
+
+### Erledigt
+- Git global konfiguriert (user.name, user.email)
+- GitHub-Repository `disponere` angelegt (Public): https://github.com/hartwig0411/disponere
+- Flutter `.gitignore` eingerichtet
+- Branch auf `main` umbenannt
+- Ersten Commit gepusht — 65 Objekte, Projekt vollständig auf GitHub
+
+### Offene Punkte
+- Handschrifterkennung: Huawei ML Kit vs. Tesseract — noch nicht getestet
+- Claude-Integration: Umfang für v1.0 noch offen
+- Google Calendar API: Zugänge noch nicht eingerichtet
+
+---
+
+## Session 3 — 05. Juni 2026
+
+### Erledigt
+- Eingabe-Funktion gebaut: neuen Eintrag per Tastatur erstellen
+- FloatingActionButton öffnet Bottom Sheet mit Textfeld, Tag-Feld und Speichern-Button
+- Neuer Eintrag erscheint oben in der Liste mit aktuellem Zeitstempel
+- Persistenz eingebaut: Einträge überleben App-Neustart (`shared_preferences`)
+- Zwei-Laufwerke-Problem (E:\Projekt vs. C:\Pub-Cache) gelöst: `GRADLE_USER_HOME` und `PUB_CACHE` auf E:\ gesetzt
+- Start-Script `run.ps1` angelegt — setzt Umgebungsvariablen und startet die App
+- Auf MatePad getestet und bestätigt ✅
+- Commits gepusht
+
+### Lektion
+- Projekt auf E:\, Pub-Cache standardmäßig auf C:\ → Kotlin-Daemon-Konflikt. Lösung: beide Umgebungsvariablen auf E:\ zeigen lassen, als `run.ps1` festgehalten.
+
+---
+
+## Session 4 — 06. Juni 2026
+
+### Erledigt
+- OCR-Engine entschieden: **Huawei ML Kit** (nativ auf HMS, beste Qualität für deutsche Handschrift)
+- Huawei Developer Account angelegt (Individual, Steffen Harder) — Identitätsverifizierung läuft (1-2 Werktage)
+- Canvas-Grundlage gebaut: `lib/screens/drawing/drawing_screen.dart`
+  - Zeichenfläche mit CustomPainter
+  - Stift-Eingabe mit GestureDetector (Striche werden aufgezeichnet)
+  - Löschen-Button (X oben rechts)
+  - Dunkles Farbschema passend zum Journal
+- Auf MatePad getestet und bestätigt ✅ — M-Pencil funktioniert, Striche flüssig
+- Commit gepusht: `bcc3234`
+
+### Lektion
+- **Palm Rejection fehlt noch** — Flutter's GestureDetector unterscheidet nicht zwischen Finger und Stift. Jede Berührung erzeugt einen Strich. Fix: Umstellen auf `Listener` mit `PointerEvent`, nur `stylus`-Events durchlassen.
+
+---
+
+## Session 5 — 10. Juni 2026
+
+### Erledigt
+- **Palm Rejection implementiert** — `GestureDetector` durch `Listener` + `PointerDeviceKind.stylus` ersetzt. Finger und Handballen erzeugen keine Striche mehr. Auf MatePad getestet und bestätigt ✅
+- **DrawingScreen in Journal-Flow integriert** — Stift-Icon im "Neuer Eintrag"-Sheet öffnet DrawingScreen. Nach Bestätigung (Häkchen) landet der Eintrag im Journal. Platzhalter `[Handschrift-Eintrag]` bis OCR fertig ist.
+- **DrawingScreen gibt Ergebnis zurück** — `Navigator.pop(context, result)` übergibt Text an JournalScreen, `_addEntry()` als eigene Methode ausgelagert.
+- **Huawei Developer Account verifiziert** ✅
+- **AppGallery Connect Projekt `disponere` angelegt** — Project ID: 101653523864310053
+- **App registriert** — Package: `com.steffen.disponere`, Platform: Android, Sprache: Deutsch
+- **`agconnect-services.json` heruntergeladen** und nach `android/app/` kopiert
+- **HMS AGConnect SDK eingebunden** — `android/build.gradle.kts` und `android/app/build.gradle.kts` angepasst, Maven-Repository und AGConnect-Plugin ergänzt
+- **`huawei_ml_text: ^3.4.0+300`** in `pubspec.yaml` eingetragen, `flutter pub get` erfolgreich
+- Alle Änderungen committed und gepusht
+
+### Lektion
+- Flutter-Projekt verwendet `.kts`-Gradle-Dateien (Kotlin DSL) — Huawei-Dokumentation zeigt Groovy-Syntax. Übersetzung notwendig: `maven { url '...' }` → `maven { url = uri("...") }`, `classpath '...'` → `classpath("...")`
+- AGConnect-Plugin benötigt `com.android.tools.build:gradle` explizit im `buildscript` — fehlt dieser Eintrag, schlägt der Build mit `is no set in the build.gradle file` fehl.
+
+---
+
+## Session 6 — 13. Juni 2026
+
+### Erledigt
+- **OCR vollständig in `drawing_screen.dart` integriert** — Platzhalter `[Handschrift-Eintrag]` durch echten ML Kit Aufruf ersetzt
+  - Canvas wird via `RepaintBoundary` + `GlobalKey` als PNG gerendert
+  - PNG wird in temporäre Datei geschrieben (`path_provider`)
+  - `MLTextAnalyzer.asyncAnalyseFrame()` mit `MLTextAnalyzerSetting.local(language: 'de')` aufgerufen
+  - Ergebnis wird via `Navigator.pop` an JournalScreen übergeben
+  - Ladeindikator (CircularProgressIndicator) während OCR läuft
+  - Fallback: `[Handschrift nicht erkannt]` wenn `stringValue` leer
+- **`path_provider: ^2.1.4`** zu `pubspec.yaml` hinzugefügt
+- **`android.uniquePackageNames=false`** in `android/gradle.properties` gesetzt (Namespace-Konflikt der Huawei OCR-Modelle)
+- **`compileSdkVersion 34`** in pub-cache `huawei_ml_text` `build.gradle` gesetzt (war 31, zu alt für AndroidX-Abhängigkeiten)
+- App baut erfolgreich und läuft auf MatePad ✅
+- OCR-Aufruf funktioniert technisch — gibt aktuell `[Handschrift nicht erkannt]` zurück
+- Commit gepusht: `63a7780`
+
+### Lektion
+- `huawei_ml_text` pub-cache Version ist `3.13.0+300` (nicht `3.4.0+300` wie in pubspec angegeben) — API hat sich geändert: `MLTextAnalyzerSetting.create()` → `MLTextAnalyzerSetting.local()`, `analyzeFrame()` → `asyncAnalyseFrame()`, `close()` → `destroy()`
+- Huawei OCR-Modelle (`ocr-latin`, `ocr-jk`, `ocr-cn`, `ocr-base`) teilen intern denselben Namespace `com.huawei.hms.mlkit.ocr` — AGP 8.x schlägt fehl. Fix: `android.uniquePackageNames=false` in `gradle.properties`
+- `huawei_ml_text` `build.gradle` im pub-cache hat `compileSdkVersion 31` — zu alt für moderne AndroidX-Abhängigkeiten. Manuell auf 34 erhöht. **Achtung: nach `flutter pub get` muss diese Änderung wiederholt werden.**
+- Huawei ML Kit lädt OCR-Modelle beim ersten Start herunter — erste Erkennung schlägt daher fehl. Ab dem zweiten Start sollte OCR funktionieren.
+
+---
+
+## Session 7 — 15. Juni 2026
+
+### Erledigt
+- **OCR-Test mit Handschrift durchgeführt** — App neu gestartet (Modell-Download abgeschlossen), „Hallo" geschrieben, Haken getippt. Weiterhin `[Handschrift nicht erkannt]`.
+- **Systematische Fehlereingrenzung** in drei Schritten:
+  1. **Schwarz-auf-weiß-Render eingebaut** (`_renderForOcr()`) — eigenes OCR-Bild, schwarze Striche auf weißem Grund, unabhängig von der dunklen Anzeige.
+  2. **`[OCR]`-Debug-Logging** — Canvas-Größe, Strichzahl, Punktzahl, PNG-Bytes, Dateipfad/-größe, roher `stringValue`.
+  3. **Entscheidungs-Experiment** (`_testPrintedText()`, oranges T-Icon) — rendert **Maschinentext** („Hallo Welt") schwarz auf weiß und schickt ihn durch dieselbe OCR-Pipeline.
+- **Befund:** Handschrift → leerer `stringValue`. Gedruckter Text → „Hallo Welt" sauber erkannt. → **Huawei ML Kit Text Recognition liest gedruckten Text, aber keine Handschrift.** Setup ist in Ordnung.
+- **Debug-Werkzeug bewusst im Code behalten** — T-Icon + `_testPrintedText()` als dauerhaftes OCR-Testwerkzeug.
+- **Durchbruch bei der Engine-Frage:** Steffen nutzt **Tintero** (Web/PWA) mit hervorragender Handschrift-zu-Text-Umwandlung. Da Tintero plattformübergreifend ist, stammt die Erkennung vom Betriebssystem → **Huaweis FreeScript**, die native System-Handschrifterkennung des MatePad.
+
+### Strategische Erkenntnis
+- **Die beste Handschrift-Engine sitzt bereits nativ auf dem Gerät: FreeScript.** On-Device, offline, Google-frei, kostenlos, systemweit.
+- Mögliche Architektur-Vereinfachung: Für die normale Texteingabe braucht Disponere evtl. keine eigene OCR-Engine.
+
+---
+
+## Session 8 — 15. Juni 2026 (Teil II)
+
+### Erledigt / Untersucht
+- **FreeScript-Tests durchgeführt** (offene Punkte aus Session 7):
+  - **Systemweit bestätigt:** Handschrift ins **Einstellungs-Suchfeld** geschrieben → FreeScript wandelt sauber in getippten Text um, inkl. Groß-/Kleinschreibung. Natives Feld, kein Browser. → On-Device, systemweit.
+  - **Im Disponere-Textfeld funktioniert FreeScript NICHT** — der Stift schreibt dort nicht.
+- **Ursache eingegrenzt:** Flutter zeichnet seine Textfelder selbst (aus Android-Sicht ein „custom text editor") und bekommt native Handschrift nicht automatisch. Flutters eigene Brücke ist `Scribe` / `stylusHandwritingEnabled`.
+- **Geprüft:** `stylusHandwritingEnabled` ist bei `TextField` standardmäßig bereits `true` → das Flag explizit zu setzen wäre wirkungslos, war also nicht die Ursache. (Build-Runde gespart.)
+- **Entscheidender Messwert** via `Scribe`-Diagnose: `isFeatureAvailable: false`, `isStylusHandwritingAvailable: false` → **Flutter sieht die Stift-Handschrift-Schnittstelle auf dem MatePad gar nicht.** FreeScript meldet sich nicht über die Standard-AOSP-Schnittstelle (`InputMethodManager`), sondern hängt direkt in native Felder (EditText/WebView) ein.
+- **Nebenbefund:** ML-Kit-OCR erkannte handschriftliches „Hallo Welt" nur als „Hallo" — verschluckt Wörter. Bestätigt erneut: ML Kit nur für gedruckten Text brauchbar.
+- Diagnose-Code wieder entfernt, alles committet und gepusht.
+
+### Engine-Entscheidung (vorläufig final)
+- **Handschrift-Eingabe = Huawei FreeScript**, eingebunden über ein **natives Android-`EditText`-Feld via PlatformView**.
+- Flutters eingebauter Weg (`stylusHandwritingEnabled` / Scribe) ist auf diesem Gerät **nicht** nutzbar.
+- ML Kit Text Recognition bleibt nur für **gedruckten** Text relevant (z.B. späterer Dokument-Import).
+
+### Commit
+- `5dc57d3` — "FreeScript-Schnittstelle getestet: Flutter-Weg ausgeschlossen (Scribe nicht verfuegbar), Plan B = natives EditText via PlatformView"
+
+---
+
+## Session 9 — 17. Juni 2026
+
+### Erledigt
+- **Plan B umgesetzt und bewiesen: FreeScript via natives `EditText` (PlatformView).**
+  - Native Kotlin-`PlatformView` + `PlatformViewFactory` gebaut (`NativeTextView.kt`), liefert ein `EditText`
+  - In `MainActivity.configureFlutterEngine` registriert (viewType `disponere/native-text`)
+  - Dart-Seite über **Hybrid Composition** eingebunden (`PlatformViewLink` + `initExpensiveAndroidView`) — nötig, damit die native IME/FreeScript ins Feld schreiben kann
+- **Proof-of-Concept bestätigt:** Mit M-Pencil ins native Feld geschrieben → FreeScript wandelt sauber in getippten Text um, inkl. Groß-/Kleinschreibung („Hallo Welt")
+- **Offline-Test bestanden:** Im Flugmodus geschrieben → Umwandlung läuft weiter → **On-Device, offline, Google-frei bestätigt**
+- **Commit (Proof):** `18d9b0e`
+- **In den Journal-Flow integriert (End-to-End):**
+  - `NativeTextView.kt` um `MethodChannel` (`disponere/native-text_$id`) erweitert → `getText` gibt den Feldinhalt an Dart zurück
+  - `MainActivity` reicht den `BinaryMessenger` (`flutterEngine.dartExecutor.binaryMessenger`) an die Factory durch
+  - Neuer Vollbild-Screen `lib/screens/text/native_text_entry_screen.dart` — natives Feld + Haken oben rechts, gibt den getippten Text via `Navigator.pop` zurück
+  - Stift-Icon im „Neuer Eintrag"-Sheet öffnet jetzt diesen Screen statt des Canvas (`DrawingScreen`)
+- **End-to-End auf MatePad getestet ✅** — Stift-Icon → handschriftlich „Haken landet oben" → Haken → Eintrag landet sauber im Journal
+- **Commit (Integration):** `1ccaae9`
+
+### Engine-Entscheidung (final)
+- **Handschrift-Eingabe in Disponere = Huawei FreeScript**, eingebunden über ein natives `EditText` via PlatformView (Hybrid Composition).
+- Der Canvas+OCR-Weg (`huawei_ml_text`) **entfällt für die normale Texteingabe.**
+- `drawing_screen.dart` bleibt im Projekt — Canvas wird später noch für **Stempel-Tool** und **freies Zeichnen** gebraucht (Zugriff auf rohe Striche).
+
+### Lektion
+- Native Eingabe-Views (mit IME/Fokus) brauchen **Hybrid Composition** (`initExpensiveAndroidView`), nicht den Standard-`AndroidView` (Virtual Display) — sonst bekommt das Feld keinen Fokus/keine Eingabe.
+- Text aus einer PlatformView holt man über einen **per-View-`MethodChannel`** (Name inkl. View-`id`), gespeist mit dem `BinaryMessenger` aus `flutterEngine.dartExecutor`.
+- Ein natives `EditText` deckt **beide** Eingabearten ab: M-Pencil (FreeScript) **und** Tastatur — kein zweiter, getrennter Weg nötig.
+
+### Commit
+- Commit-Message (Integration): `FreeScript in Journal-Flow integriert: Stift-Eintrag via nativem EditText, Text landet im Journal`
+- Commit (Integration) gepusht: `1ccaae9`
+
+---
+
+## Session 10 — 18. Juni 2026 (Brain-Session, kein Code)
+
+### Charakter der Session
+- **Reine Denk-/Brain-Session — kein Code, kein Commit.** Bewusste Entscheidung, dieses Format künftig regelmäßig einzuschieben, um den Kurs zu halten und Architektur-Fragen vor dem Coden zu klären.
+- Ausgangspunkt war die geplante Tag-Vergabe beim Stift-Eintrag — daraus ist eine grundsätzliche Klärung des Eingabe- und Datenmodells geworden.
+
+### Entscheidungen — Eingabe & Tags
+1. **Stempel-Tool für v1.0 gestrichen.** Das Taggen läuft über ein dediziertes Tag-Feld; der Stempel (Tag aus handgeschriebenem Wort via OCR) wird damit überflüssig. Die räumliche Idee überlebt als v2-Feature (siehe unten).
+2. **Zwei Eingabe-Modi pro Eintrag:**
+   - **Text-Modus:** Stift via FreeScript **oder** Tastatur → gespeichert als **Text** → durchsuchbar, von Claude lesbar.
+   - **Tinten-Modus:** Canvas → gespeichert als **Strichdaten** → **keine** Umwandlung, bleibt Handschrift.
+   - FreeScript und Canvas bedienen je genau einen Modus. FreeScript *ist* Umwandlung-in-Text (die rohen Striche bleiben dabei nicht erhalten); der Canvas-Weg behält die Handschrift. Damit ist nichts aus Session 6–9 verloren — FreeScript wandert vom „einzigen Weg" zum „Text-Modus-Weg".
+3. **Mehrfach-Tags im Tag-Feld**, getrennt per Pipe `|` (z.B. `MBS | ValSys | Vertrag`). Ein Tag = ein Wort. Leerzeichen werden getrimmt, leere Segmente ignoriert. Das Tag-Feld bleibt vorerst ein **normales Flutter-Textfeld (Tastatur)** — kein zweites natives FreeScript-Feld.
+
+### Entscheidungen — Tinte & Claude
+4. **Tinte wird als Strichdaten (Vektoren) gespeichert, nicht als plattes PNG.** Folge: Tinten-Einträge sind **editierbar und weiterschreibbar** (Striche zurück in die Canvas laden, korrigieren, radieren). Das PNG ist nur die Anzeige-/Render-Version bei Bedarf. Begründung: „Editierbarkeit" ist 🟡 Core im Anforderungsdokument; ein nicht weiterbearbeitbarer Tinten-Eintrag würde das brechen. Nebeneffekt: Strichdaten halten die Tür für bessere (strich-basierte) Erkennung offen.
+5. **Claude kann Tinten-Einträge auswerten** — über die **multimodale Anthropic-Bild-API** (Handschrift-PNG als Bild mitschicken; Claude liest die Handschrift direkt). Einschränkungen ehrlich notiert: braucht Netz + API-Call (Tokens, nicht on-device), Erkennung schrift-abhängig (meist gut, nicht garantiert 100%).
+6. **Lokale Volltextsuche von Tinte bleibt ungelöst.** Bräuchte eine On-Device-Handschrift-OCR, die wir nicht haben: ML Kit kann keine Handschrift, FreeScript ist reine Eingabe-Methode (nimmt kein gespeichertes Bild nachträglich). → Auswerten durch Claude: ja. Lokal durchsuchen: offen, **kein** garantiertes v2-Feature.
+
+### Entscheidungen — Datenmodell
+7. **Ein Journal, Tags als Sicht.** Es gibt nur **ein** durchgehendes Journal (Tageszeitachse). Projekte wie „Wasser"/„Wärme" sind **Tags**, keine eigenen Journale. Kein Leerstart pro Projekt, kein Neu-Verknüpfen. Die Tag-Seite ist eine **gefilterte Sicht** über das eine Journal.
+8. **Ein „Tag" (Datum) ist eine Sicht/Abfrage, keine Datei.** Datei-pro-Tag (Logseq-Stil) bewusst verworfen — passt nicht zu Tinte/Strichen. Perspektivisch **lokale Datenbank** (SQLite o.ä.) statt `shared_preferences`, abfragbar nach Datum/Tag/Zeitraum (Grundlage u.a. für die Perlenkette).
+9. **Platz unkritisch.** Text vernachlässigbar; Tinte als Striche ~ Größenordnung 50 KB/Seite → über zwei Jahre eher einige hundert MB im worst case, realistisch weniger. Für das MatePad trivial. Wichtig: Striche als Wahrheit speichern, PNGs nur bei Bedarf rendern (nicht dauerhaft mitschleppen).
+10. **Kalender → Tag-Zuordnung, global.** Mehrere Google-Kalender (Privat, Familie, Wasser, Wärme) werden **einmal global** auf Tags abgebildet; Termine kommen **vor-getaggt** ins Journal. Kein Neu-Verknüpfen pro Projekt — neues Projekt = höchstens eine Zeile in der Zuordnung. (Noch nicht gebaut — Google-API-Zugänge stehen aus.)
+11. **Backup per Export/Import.** Archiv (lokale DB + Tinten-Assets), das der Nutzer selbst ablegt (z.B. pCloud). Echtes Cloud-Sync bleibt für v1.0 bewusst draußen (laut Anforderungsdokument).
+
+### v2-Notiz
+- **Bereiche in der Handschrift markieren** und gezielt einen Zusatz-Tag nur diesem markierten Bereich zuordnen. Elegante Wiedergeburt der Stempel-Idee; passt zur ursprünglichen v1.0-Vision (Zeile/Satz/Absatz mehreren Tags zuordnen).
+
+### Auswirkungen auf bestehende Planung
+- Die für heute geplante Stift-Eintrag-Tag-Vergabe wird im Licht dieser Entscheidungen umgesetzt: Tag-Feld + Mehrfach-Tags per Pipe.
+- `drawing_screen.dart` wird jetzt der **Tinten-Modus** (Striche speichern statt OCR) — nicht mehr Canvas+OCR.
+- ML-Kit-Pfad (`huawei_ml_text`) nur noch für gedruckten Text (Dokument-Import) relevant.
+- **Anforderungsdokument muss nachgezogen werden:** Engine „Huawei ML Kit" → „FreeScript via natives EditText/PlatformView", plus die hier getroffenen Entscheidungen (Stempel raus, zwei Modi, Mehrfach-Tags, ein-Journal-Tags-als-Sicht, Kalender→Tag, Backup).
+
+### Nächste Session
+1. **Tag-Feld + Mehrfach-Tags (Pipe `|`)** im Stift-/Text-Eintrag umsetzen — die ursprünglich für heute geplante Lücke. Stift-Screen gibt Text **+ Tags** zurück; `_addEntry()` übernimmt die Tags.
+2. **Tinten-Modus konkretisieren:** Strichdaten serialisieren (JSON), `JournalEntry`-Modell um einen Tinten-Körper erweitern, Striche laden/weiterschreiben.
+3. **Anforderungsdokument aktualisieren** (Engine-Entscheidung + Session-10-Festlegungen).
+4. Perspektivisch: Migration `shared_preferences` → lokale DB einplanen (noch kein Blocker).
+5. Weiter Richtung v1.0: Google Calendar (Kalender→Tag-Zuordnung), Claude-API.
+
+### Offene Punkte
+- `JournalEntry`-Modell muss einen **Tinten-Körper (Strichdaten)** unterstützen — Modelländerung steht aus.
+- Lokale Handschrift-Volltextsuche ungelöst (keine On-Device-Engine).
+- Migration auf lokale DB am Horizont (Skalierung Tinten-Einträge).
+- Test-Screen `native_text_test_screen.dart` noch im Projekt (bewusst, als PoC-Referenz).
+- ML Kit Text Recognition nur noch für **gedruckten** Text relevant (späterer Dokument-Import).
+- Claude-Integration: Umfang für v1.0 noch offen.
+- Google Calendar API: Zugänge noch nicht eingerichtet.
+
+### Commit
+- **Keine Code-Änderung diese Session (reine Brain-Session) → kein Commit.**
+
+---
+
+## Session 11 — 19. Juni 2026
+
+### Erledigt
+- **Mehrfach-Tags pro Eintrag umgesetzt** — die für Session 10 geplante Lücke (Nächste-Session-Punkt 1). Tastatur- und Stift-Pfad nutzen jetzt **denselben** Tag-Parser.
+- **Neue Util `lib/utils/tag_parser.dart`** mit `parseTags(String)` — trennt Tags, trimmt, ignoriert leere Segmente; ein einzelner Tag ohne Trennzeichen wird ebenfalls akzeptiert.
+- **Stift-Screen erweitert** (`lib/screens/text/native_text_entry_screen.dart`):
+  - Eigenes **Tag-Feld (Tastatur)** unter dem nativen Feld ergänzt
+  - Rückgabe geändert: statt `String` jetzt **`NativeTextResult` (Text + Tags)** via `Navigator.pop`
+- **„Neuer Eintrag"-Sheet** (`lib/screens/journal/journal_screen.dart`):
+  - Tastatur-Pfad: `_addEntry(content, parseTags(tagController.text))`
+  - Stift-Pfad: `Navigator.push<NativeTextResult>` → `_addEntry(result.text, result.tags)`
+  - `_addEntry(String, List<String>)` unverändert (nahm bereits eine Tag-Liste)
+- **End-to-End auf MatePad getestet ✅** — sowohl Tastatur- als auch Stift-Eintrag erzeugen drei saubere Tag-Chips (`#MBS`, `#ValSys`, `#Vertrag`).
+- **Trenner-Entscheidung:** zuerst Pipe `|`, dann auf **`#` gewechselt**. Begründung: Pipe ist auf der Tablet-Tastatur schlecht erreichbar (weit hinten) und per Stift unzuverlässig erkannt (`|` wurde zu `$1`/`I`). `prefixText '# '` aus beiden Tag-Feldern entfernt (sonst doppeltes `#`, da `#` jetzt die Eingabe selbst ist), Hint auf `#`-Format umgestellt.
+
+### Lektion
+- **Stift-Tagging geht (noch) nicht.** Das Tag-Feld ist ein normales Flutter-`TextField` → FreeScript schreibt da nicht hinein (gleiches Verhalten wie Session 8). Mit dem Stift über das Tag-Feld geschriebener Text landet im fokussierten **nativen** Feld (Hauptfeld), nicht im Tag-Feld. → Tags daher per Tastatur; Pen-Tagging bleibt v-next.
+- **Handgeschriebene Sonderzeichen sind unzuverlässig.** FreeScript erkennt ein gemaltes `|` schlecht — Trennzeichen sollten tastaturfreundlich **und** stift-robust sein.
+
+### Diskussion — für später erfasst (Cluster „Tag-Register + Autocomplete + Eintrag editieren")
+1. **Trenner `#` vs. Leerzeichen:** Da Tag = ein Wort, würde Space als Feld-Trenner genügen. `#` wurde **vorerst behalten**, aber die Entscheidung ist bewusst offen. Erkenntnis: Feld-Trenner und Inline-Marker sind getrennte Belange — ein Inline-`#word` im Fließtext kann auch per **Regel** gesetzt werden („Wort = Tag → `#` davor"), unabhängig vom Feld. Revisitbar (ggf. Space im Feld).
+2. **Tag-Normalisierung** (`ValSys` = `VaLSYs` → **ein** Tag): case-insensitiv zusammenführen, kanonische Schreibweise. Braucht ein zentrales **Tag-Register**, das es noch nicht gibt — Tags sind aktuell lose Strings am Eintrag.
+3. **Tippfehler abfangen** (`Valsis`): entweder **„Meintest du `ValSys`?"** (Fuzzy-Autocomplete gegen das Tag-Register, 🟢 Enhancement) und/oder **nachträgliches Editieren** von Einträgen/Tags. Editierbarkeit ist 🟡 Core im Anforderungsdokument und noch **nicht gebaut** — würde Punkt 3 mit lösen.
+
+### Nächste Session
+1. **Tag-Register** als zentrale Tag-Liste einführen — Grundlage für Normalisierung (Punkt 2) und Autocomplete/„Meintest du…?" (Punkt 3).
+2. **Eintrag/Tags nachträglich editieren** (🟡 Core) — löst u.a. die Tippfehler-Korrektur und ist ohnehin Pflicht für v1.0.
+3. **Tinten-Modus konkretisieren** (aus Session 10): Strichdaten serialisieren (JSON), `JournalEntry` um einen Tinten-Körper erweitern, Striche laden/weiterschreiben.
+4. **Anforderungsdokument aktualisieren** (offen seit Session 10: Engine-Entscheidung + Session-10-Festlegungen + jetzt `#`-Tags/Trenner-Notiz).
+5. Perspektivisch: Migration `shared_preferences` → lokale DB; weiter Richtung v1.0 mit Google Calendar (Kalender→Tag-Zuordnung) und Claude-API.
+
+### Offene Punkte
+- **Pen-Tagging** ungelöst — Tag-Feld ist Flutter-`TextField`, nimmt keine native Handschrift (FreeScript).
+- **Tag-Normalisierung / kanonische Schreibweise** — braucht Tag-Register.
+- **Eintrags-Editierbarkeit (🟡 Core)** noch nicht gebaut.
+- Trenner-Wahl `#` bewusst vorläufig (Space im Feld als Alternative offen).
+- (bestehend aus Session 10) `JournalEntry` braucht Tinten-Körper; lokale Handschrift-Volltextsuche ungelöst; DB-Migration am Horizont; Test-Screen `native_text_test_screen.dart` bleibt als PoC-Referenz; ML Kit nur für gedruckten Text; Claude-Umfang offen; Google Calendar API-Zugänge stehen aus; Anforderungsdokument-Update ausstehend.
+
+### Commit
+- `759fad5` — "Mehrfach-Tags pro Eintrag: #-getrennte Tags via Tastatur-Feld, Stift-Screen liefert Text + Tags, parseTags-Util"
+- Vorgänger: `1ccaae9`
+
+## Session 12 — 20. Juni 2026
+
+### Charakter der Session
+- Offenes Zeitfenster (früher Morgen, vor dem Aufwachen der Familie). Drei abgeschlossene, getestete Bausteine an einem Morgen — Editierbarkeit, Tag-Register, Autocomplete.
+- Arbeitsweise: Claude liest den echten Stand direkt aus dem öffentlichen Repo (`759fad5`), schreibt Code dagegen statt gegen eine Beschreibung.
+
+### Erledigt
+
+**1. Editierbarkeit (🟡 Core) — Commit `d813e3a`**
+- Karte antippen öffnet dasselbe Eingabe-Sheet, **vorbefüllt** mit Inhalt + Tags; Speichern aktualisiert den Eintrag in place.
+- `_openNewEntrySheet` → `_openEntrySheet({existing})` bedient Neu **und** Bearbeiten.
+- `JournalEntry.copyWith` ergänzt (Modell).
+- `formatTags()` in `tag_parser.dart` als Gegenstück zu `parseTags` (Round-trip fürs Tag-Feld beim Bearbeiten).
+- `_updateEntry(id, content, tags)` — ersetzt per `id` via `copyWith`, persistiert.
+- `_EntryCard` um `onTap` erweitert (Material + InkWell), Tap öffnet Bearbeiten.
+- **Nebenbei behoben:** Tastatur-Tag-Feld trug noch den alten `|`-Hint + verwaisten `prefixText '# '` (Doc-Code-Abweichung aus Session 11, klassischer Layer-8/„VS Code hat scheinbar gespeichert") → auf `#`-Format angeglichen.
+- Getestet ✅ inkl. Persistenz über App-Neustart im Flugmodus.
+
+**2. Tag-Register mit Normalisierung — Commit `e12a01a`**
+- Neue Datei `lib/utils/tag_registry.dart` (`TagRegistry`).
+- Führt Schreibvarianten **case-insensitiv** zusammen: `ValSys` = `valsys` → eine kanonische Schreibweise.
+- API: `canonicalize`, `canonicalizeAll`, `rebuildFrom`, `allTags`.
+- **Abgeleitet, nicht separat persistiert:** beim Laden aus den Einträgen aufgebaut (`rebuildFrom`, chronologisch → erste Schreibweise gewinnt), beim Anlegen/Bearbeiten inkrementell ergänzt. Eine Wahrheit (die Einträge), kein Sync-Problem.
+- Normalisierung greift **ab jetzt**; bereits gespeicherte Misch-Einträge werden beim Laden **nicht** still umgeschrieben (bewusst nicht-destruktiv).
+- Getestet ✅: `Valsys`/`valsys` → beide Chips `#ValSys`; kanonische Form stammte aus den älteren Einträgen, die beim Start ins Register gelesen wurden (`rebuildFrom` bestätigt).
+
+**3. Tag-Autocomplete (🟢 Enhancement) — Commit `e09b513`**
+- Neues **wiederverwendbares** Widget `lib/widgets/tag_autocomplete_field.dart`.
+- Vorschlags-Chips unter dem Tag-Feld, bezogen auf das gerade getippte Fragment (Text nach dem letzten `#`).
+- Substring-Treffer (Prefix zuerst); kein Treffer → Fuzzy **„Meintest du …?"** via Levenshtein (Distanz ≤ 2, ab 3 Zeichen).
+- Tap übernimmt den kanonischen Tag und hängt `#` für den nächsten an.
+- An **beiden** Eingabewegen aktiv: Eintrags-Sheet (`journal_screen.dart`) und Stift-Screen (`native_text_entry_screen.dart` bekommt `knownTags`-Parameter, gefüttert aus `_tagRegistry.allTags`).
+- Getestet ✅ an beiden Wegen.
+
+### Entscheidungen
+- **Kanonische Schreibweise: case-preserving, „erste Schreibweise gewinnt".** Alles-klein wurde bewusst geprüft und **verworfen**. Begründung: Steffens Tags sind Akronyme (`MBS`, `ValSys`) und deutsche Substantive (`Vertrag`, `Wasser`, `Wärme`, `Privat`, `Familie`) — kleingeschrieben schlechter lesbar bzw. im Deutschen falsch (Substantive werden großgeschrieben). Die Sorge „welche Variante gewinnt, ist reihenfolge-abhängig" wird **nicht** über Alles-klein gelöst, sondern später über eine **Tag-Verwaltung / Umbenennen** (kanonische Schreibweise selbst festlegen), die auf dem Register aufsetzt.
+- **Bearbeiten via Tastatur**, nicht Stift: das native FreeScript-Feld kann (noch) nicht vorbefüllt werden — bräuchte `setText` in `NativeTextView.kt`. Da alle Einträge als Text gespeichert sind, deckt die Tastatur das Bearbeiten vollständig ab.
+- **timestamp bleibt beim Bearbeiten erhalten** — ein bearbeiteter Eintrag behält seinen Platz auf der Zeitachse (passt zum Ein-Journal-Modell aus Session 10).
+
+### Lektion
+- **Wiederverwendbares Widget zahlt sich aus:** `TagAutocompleteField` einmal gebaut, an beiden Eingabewegen ohne Logik-Duplikat eingesetzt.
+- **Lange Dateien lieber ganz überschreiben** statt chirurgisch editieren — „such den Block"-Anleitungen sind fehleranfällig.
+- Tippfehler beim Einfügen (`ffinal`) bestätigt erneut: nach dem Einfügen kurz bauen, der Compiler fängt's sofort.
+
+### Offene Punkte
+- **Tag-Verwaltung / Umbenennen** — der saubere Hebel gegen die reihenfolge-abhängige Kanonisierung (heute neu beschlossen, noch nicht gebaut).
+- **Tinten-Modus** weiterhin offen: `JournalEntry` braucht Tinten-Körper (Strichdaten), JSON-Serialisierung, Striche laden/weiterschreiben (aus Session 10).
+- **Anforderungsdokument-Update überfällig** (seit Session 10) — jetzt zusätzlich: Editierbarkeit umgesetzt, Tag-Register/Normalisierung, Autocomplete, Schreibweisen-Entscheidung.
+- Autocomplete-Politur denkbar: Fokus/Tastatur nach Chip-Tap halten; Vorschläge auch bei leerem Fragment (z.B. zuletzt genutzte Tags).
+- (bestehend) Pen-Tagging ungelöst (FreeScript nur im Hauptfeld); lokale Handschrift-Volltextsuche ungelöst; DB-Migration am Horizont; `native_text_test_screen.dart` bleibt als PoC-Referenz; ML Kit nur für gedruckten Text; Claude-Umfang offen; Google Calendar API-Zugänge stehen aus.
+
+### Nächste Session
+1. **Anforderungsdokument aktualisieren** (überfällig — Engine FreeScript + alle Festlegungen Session 10–12).
+2. **Tinten-Modus konkretisieren** (Strichdaten serialisieren, `JournalEntry` erweitern).
+3. **Tag-Verwaltung / Umbenennen** (löst die Kanonisierungs-Willkür, ergänzt Editierbarkeit).
+4. Perspektivisch: Migration `shared_preferences` → lokale DB; Google Calendar (Kalender→Tag); Claude-API.
+
+### Commits (heute)
+- `d813e3a` — "Eintraege editierbar: Karte antippen oeffnet vorbefuelltes Sheet, copyWith im Modell, formatTags-Round-trip, Tastatur-Tagfeld auf #-Format angeglichen"
+- `e12a01a` — "Tag-Register mit Normalisierung: Schreibvarianten case-insensitiv zusammengefuehrt (ValSys = valsys), abgeleitet aus Eintraegen, canonicalize beim Anlegen/Bearbeiten"
+- `e09b513` — "Tag-Autocomplete an beiden Eingabewegen: Vorschlags-Chips und 'Meintest du' (Fuzzy) im Eintrags-Sheet und Stift-Screen, wiederverwendbares TagAutocompleteField"
+- Vorgänger: `759fad5`
+
+---
+
+## Session 13 — 23. Juni 2026
+
+### Charakter der Session
+- Frühes Zeitfenster (vor 05:00, vor dem Aufwachen der Familie), geplante 60 Min. Ein klar umrissenes Ziel — der **Tinten-Modus** —, dazu zwei Politur-Bausteine. Alles getestet, ein sauberer Commit am Ende.
+- Arbeitsweise wie gehabt: Claude liest den echten Stand direkt aus dem öffentlichen Repo (`e09b513`), schreibt Code dagegen.
+- Wichtige Vorab-Erkenntnis: `drawing_screen.dart` war seit Session 9 **totes Holz** (der Journal-Flow hängt am nativen FreeScript-Screen, der Canvas war nirgends mehr verdrahtet). Er wurde jetzt als **Tinten-Editor** wiederbelebt — kein anderer Aufrufer im Weg.
+
+### Erledigt — Tinten-Modus (🔧 → ✅), Commit `7e8f794`
+
+**1. Datenmodell für Tinte**
+- Neue Datei `lib/models/ink_data.dart` mit `InkStroke` (Punktfolge `List<Offset>`, kompakt als flache Doubles, 1 Nachkommastelle) und `InkData` (alle Striche **plus** die Canvas-Größe `width`/`height` bei der Aufnahme).
+- Begründung Strichdaten statt PNG: bleibt editier-/weiterschreibbar (Session-10-Beschluss). Die mitgespeicherte Canvas-Größe ist der Hebel fürs maßstabsgerechte Rendern (Vorschau, Orientierungs-Fit).
+- `JournalEntry` um optionales Feld `ink` erweitert: `ink == null` → Text-Eintrag, sonst Tinten-Eintrag. Getter `isInk`. `copyWith` nimmt `ink` mit (kann setzen/aktualisieren, nicht auf null zurücksetzen — ein Eintrag wechselt den Modus nicht).
+
+**2. Tinten-Editor** (`lib/screens/drawing/drawing_screen.dart`, vollständig neu)
+- Nimmt `initialInk`, `initialTags`, `knownTags`. Liefert `InkResult(InkData, List<String> tags)` via `Navigator.pop`.
+- Striche als `List<List<Offset>>`, Palm Rejection wie gehabt (`Listener` + `PointerDeviceKind.stylus`).
+- Canvas-Größe wird beim Übernehmen aus dem `RepaintBoundary`-`RenderBox` gelesen und in `InkData` gespeichert.
+- Eigenes Tag-Feld (`TagAutocompleteField`) unter dem Canvas — Tinten-Einträge sind taggbar.
+- **OCR/ML-Kit-Pfad aus diesem Screen entfernt** (das Entscheidungs-Experiment ist abgeschlossen; der Screen ist jetzt reiner Tinten-Modus). Paket `huawei_ml_text` bleibt in `pubspec.yaml` für späteren Dokument-Import.
+
+**3. Geteilte Painter** (`lib/widgets/ink_painter.dart`, neu)
+- `InkLivePainter` — Live-Strich im Editor (Path, 1:1).
+- `InkPreviewPainter` — skaliert `InkData` **uniform & zentriert** in den Karten-Vorschauplatz (nutzt die gespeicherte Original-Größe → relative Position bleibt erhalten).
+
+**4. Verdrahtung im Journal** (`lib/screens/journal/journal_screen.dart`)
+- Persistenz: `ink` wird beim Speichern mitgeschrieben (nur wenn vorhanden) und beim Laden geparst. **Rückwärtskompatibel** — alte Einträge ohne `ink`-Key laden als Text.
+- „Neuer Eintrag"-Sheet: zusätzliches **Pinsel-Icon** (🖌️ `Icons.brush`) neben dem FreeScript-Stift → öffnet den Tinten-Editor. `_addInkEntry`.
+- Karte **antippen**: Tinten-Eintrag → Tinten-Editor mit zurückgeladenen Strichen + Tags (`_openInkEditorEdit` → `_updateInkEntry`); Text-Eintrag → wie gehabt das Text-Sheet.
+- `_EntryCard`: Tinten-Eintrag zeigt **Strich-Vorschau** (fixe Höhe 140, `InkPreviewPainter`) statt Text, plus kleines Pinsel-Icon am Zeitstempel. Tags unverändert darunter.
+
+### Erledigt — Politur (im selben Commit)
+
+**5. Strich-Radierer**
+- Toggle-Button (🧹 `Icons.cleaning_services`, blau wenn aktiv) in der Editor-Leiste. Aktiv → Stift löscht **ganze** Striche per Distanz-Treffer (Punkt-zu-Segment, Schwelle 18 px). Teil-Radieren (Striche zerschneiden) bewusst draußen.
+
+**6. Orientierungs-Fit beim Laden**
+- Beim Öffnen eines Tinten-Eintrags werden die Striche per Post-Frame-Callback von der **gespeicherten** Canvas-Größe auf die **aktuelle** umgerechnet (uniform, zentriert — keine Verzerrung der Handschrift). Gleiche Größe → No-op (keine Regression im Normalfall). Greift bei Geräte-Drehung zwischen Erstellen und Bearbeiten.
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- Tinten-Eintrag anlegen → Vorschau auf der Karte (Pinsel-Icon, Tag #MBS).
+- Karte antippen → Striche zurück → weiterschreiben **und** zeichnen (Skizze ergänzt), Undo genutzt → Vorschau aktualisiert.
+- Radierer: ganzer Strich verschwindet beim Drüberfahren.
+- Orientierungs-Fit: gedrehter Eintrag wird eingepasst statt abgeschnitten.
+- Text-Modus (Tastatur + FreeScript) unverändert; alte Einträge laden weiter.
+
+### Erledigt — Tag-Verwaltung / Umbenennen (🟢 → ✅), Commit `62f7a3e`
+- Seit Session 12 vorgemerkt: der saubere Hebel gegen die **reihenfolge-abhängige Kanonisierung** (kanonische Schreibweise selbst festlegen, statt „wer zuerst kam gewinnt").
+- Neue Datei `lib/screens/tags/tag_management_screen.dart` (`TagManagementScreen`).
+  - Listet alle bekannten Tags (aus `_tagRegistry.allTags`) mit **Nutzungszähler** je Tag (pro Eintrag max. einmal gezählt).
+  - Tag antippen → Umbenennen-Dialog (vorbefüllt). Eingabe wird gesäubert (führendes `#` weg, getrimmt, erstes Wort).
+  - Hält eine **Anzeige-Kopie** der Tags/Zähler aktuell, das eigentliche Umschreiben passiert im JournalScreen via `onRename`-Callback.
+- `journal_screen.dart`:
+  - **Tag-Icon** (`Icons.sell_outlined`) in der Titelleiste → öffnet die Verwaltung.
+  - `_tagUsage()` — Zähler je Tag (Schlüssel kleingeschrieben).
+  - `_renameTag(from, to)` — schreibt die neue Schreibweise **case-insensitiv durch alle Einträge** (Text- **und** Tinten-Einträge, da Tags am Eintrag modusunabhängig liegen). Trifft das Ziel einen bestehenden Tag → **Merge** (Duplikat pro Eintrag fällt weg). Danach Register-Rebuild + persistieren.
+- **Löschen bewusst draußen** (eigener kleiner Folgebaustein).
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- Bestand war bereits **einheitlich** (Normalisierung aus Session 12 hält) → kein „kaputter" Casing-Fall vorhanden.
+- **Round-Trip** (reversibel): `#MBS` → `MBS-Test` → alle MBS-Einträge springen um, Zähler stimmt → zurück auf `MBS`. Beweist das Durchschreiben über alle Einträge.
+- **Merge**: Wegwerf-Eintrag mit `#Muell` → `Muell` → `MBS` umbenannt → faltet zusammen, Eintrag trägt danach `#MBS`, Zähler addiert.
+- App-Neustart → Umbenennungen bleiben.
+
+### Lektion
+- **Datei-Vertauscher früh sichtbar machen:** Beim Einfügen war einmal der Inhalt von `ink_painter.dart` in `drawing_screen.dart` gelandet. Der Compiler zeigte es sofort eindeutig (`InkPreviewPainter aus beiden importiert`, Import-Zeile am falschen Pfad, `DrawingScreen`/`InkResult` nicht gefunden). → Nach dem Einfügen kurz bauen; charakteristische erste Zeilen als Schnellcheck.
+- **Geteilter Painter zahlt sich aus:** ein `InkPreviewPainter` für die Karte, ein `InkLivePainter` für den Editor — eine Datei, kein Duplikat.
+- **Tote-Code-Wiederbelebung:** Vor dem Bauen prüfen, ob die Zieldatei überhaupt noch verdrahtet ist — `drawing_screen.dart` war es nicht, das vereinfachte die Umstellung (kein Aufrufer zu migrieren).
+
+### Offene Punkte
+- **Tag löschen** (aus allen Einträgen entfernen) — kleiner Folgebaustein zur Tag-Verwaltung, bewusst noch nicht gebaut.
+- **Radierer-Politur denkbar:** Undo erfasst aktuell nur gezeichnete Striche, nicht das Radieren (kein Erase-Undo-Stack). Teil-Radieren offen.
+- **Tinten-Auswertung durch Claude** (multimodale Bild-API) noch nicht angebunden — das Datenmodell (Striche → PNG bei Bedarf) ist dafür jetzt vorbereitet.
+- (bestehend) lokale Handschrift-Volltextsuche von Tinte ungelöst; Migration `shared_preferences` → SQLite am Horizont; `native_text_test_screen.dart` bleibt als PoC-Referenz; ML Kit nur für gedruckten Text; Pen-Tagging ungelöst (FreeScript nur im Hauptfeld); Google Calendar API-Zugänge stehen aus; Claude-Umfang für v1.0 offen.
+
+### Nächste Session
+1. Perspektivisch: Migration `shared_preferences` → SQLite (Basis u.a. für Perlenkette).
+2. Richtung v1.0: Google Calendar (Kalender→Tag), Claude-API (inkl. Tinten-Auswertung über die multimodale Bild-API).
+3. Kleinkram: Tag löschen, Radierer-Undo, Autocomplete-Politur.
+
+### Anforderungsdokument
+- `disponere_anforderungen_v3_0.md`: **Tinten-Modus** 🔧 → ✅ (Canvas + Serialisierung vorhanden), **Tag-Verwaltung / Umbenennen** ⏳ → ✅. Beim nächsten Doc-Durchgang nachziehen.
+
+### Commits (heute)
+- `7e8f794` — "Tinten-Modus: Strichdaten als Vektoren serialisiert (InkData), drawing_screen als Tinten-Editor mit Karten-Vorschau, Editieren/Weiterschreiben, Strich-Radierer und Orientierungs-Fit beim Laden"
+- `62f7a3e` — "Tag-Verwaltung: Tags umbenennen mit Durchschreiben ueber alle Eintraege, case-insensitiver Merge, Nutzungszaehler, erreichbar ueber Tag-Icon in der Titelleiste"
+- Vorgänger: `e09b513`
+
+---
+
+
+## Session 14 — 06. Juli 2026
+
+### Charakter der Session
+- Nach langer Pause. Ein großer Teil der Zeit ging bewusst in **Prozess-Hygiene vor dem Code**: Beim Repo-Read fiel eine Doc-Code-Diskrepanz aus Session 13 auf (siehe unten), die erst geschlossen wurde. Danach klares Ziel: die **SQLite-Migration** (Priorität #1).
+- Grundsatz-Beschluss dieser Session: **Doku wandert ab sofort mit ins Repo** (`docs/`), damit genau diese Diskrepanz-Klasse strukturell nicht mehr entstehen kann.
+
+### Erledigt — SQLite-Migration (Persistenz 🔴), Commit `2e59e74`
+
+**1. Neue Persistenz-Schicht** (`lib/data/journal_repository.dart`)
+- `JournalRepository`: DB öffnen (`disponere.db`), Schema anlegen, CRUD — löst `shared_preferences` als Speicher ab.
+- **Normalisiertes Schema** (bewusst, statt 1:1-JSON-Port):
+  - `entries` (id, timestamp *indiziert*, content, ink als JSON-Blob *nullable*).
+  - `entry_tags` (entry_id, tag, **tag_key** lowercase, **ord**) mit Index auf `tag_key`, PK `(entry_id, tag_key)`, FK auf `entries` mit `ON DELETE CASCADE` (`PRAGMA foreign_keys = ON`).
+- **Begründung Schema:** erfüllt die Anforderung „abfragbar nach Datum / Tag / Zeitraum" (v3.0) direkt — Datum/Zeitraum über den indizierten ISO8601-`timestamp`, Tag über JOIN auf `entry_tags.tag_key` (case-insensitiv). `ord` hält die Anzeige-Reihenfolge der Tags je Eintrag stabil.
+- **Bewusst NICHT vorentschieden:** die Perlenkette-Datenmodell-Frage (eigener Tag-Index vs. Laufzeit-Abfrage über Journal + Kalender + Aufgaben). Das Schema *ermöglicht* beides.
+- CRUD transaktional: `upsert` (ein Eintrag), `upsertAll` (mehrere, für Tag-Rename), `delete` (mit Cascade; noch kein UI-Aufrufer, Grundlage für späteres Eintrag-Löschen), `loadAll`.
+
+**2. Sicherer Einmal-Import** (`migrateFromPrefsIfNeeded`)
+- Übernimmt vorhandene `shared_preferences`-Einträge **einmalig** in die DB, dann Flag `migrated_to_sqlite` — verhindert Doppel-Import und ein Wiederauftauchen später gelöschter Einträge.
+- Alter Prefs-Key (`entries`) bleibt als **Backup** liegen (Cleanup ist ein späterer, eigener Schritt).
+
+**3. Journal verdrahtet** (`lib/screens/journal/journal_screen.dart`)
+- `_loadEntries`/`_saveEntries` (+ `dart:convert`, `shared_preferences`) raus; stattdessen `JournalRepository _repo`.
+- Startsequenz `_init()`: Migration → `loadAll` → Register-Rebuild.
+- Jede Mutation macht jetzt ein **gezieltes `upsert`** statt die ganze Liste zu schreiben; Tag-Rename persistiert via `upsertAll` **nur die tatsächlich geänderten** Einträge.
+- **Tag-Register unverändert:** weiter Laufzeit-Ableitung aus den Einträgen (keine eigene Persistenz). `entry_tags` ist nur die zusätzliche, abfragbare Projektion.
+
+**4. Dependencies** (`pubspec.yaml`)
+- `sqflite`, `path` ergänzt.
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- Start / Migration: leere Basis → leer (korrekt).
+- Text-Eintrag anlegen → Neustart → bleibt.
+- Tinten-Eintrag anlegen → Neustart → Vorschau bleibt, antippen → Striche zurück, weiterschreiben → bleibt.
+- Bearbeiten (Text **und** Tinte) → Neustart → Änderung bleibt.
+- Tag umbenennen (`Bentley` → `Bentley-Test`) → Neustart → bleibt; zweiter, unabhängiger Tag `#MBS` daneben — korrekt getrennt.
+- Merge-Fall und Tag-Reihenfolge (`ord`) als Kür verstanden, nicht formal durchgespielt (Logik unverändert aus Session 13, nur die Speicherung wechselte).
+
+### Lektion
+- **Datei-Vertauscher schlug wieder zu — und wurde wieder sofort sichtbar:** Beim Einfügen landete der Dart-Inhalt von `journal_repository.dart` in `pubspec.yaml`. Der YAML-Parser zeigte es eindeutig (`///`-Doc-Kommentar in Zeile 14, „Mapping values are not allowed / missed a colon"). Erste-Zeile-Schnellcheck (`Get-Content <datei> -First 1`) fand es in Sekunden. Bei **Mehrfach-Datei-Lieferung** ist die Kreuzungsgefahr höher — Schnellcheck lohnt dann doppelt (Soll-Erstzeilen: `name: disponere` / `import 'dart:convert';` / `import 'package:flutter/material.dart';`).
+- **Doc-Code-Diskrepanz strukturell schließen:** Tag-Verwaltung (`62f7a3e`) war in Session 13 committet, aber das zugehörige Abschlussdokument nie im Projekt abgelegt — das Doc stand einen Commit hinter der Realität. Nachgetragen. Konsequenz: Doku ab sofort ins Repo, damit `git status` so etwas sofort zeigt.
+
+### Offene Punkte
+- **Alter Prefs-Key-Cleanup** (`entries` + Flag) — bewusst später, wenn die SQLite-Basis sich bewährt hat.
+- **Anforderungsdokument-Update** nachziehen: Persistenz „SQLite-Migration ⏳" → ✅, außerdem **Tinten-Modus** und **Tag-Verwaltung** → ✅ (seit Session 13 vorgemerkt).
+- (bestehend) Tag löschen; Radierer-Undo / Teil-Radieren; lokale Tinten-Volltextsuche ungelöst; Tinten-Auswertung durch Claude (multimodale Bild-API) noch nicht angebunden; Perlenkette-Datenmodell offen; Pen-Tagging (FreeScript nur im Hauptfeld); Google Calendar API-Zugänge stehen aus; Claude-Umfang für v1.0 offen.
+
+### Nächste Session
+1. Richtung v1.0: **Google Calendar** (Kalender→Tag-Mapping) **oder** **Claude-API** (inkl. Tinten-Auswertung über die multimodale Bild-API) — je nach Lust; beide bauen jetzt auf einer abfragbaren DB auf.
+2. Bei Gelegenheit: Anforderungsdokument-Durchgang (die ✅-Nachträge oben).
+
+### Prozess / Repo
+- **Doku ins Repo übernommen:** `docs/` mit den App-Doks (Fortschritt + Anforderungen). Private Doks (`steffen_projektplan.md`, `Heimlabor_Zusammenfassung.md`) via `.gitignore` ausgeschlossen — Repo ist öffentlich.
+- Zwei-Commit-Muster pro Session ab jetzt: erst Code-Commit (Hash liegt vor), dann `docs:`-Commit mit dem Fortschrittsdokument, das den Hash nennt.
+
+### Commits (heute)
+- `2e59e74` — "Persistenz auf SQLite umgestellt: normalisiertes Schema (entries + entry_tags), tag-/datum-/zeitraum-abfragbar, transaktionales upsert, einmaliger Import aus shared_preferences mit Backup-Flag"
+- `docs:` — Fortschritt Session 14 + Doku ins Repo (folgt direkt im Anschluss)
+- Vorgänger: `62f7a3e`
+
+## Session 15 — 07. Juli 2026
+
+### Charakter der Session
+- 45-Minuten-Box, fokussiert. Erstes **🟡-Core-Feature** nach dem Persistenz-Fundament: **Daily Info (Tagesinfo)** als vollständiger Durchstich (Modell → Persistenz → UI → Test), damit auf dem MatePad wirklich etwas anlegbar und über mehrere Tage sichtbar ist.
+- Kurze Vor-Abstimmung: **eine** Architektur-Entscheidung zur Bestätigung gestellt (eigenes Modell + eigene Tabelle), Rest innerhalb des Scopes entschieden und reversibel geflaggt.
+
+### Erledigt — Daily Info (🟡 Core), Commit `81f35fa`
+
+**1. Neues Modell** (`lib/models/daily_info.dart`)
+- `DailyInfo`: id, text, `startDate`, `endDate?` (**null = Einzeltag**, gesetzt = Zeitspanne).
+- Reine **Kalendertage** (ohne Uhrzeit): `DailyInfo.dayOnly()` normalisiert; `coversDay(day)` prüft `start ≤ tag ≤ (end ?? start)`.
+- `copyWith` mit `clearEndDate`-Flag — nötig, weil `endDate: null` sonst nicht von „nicht ändern" unterscheidbar wäre (Zeitspanne → Einzeltag zurücksetzen).
+- **Bewusst kein `JournalEntry`:** eigene Identität, weil Zeitspanne statt Zeitpunkt und Erscheinen auf mehreren Tagen. Von Steffen bestätigt.
+
+**2. Repo auf Schema-v2** (`lib/data/journal_repository.dart`)
+- `_dbVersion` 1 → 2; `onUpgrade` ergänzt. Migrationen **stufenweise, ohne `else`** (Sprung v1→v3 liefe alle Stufen). Bestehende DB bleibt erhalten, `daily_info` wird ergänzt — **kein Deinstallieren nötig**.
+- `_createDailyInfoTable` von `onCreate` **und** `onUpgrade` geteilt → Neuinstallation und Migration teilen dasselbe Schema (verhindert Schema-Drift).
+- Tabelle `daily_info` (id, text, `start_date`, `end_date` *nullable*), Index auf `start_date`.
+- **Datums-Key `yyyy-MM-dd`** (lexikographisch = chronologisch → direkt in Bereichsabfragen vergleichbar).
+- CRUD: `upsertDailyInfo`, `deleteDailyInfo`, `loadAllDailyInfos` (für spätere Verwaltungsansicht), **`dailyInfosForDay(day)`** — die Bereichsabfrage `start_date <= ? AND COALESCE(end_date, start_date) >= ?`. Genau die Query-Fähigkeit, für die das Schema in Session 14 normalisiert wurde.
+
+**3. Journal-Screen** (`lib/screens/journal/journal_screen.dart`)
+- **Bernstein-Bereich** (`_kDailyInfoAccent = 0xFFD9A441`) als erstes ListView-Element (`itemCount = _entries.length + 1`): zeigt die **heute** betroffenen Infos + dezenten „+"-Einstieg; leer → Hinweistext.
+- Erstellen/Bearbeiten-Sheet: Textfeld, Start-Datum-Picker, **Zeitspanne-Umschalter** (bis-Datum optional, nie vor Start), Löschen (nur im Bearbeiten-Fall).
+- CRUD-Handler laden `_todayInfos` nach **jeder** Mutation neu (`_reloadTodayInfos`) — robust, damit z.B. eine Info mit Zukunftsdatum korrekt *nicht* heute erscheint.
+- Fix beim Bau: Guards auf `existing != null` (statt separater `isEditing`-Bool) umgestellt, damit Dart `existing` in den Closures promotet (gleiche Technik wie im bestehenden Text-Sheet).
+
+### Design-Entscheidungen (reversibel geflaggt)
+- **Eigenes Modell + eigene Tabelle** (bestätigt).
+- **Keine Tags** für Daily Info — Anforderung nennt „freier Text, Datum/Zeitspanne", kein Tag-System. Bewusst weggelassen.
+- **„Oben im Journal" = heute betroffene Infos**; die Repo-Query nimmt ein beliebiges Datum → zieht sich bei späterer **Tages-Navigation** automatisch mit.
+- **Bernstein-Akzent** zur klaren Abgrenzung vom kühlen Blau der Einträge (und Platz für spätere Aufgaben/Termine in eigenen Farben).
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- Einzeltag ohne Bereichs-Label („07.07. Erste Tagesinfo") ✓
+- Zeitspanne **mit** Label („07.07. – 10.07.") erscheint korrekt am 07.07. ✓
+- **Info mit morgigem Datum taucht heute NICHT auf** — der eigentliche Beweis, dass die Datums-Bereichsabfrage greift ✓
+- Bearbeiten (Text ändern) → aktualisiert ✓
+- Löschen (Mülleimer im Sheet) → weg ✓
+- **Neustart → Persistenz bestätigt:** gelöschte Info bleibt weg, echte Infos bleiben ✓
+
+### Klarstellung — Handschrift-Quelle (wichtig für künftige Doku)
+- Die Handschrift im **Tagesinfo-Feld** stammt von der **aktiven Tastatur (Google/Gboard-Handschrift)**, weil es ein normales Flutter-`TextField` ist — **nicht** von FreeScript.
+- **FreeScript bleibt exklusiv** das dedizierte native Text-Eingabefeld über die PlatformView/EditText (`native_text_entry_screen`). Die beiden nicht vermischen.
+
+### Prozess-Lektionen
+- **Anweisungsreihenfolge = Ausführungsreihenfolge:** Instruktionen strikt linear von oben nach unten abarbeitbar halten (kein Hoch-/Runter-Scrollen). Terminal-Befehle bleiben unten — aber Schritte *nach* dem Terminal (Test-/Verifikations-Checkliste nach `run.ps1`) gehören dann auch **unter** die Befehle, nicht darüber.
+- **Lange Dateien als Download:** ~1.300 Zeilen verifizierten Codes diesmal via Datei-Übergabe statt Chat-Blöcken, um Copy-Paste-Fehler bei der langen `journal_screen.dart` auszuschließen. Klammerbalance + Erstzeilen-Check vorab im Container gelaufen.
+
+### Offene Punkte
+- **Theme/Farb-Entscheidung bewusst geparkt:** dunkel + Bernstein vorläufig. Hängt mit der Tinten-Darstellung (aktuell hell-auf-dunkel) zusammen und betrifft **alle Screens** → eigene kleine Design-Brain-Session wert.
+- **Aufgaben** (🟡 Core) als nächstes — keine externen Deps, analog Daily Info.
+- (bestehend) Alter Prefs-Key-Cleanup; Tag löschen; Radierer-Undo / Teil-Radieren; lokale Tinten-Volltextsuche; Tinten-Auswertung durch Claude (multimodale Bild-API); Perlenkette-Datenmodell; Google Calendar API-Zugänge; Claude-Umfang für v1.0.
+
+### Nächste Session
+1. **Aufgaben** (🟡 Core): jederzeit erstellbar, Datum/Uhrzeit optional, am Fälligkeitstag automatisch im Journal, klar unterscheidbar von Kalenderterminen. Baut wie Daily Info direkt auf der abfragbaren DB auf.
+2. Danach: Architektur-Sessions für **Google Calendar** und **Claude-API** vor dem Coden.
+
+### Anforderungsdokument
+- `disponere_anforderungen_v3_0.md`: **Daily Info ⏳ → ✅** nachgezogen (Feature-Beschreibung + Übersichtstabelle).
+
+### Commits (heute)
+- `81f35fa` — „feat: Daily Info (Tagesinfo) mit Einzeltag und Zeitspanne, erscheint automatisch an betroffenen Tagen"
+- `docs:` — Fortschritt Session 15 + Anforderungsdoc-Nachzug (folgt direkt im Anschluss)
+- Vorgänger: `2e59e74`
+
+---
+
+## Session 16 — 08. Juli 2026
+
+### Charakter der Session
+- Fokussierte Box. Zweites 🟡-Core-Feature nach Daily Info: **Aufgaben (Tasks)** als vollständiger Durchstich (Modell → Persistenz mit eigenem `task_tags` → UI → Test), direkt auf der abfragbaren DB, kein externer Dienst.
+- Kurze Zwischenfrage zu **Claude Code** bewusst vertagt (fokussiert bleiben). Danach eine Architektur-Empfehlung **revidiert** (Tags an Aufgaben doch rein, s.u.).
+- Sprachregelung: **„Day"** meint ab jetzt einen Kalendertag (statt „Datum") zur Verwechslungsvermeidung — neues Feld heißt `dueDay`; bestehende DailyInfo-Felder (`startDate`/`endDate`) bleiben unangetastet.
+
+### Erledigt — Aufgaben (🟡 Core), Commit `e7d7e96`
+
+**1. Neues Modell** (`lib/models/task.dart`)
+- `Task`: id, title, `dueDay?` (nur Kalendertag, null = ohne Day), `dueTime?` (`HH:mm`, nur mit Day sinnvoll), `done`, `tags`.
+- Drei Zustände: kein Day / nur Day / Day+Uhrzeit. `dayOnly()`, `hasDay`, `isOverdue(today)`, `copyWith` mit `clearDueDay`/`clearDueTime` (wie DailyInfo — null-Rücksetzen von „nicht ändern" unterscheidbar).
+- **Bewusst eigenes Modell:** eigener Erledigt-Zustand + optionaler Fälligkeits-Day, getrennt von Eintrag/DailyInfo.
+
+**2. Repo auf Schema-v3** (`lib/data/journal_repository.dart`)
+- `_dbVersion` 2 → 3; `_onUpgrade`-Stufe `if (oldVersion < 3)` ergänzt (stufenweise, ohne `else`; Bestand bleibt, kein Deinstallieren). `_createTaskTables` von `_onCreate` **und** `_onUpgrade` geteilt (kein Schema-Drift).
+- Tabelle `tasks` (id, title, `due_day` *nullable*, `due_time` *nullable*, `done` 0/1), Index auf `due_day`. Tabelle **`task_tags`** — spiegelt `entry_tags` (lowercase `tag_key`, `ord`, FK `ON DELETE CASCADE`) → Aufgaben **nach Tag abfragbar**.
+- CRUD: `upsertTask` (transaktional inkl. Tags), `deleteTask`, `loadAllTasks`, **`surfacedTasksForDay(day)`** (offen + `due_day ≤ day` **oder** ohne Day; erledigte/zukünftige raus; überfällige zuerst), **`tasksForTag(tag)`** (Fundament „alles zu einem Tag" / Perlenkette, noch kein UI-Aufrufer). `_hydrateTasks` lädt Tags in einer Abfrage nach.
+
+**3. Journal-Screen** (`lib/screens/journal/journal_screen.dart`)
+- **Grüner AUFGABEN-Bereich** (`_kTaskAccent = 0xFF5FA86A`) als zweites festes ListView-Element unter TAGESINFO (`itemCount = _entries.length + 2`).
+- Erstellen/Bearbeiten-Sheet: Titel, `TagAutocompleteField`, optionaler Day-Picker, optionaler Uhrzeit-Picker (nur mit Day), Löschen (nur Bearbeiten).
+- Karte: Checkbox links (hakt inline ab → Aufgabe verlässt die Liste), Karte antippen → Bearbeiten. Meta-Zeile: rotes „Überfällig · TT.MM. [· HH:mm]" bzw. Uhrzeit bzw. „Ohne Datum". `_reloadTasks` nach jeder Mutation.
+
+### Erledigt — Aufgaben-Tags in die Tag-Verwaltung integriert (nachgezogene Restschuld, im selben feat)
+- Beim „Tags ja"-Beschluss war offen geblieben, dass reine Aufgaben-Tags das Register nicht speisen. Steffen fiel es beim Test auf (`#Kur` nur an einer Aufgabe → Zähler „0 Einträge"). Jetzt sauber geschlossen:
+  - **Register aus Einträgen *und* Aufgaben** aufgebaut (`_rebuildTagRegistry`, `_allTasks` gehalten). Einträge definieren die kanonische Schreibweise, Aufgaben übernehmen sie. Reine Aufgaben-Tags erscheinen jetzt in Autocomplete + Verwaltung, auch über Neustart.
+  - **Nutzungszähler** weist Einträge und Aufgaben getrennt aus („N Einträge · M Aufgaben"; reiner Aufgaben-Tag → „M Aufgaben"). Neuer Parameter `taskUsage` in `TagManagementScreen`.
+  - **Umbenennen zieht Aufgaben-Tags mit durch** (`_renameTag` schreibt Einträge **und** Aufgaben um, Merge inklusive) — sonst hätte der Zähler nach einem Rename gelogen.
+
+### Design-Entscheidungen (reversibel geflaggt)
+- **Tags an Aufgaben: ja** (Empfehlung revidiert). Ohne sie fehlten Aufgaben in der „alles zu einem Tag"-Ansicht — dem App-Kern. Kein Vorziehen der Perlenkette, sondern deren Fundament. Speicherung **normalisiert** (`task_tags`), nicht als JSON-Spalte.
+- **Überfällige bleiben sichtbar** (rotes Label), statt am Folgetag lautlos zu verschwinden — ehrliche Lesart von „surft am Tag auf, an dem sie zählt".
+- **Erledigt = raus aus der Liste** (bleibt in DB). Wieder-Aufhaken erst über die geplante Übersicht.
+- **Grüner Akzent**, provisorisch (Theme weiter geparkt).
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- Ohne Day → sofort da („Ohne Datum"), bleibt über Neustart.
+- Day = heute (+ Uhrzeit) → erscheint, Zeit als Meta.
+- **Day = morgen → erscheint heute NICHT** (Zukunftsfall, Beweis der Query).
+- Day = gestern → rotes „Überfällig · 07.07. · 16:00", roter Balken.
+- Abhaken → verschwindet; Karte antippen → Bearbeiten; Tag-Round-trip; Sortierung überfällig → heute → undatiert.
+- Punkt 1: `#Kur` nur an Aufgabe → Verwaltung zeigt „1 Aufgabe"; Umbenennen zieht den Chip mit; Autocomplete schlägt den Tag im Eintrag vor.
+
+### Offene Punkte / Nächste Session
+- **Aufgaben-Übersicht** (von Steffen gewünscht, bewusst eigene Session): abrufbarer Screen; **offene** Aufgaben mit Sortieroption **Tag / Day** (Standard Day); **erledigte** zusammengeklappt; Checkbox + Bearbeiten direkt dort (einziger Ort zum Wieder-Aufhaken einer erledigten Aufgabe). Vorab zu klären: Einstieg (Listen-Icon in der AUFGABEN-Kopfzeile), „Sortierung Tag" flach vs. gruppiert.
+- **Tag löschen** weiter offen; **Rename über Aufgaben** ist jetzt drin.
+- Danach: Architektur-Sessions **Google Calendar** und **Claude-API** vor dem Coden.
+- (bestehend) Prefs-Key-Cleanup; Radierer-Undo / Teil-Radieren; lokale Tinten-Volltextsuche; Tinten-Auswertung durch Claude (multimodale Bild-API); Perlenkette-Datenmodell; Pen-Tagging (FreeScript nur im Hauptfeld); Google-Calendar-Zugänge; Claude-Umfang für v1.0.
+
+### Anforderungsdokument
+- `disponere_anforderungen_v3_0.md`: **Aufgaben §6 ⏳ → ✅** und **Aufgaben-Management (Übersichtstabelle) ⏳ → ✅** (Kern erfüllt: erstellen/bearbeiten/löschen/abhaken/taggen, automatisch am fälligen Day). Die gewünschte **Übersicht** als nächster Baustein vermerkt (kein Teil des §6-Wortlauts).
+
+### Commits (heute)
+- `e7d7e96` — „feat: Aufgaben mit optionalem Faelligkeits-Day, Uhrzeit und Tags; erscheinen automatisch am faelligen Day, ueberfaellige bleiben sichtbar; Aufgaben-Tags zaehlen in der Tag-Verwaltung und werden beim Umbenennen mitgezogen"
+- `docs:` — Fortschritt Session 16 + Anforderungsdoc-Nachzug (folgt direkt im Anschluss)
+- Vorgänger: `81f35fa`
+
+
+## Session 17 — 09. Juli 2026
+
+### Charakter der Session
+- In Session 16 bewusst vertagter, von Steffen gewünschter Baustein: die **Aufgaben-Übersicht**. Reine UI auf vorhandenen Queries (`loadAllTasks`) — kein neues Schema, kein externer Dienst.
+- Zwei Vorab-Entscheidungen bestätigt: Einstieg per **Checklisten-Icon in der AUFGABEN-Kopfzeile**; „Sortierung nach Tag" **gruppiert** (nicht flach) — die „alles zu einem Tag"-Lesart, die den App-Kern trägt.
+- Nebenbei (getrennt, eigener `chore:`): Template-Test `widget_test.dart` entfernt — er zeigte auf die längst entfernte Default-Counter-App `MyApp` und testete nichts Reales.
+
+### Erledigt — Aufgaben-Übersicht (🟡 Core-Folgebaustein), Commit `274af60`
+
+**1. Wiederverwendbares Aufgaben-Sheet** (`lib/widgets/task_sheet.dart`, neu)
+- `_openTaskSheet` aus `journal_screen.dart` als top-level **`showTaskSheet(...)`** herausgelöst. Persistenz/Reload liegen bewusst **nicht** im Sheet, sondern beim Aufrufer (Callbacks `onSave`/`onDelete`) — Journal und Übersicht teilen exakt dieselbe UI, keine Drift.
+- Das Sheet baut die fertige `Task` (frische id bei „neu", übernommene id + **erhaltener** `done`-Status bei „bearbeiten"; `done` wird nur über die Checkbox verändert, nie im Sheet). Tags über die geteilte `TagRegistry` kanonisiert.
+- Alte `_addTask`/`_updateTask` im Journal entfallen; `_openTaskSheet` ist jetzt dünne Delegation. `_DateRow` behält nur noch den Kalender-Fall (der nach dem Auslagern ungenutzte `icon`-Parameter entfernt → Analyzer sauber).
+
+**2. Aufgaben-Übersicht** (`lib/screens/tasks/task_overview_screen.dart`, neu)
+- Eigener Screen; lädt selbst über `loadAllTasks` und aktualisiert seinen Zustand nach jeder Mutation. Das Journal lädt beim Zurückkehren ohnehin neu, muss also nicht aktiv benachrichtigt werden.
+- **Umschalter** `SegmentedButton` „Nach Day" (Standard) / „Nach Tag".
+- **Nach Day:** offene Aufgaben aufsteigend nach Fälligkeits-Day (überfällige damit zuerst, rot), gleicher Day nach Uhrzeit, undatierte ans Ende.
+- **Nach Tag:** gruppiert — Kopf `#Tag · N`, eine Aufgabe erscheint **unter jedem** ihrer Tags; „Ohne Tag" am Ende; Köpfe alphabetisch (case-insensitiv, kanonische Schreibweise aus dem Register).
+- **Erledigt · N** als eingeklappte `ExpansionTile` darunter — der **einzige** Ort zum Wieder-Aufhaken; erledigte Titel durchgestrichen und gedämpft.
+- Checkbox (hakt ab/auf) und Karten-Tap (öffnet dasselbe Sheet, inkl. Löschen) direkt im Screen.
+
+**3. Journal-Anbindung** (`lib/screens/journal/journal_screen.dart`)
+- Grünes **Checklisten-Icon** in der AUFGABEN-Kopfzeile → `_openTaskOverview`; bei Rückkehr `_reloadTasks`, sodass abgehakte/bearbeitete/neue Aufgaben sich sofort in der heutigen Liste spiegeln.
+
+### Design-Entscheidungen (reversibel geflaggt)
+- **Wiederverwendung statt Duplikat:** ein Sheet, zwei Aufrufer. Kosten: minimale private Duplikate (Karten-/Chip-Darstellung) in der Übersicht — bewusst in Kauf genommen, statt den ~1500-Zeilen-Journal-Screen breit umzubauen. Spätere Konsolidierung möglich, wenn gewünscht.
+- **Gruppiert statt flach** bei „Nach Tag" — Fundament der „alles zu einem Tag"-Sicht und optische Vorstufe der Perlenkette.
+- **`withOpacity`** in den neuen Dateien belassen (konsistent zum repo-weiten Bestand); die Umstellung auf `withValues()` bleibt ein eigener, repo-weiter Aufräum-Schritt.
+
+### Getestet auf MatePad (MRDI-W09) ✅
+- „Nach Day": OFFEN · 4 korrekt sortiert (überfällig/heute/undatiert), Tag-Chips sichtbar.
+- Abhaken → wandert in „Erledigt · N" (eingeklappt); Leerzustand „Keine offenen Aufgaben" erscheint, „Erledigt · 6" bleibt darunter.
+- Wieder-Aufhaken aus „Erledigt" → Aufgabe zurück nach oben.
+- Einstieg per Checklisten-Icon; Rücksprung ins Journal spiegelt die Änderungen.
+
+### Offene Punkte / Nächste Session
+- „Nach Tag"-Ansicht in der Praxis mit mehreren Tags breiter testen (Mehrfachnennung derselben Aufgabe unter je einem Tag ist gewollt).
+- Danach: Architektur-Sessions **Google Calendar** und **Claude-API** vor dem Coden.
+- (bestehend) `withOpacity` → `withValues()` repo-weit; Tag löschen; Prefs-Key-Cleanup; Radierer-Undo/Teil-Radieren; lokale Tinten-Volltextsuche; Tinten-Auswertung durch Claude (multimodale Bild-API); Perlenkette-Datenmodell; Pen-Tagging; optionaler Smoke-Test als Ersatz für den entfernten Template-Test.
+
+### Anforderungsdokument
+- Keine Statusänderung nötig: **Aufgaben-Management** war bereits ✅ (Session 16), die **Übersicht** dort als „nächster Baustein" vermerkt — jetzt erfüllt. §6-Wortlaut unverändert.
+
+### Commits (heute)
+- `9fa0e0f` — „chore: Template-Test widget_test.dart entfernt (testete die nicht mehr existierende Default-Counter-App)"
+- `274af60` — „feat: Aufgaben-Uebersicht als eigener Screen — offene Aufgaben sortierbar nach Day (Standard) oder nach Tag (gruppiert, eine Aufgabe unter jedem Tag), erledigte eingeklappt und nur dort wieder aufhakbar; Aufgaben-Sheet als wiederverwendbares showTaskSheet ausgelagert (Journal und Uebersicht teilen dieselbe UI); Einstieg ueber Checklisten-Icon in der AUFGABEN-Kopfzeile"
+- `docs:` — Fortschritt Session 17 (folgt direkt im Anschluss)
+- Vorgänger: `73dc2c5`
+
+---
+
+## Session 18 — 11. Juli 2026
+
+### Charakter der Session
+- **Architektur-Session** (kein Code): Design der **Google Calendar-Anbindung** — eine der zwei
+  verbleibenden 🟡-Core-Features für App v1.0 (die andere: Claude-API). Ergebnis ist ein eigenes
+  Architektur-Dokument als Grundlage für zwei nachfolgende Coding-Sessions.
+- Ausgangspunkt war die Spannung „HMS Core, **kein** Google" auf dem Gerät vs. Google-Calendar als
+  Core-Anforderung. Auflösung: **google-frei bleibt das Gerät** (kein GMS, kein `google_sign_in`);
+  mit Google wird über **HTTPS-REST + GMS-unabhängigen OAuth** geredet.
+
+### Ergebnis — Architektur-Dokument
+- Neu: `docs/disponere_architektur_google_calendar_v1_0.md` (Design abgeschlossen, vor Coding).
+
+### Fünf bestätigte Architektur-Entscheidungen
+1. **Auth:** AppAuth (System-Browser/Custom-Tab, Authorization Code + PKCE) primär; Device-Flow als Fallback.
+2. **Scope:** read-only (`calendar.readonly`) — Datenfluss einseitig, Kalender → Journal.
+3. **Datenmodell:** eigene `calendar_events`-Tabelle, ins Journal eingeblendet **wie Aufgaben**
+   (Schema v4, spiegelt das Tasks-Muster mit normalisierten `event_tags`).
+4. **Tags:** nur Kalender→Tag global (Termin erbt die Tags seines Kalenders); kein Per-Termin-Override in v1.0.
+5. **Secrets:** Config git-ignored (+ `.example`); Refresh-Token in `flutter_secure_storage` (Keystore), nicht in SQLite.
+
+### Durchgespielte Nutzungsfrage (Familien-/Business-Kalender)
+- **Kalender-Auswahl** ist eingebaut (`calendar_sources.enabled`): pro Kalender an/aus + Tag-Mapping.
+- **Ein Event „gehört" genau einem Kalender.** Es in zwei Kalendern *auftauchen* zu lassen geht per
+  **Einladung** (verknüpfte Kopien, gleiche `iCalUID`) oder **„Kopieren nach…"** (eigenständige Dublette).
+  - *Immer relevant* → **einladen** (zieht bei Verschiebung mit).
+  - *Nur manchmal relevant* („Maria nähen" nur bei Anjas Spätschicht) → **„Kopieren nach…"** in den Hub-Kalender.
+    Die **Bedingung** wertet der Nutzer aus, nicht die App.
+- Konsequenz fürs Modell: **`iCalUID` wird mitgeführt** (Dedup-Reserve).
+
+### Hub-Konto & Business-Adresse (entschieden: zurückgestellt)
+- **Hub-Konto = bestehendes Google-Konto (gmail).** Proton bleibt für Business-Mail.
+- Ein **Nicht-Gmail-Google-Konto** (Business-Adresse als Identität) ist gratis möglich, hat aber
+  **kein Gmail-Postfach** → per **Outlook ge-mailte** Einladungen (z.B. BEW-Wärme) landen **nicht**
+  automatisch im Google-Kalender (Google scannt kein fremdes Postfach). Zulauf dann nur per ICS-Abo/Handimport.
+- **Google→Google**-Einladungen landen dagegen automatisch (intern durchgereicht).
+- Der bezahlte „sauber automatisch"-Weg wäre **Google Workspace** für die Domain — vom Nutzer als zu teuer
+  eingestuft. **Entscheidung dieser Session:** alles beim Alten, **kein Rumzaubern mit der Business-Adresse**;
+  Business-Identität/Workspace **nicht Teil von v1.0**.
+- IONOS (Domain-Hoster) wurde nur als Mail-Postfach betrachtet, **nicht** als Kalender-Quelle; ein IONOS-Kalender
+  wäre nur als ICS-Bridge relevant (Disponere ist per Anforderung Google-Calendar-only).
+
+### Nächste Schritte
+- **Vor Coding-Session A** (außerhalb des Codes): Google-Cloud-Projekt anlegen, Calendar API aktivieren,
+  OAuth-Consent-Screen (Testing, Steffen als Testnutzer), OAuth-Client. Klick-Pfade dann in der Session,
+  nicht vorab.
+- **Coding-Session A:** Auth (AppAuth/PKCE) + Einstellungen (Kalender listen, aktivieren + Tag-Mapping, Token sicher ablegen).
+- **Coding-Session B:** Sync-Engine (`syncToken`, `singleEvents=true`) + Schema-v4-Migration + Einblendung („TERMINE"-Sektion) + „Sync jetzt".
+- (bestehend) danach Architektur-Session **Claude-API**; sowie die offenen Aufräumpunkte
+  (`withOpacity` → `withValues()`, Tag löschen, Smoke-Test u.a.).
+
+### Anforderungsdokument
+- Keine Statusänderung: *Google Calendar-Anbindung* bleibt 🟡 Core ⏳ (Design steht, Umsetzung folgt in Coding A/B).
+
+### Commits (heute)
+- `docs:` — Architektur Google Calendar v1.0 + Fortschritt Session 18 (dieser Commit; reine Design-Session, kein Code).
+- Vorgänger: `d51f6dc`
+
+---
+
+## Session 19 — 15./16. Juli 2026
+
+**Coding-Session A, Teil 1: Auth.** Die Session wurde in zwei testbare Teile
+geschnitten — Teil 1 (Auth) und Teil 2 (Schema v4, Kalenderliste, Tag-Mapping).
+Grund: Der Custom-Tabs-Test auf EMUI (§10 des Architekturdokuments) war das
+größte Risiko und gehörte an den Anfang, nicht ans Ende.
+
+### Erledigt
+- Pakete: `flutter_appauth`, `flutter_secure_storage`, `http`
+- `lib/config/google_config.dart` (Client-ID, Redirect-Schema) — **git-ignoriert**;
+  `google_config.example.dart` als eingecheckte Vorlage
+- `build.gradle.kts`: `appAuthRedirectScheme` als `manifestPlaceholder`
+- `GoogleAuthService` (`lib/services/google_auth_service.dart`): `signIn`, `signOut`,
+  `isSignedIn`, `accessToken` mit stillem Refresh. Refresh-Token im Android-Keystore,
+  Access-Token nur im Speicher (Cache mit 1-Minute-Sicherheitsabstand zum Ablauf)
+- `CalendarSettingsScreen` (`lib/screens/settings/calendar_settings_screen.dart`):
+  Konto verbinden/trennen, Zugriff prüfen; Fehlertext als `SelectableText`
+- Einstieg über neues Kalender-Symbol in der Journal-AppBar
+- **Auf dem MatePad getestet und bestanden:** Login, stiller Refresh nach App-Neustart
+  (= einmaliger Login belegt), Trennen und erneutes Verbinden
+- Google Auth Platform → Branding: App-Name von „Dosonere" auf **„Disponere"** korrigiert
+
+### Erkenntnis 1 — Custom URI Scheme braucht einen Schalter
+Google liefert für Android-OAuth-Clients standardmäßig `Fehler 400: invalid_request`
+mit dem Detail *„Custom URI scheme is not enabled for your Android client."*
+
+**Lösung:** Google Auth Platform → Clients → Android-Client → **Erweiterte
+Einstellungen** → **„Enable custom URI scheme"** einschalten, speichern, ~10 Minuten
+warten. Reine Server-Seite, kein Rebuild nötig.
+
+**Risiko:** Google beschriftet den Schalter mit „nicht empfohlen für Android-Clients",
+und die Doku heißt inzwischen *„OAuth 2.0 for iOS & Desktop Apps"* — Android ist aus
+dem Titel verschwunden. Der offizielle Android-Ersatz ist Googles Authorization-API
+und **setzt Play Services voraus** — auf dem MatePad nicht verfügbar. Der Weg trägt
+heute, kann aber wegfallen. **§3 #1 des Architekturdokuments ist entsprechend zu
+relativieren.**
+
+### Erkenntnis 2 — der Device-Flow-Fallback existiert nicht
+§10 nennt den Device-Flow („OAuth 2.0 for TVs and Limited-Input Devices") als
+Ausweichplan, falls Custom Tabs auf EMUI nicht funktionieren. **Das trägt nicht:**
+Der Device-Flow erlaubt nur eine feste Scope-Liste — `email`, `openid`, `profile`,
+`drive.appdata`, `drive.file`, `youtube`, `youtube.readonly`. **`calendar.readonly`
+ist nicht dabei.**
+
+**§10 muss ersetzt werden.** Kandidaten für einen echten Ausweichplan, falls Google
+den Schalter abschafft:
+- **ICS-Geheimadresse** pro Kalender (kein OAuth, kein Token; dafür Tag-Mapping
+  von Hand, kein Delta-Sync, und ein RRULE-Motor nötig — der Vorteil von
+  `singleEvents=true` fiele weg)
+- **HTTPS-Redirect über Android App Links** mit eigener Domain (`assetlinks.json`);
+  ungeprüft, welcher Client-Typ das bei Google zulässt
+
+*Positiv:* Custom Tabs laufen auf EMUI einwandfrei — das Risiko, das §10 absichern
+sollte, ist gar nicht eingetreten.
+
+### Erkenntnis 3 — `taskAffinity=""` verhindert den Rücksprung
+Nach erfolgreichem Login blieb der Browser im Vordergrund; die App kam nicht nach vorn
+und meldete anschließend „User cancelled flow".
+
+Das Logcat zeigte: `RedirectUriReceiverActivity` **lief** — die Umleitung kam also an —
+aber in **Task 3045**, während die App in **Task 3044** lag. Ursache:
+`android:taskAffinity=""` an `MainActivity` (aus der Flutter-Vorlage, seit dem
+Initial-Commit `042686d` drin). AppAuths Activities haben die Standard-Affinität
+(= Paketname); zwei verschiedene Affinitäten ergeben zwei Tasks.
+
+**Lösung:** `android:taskAffinity=""` aus dem Manifest entfernt. Das Verhalten ist in
+der `flutter_appauth`-Doku ausdrücklich beschrieben.
+
+**Bewusste Abwägung:** `taskAffinity=""` erschwert das Kapern des Task-Stacks durch
+fremde Apps. Für eine Ein-Personen-App auf einem einzelnen Gerät ist das theoretisch;
+ein funktionierender Login wiegt schwerer.
+
+### Offene Punkte (neu)
+- **Zustimmungsbildschirm steht auf „Testing"** → Refresh-Token läuft nach 7 Tagen ab.
+  Umstellung auf **„In production" (unverifiziert)** ist Voraussetzung dafür, dass der
+  einmalige Login dauerhaft trägt. **Noch nicht entschieden.**
+- **Architekturdokument nachziehen:** §3 #1 relativieren, §10 ersetzen, §12 um den
+  Schalter „Enable custom URI scheme" ergänzen. → Docs-Commit von Teil 2.
+- **Brave verhält sich anders als der Huawei-Browser:** Beim Brave-Versuch lief
+  `RedirectUriReceiverActivity` gar nicht erst. Nach dem taskAffinity-Fix nur mit dem
+  Huawei-Browser getestet. Kein Blocker, aber ungeklärt.
+- **Java-8-Warnungen** beim Build (aus einer Abhängigkeit, nicht aus eigenem Code).
+- **PowerShell Execution Policy** auf Vega blockiert `.\run.ps1`; Workaround
+  `powershell -ExecutionPolicy Bypass -File .\run.ps1`. `adb` ist nicht im PATH.
+- (bestehend) `withOpacity` → `withValues()`, `unnecessary_underscores`, Tag löschen,
+  Smoke-Test.
+
+### Nächste Schritte
+- **Coding-Session A, Teil 2:** Schema v4 (`calendar_sources` + `calendar_source_tags`),
+  `calendarList.list`, Kalender an/aus + Tag-Mapping. `calendar_events` folgt in
+  Session B als v5.
+- **Coding-Session B:** Sync-Engine (`syncToken`, `singleEvents=true`), Schema v5,
+  Einblendung („TERMINE"-Sektion), „Sync jetzt".
+
+### Anforderungsdokument
+- Keine Statusänderung: *Google Calendar-Anbindung* bleibt 🟡 Core ⏳.
+
+### Commits (heute)
+- `04c98e4` — feat: Google-Konto-Anbindung mit OAuth und PKCE (Session A, Teil 1)
+- `docs:` — Fortschritt Session 19 (dieser Commit; zitiert `04c98e4`)
+- Vorgänger: `5e6fd01`
+
+---
+
+## Session 20 — 21. Juli 2026
+
+Zwei Vorarbeiten plus Coding-Session A, Teil 2 — in einer Sitzung. Konsole/Config,
+Architektur nachgezogen, dann gecodet und auf dem MatePad abgenommen.
+
+### Erledigt — Vorarbeiten
+- **Zustimmungsbildschirm auf „In Produktion" (unverifiziert) umgestellt.**
+  `calendar.readonly` ist ein sensibler Scope; in „Testing" lief das Refresh-Token
+  nach 7 Tagen ab. Nach der Umstellung auf dem MatePad einmal Konto getrennt und neu
+  verbunden → frischer Token, der dauerhaft trägt. Der „nicht verifiziert"-Warnhinweis
+  beim Login ist erwartet und wird einmal weggeklickt.
+- **Architekturdokument nachgezogen** (`218eeb2`): §3 #1 relativiert (kein Fallback),
+  §10 ersetzt (Custom-Tabs auf EMUI bestätigt, Device-Flow entfällt — `calendar.readonly`
+  nicht in dessen erlaubter Scope-Liste), §12 auf „erledigt" gezogen samt „Enable custom
+  URI scheme"-Schalter und `taskAffinity`-Fallstrick. Zusätzlich §5/§13 auf den
+  **Schema-Split v4/v5** umgestellt.
+
+### Erledigt — Coding-Session A, Teil 2 (`a555f3c`)
+- **Schema v4** (`_dbVersion` 3→4, additive Migration via `_onUpgrade`):
+  `calendar_sources` (`calendar_id` PK, `display_name`, `enabled` 0/1 default 0,
+  `sync_token?`) und `calendar_source_tags` (spiegelt `task_tags`: lowercase `tag_key`,
+  `ord`, ON DELETE CASCADE). Bestehende Einträge/Aufgaben bleiben unberührt.
+- **Neue Dateien:** `lib/models/calendar_source.dart` (Modell mit `copyWith`),
+  `lib/services/google_calendar_service.dart` (`calendarList.list` als roher `http`-GET
+  mit Bearer-Token aus `GoogleAuthService`).
+- **Repository-Methoden:** `loadCalendarSources`, `upsertCalendarSource` (spiegelt
+  `upsertTask`), `mergeCalendarList` (vorhandene behalten `enabled`/Tags/`sync_token`,
+  neue kommen aus, verschwundene fliegen samt Mapping raus).
+- **UI** (`calendar_settings_screen.dart` neu geschrieben): Button „Kalender
+  laden/aktualisieren", je Kalender Aktiv-Schalter + Tag-Chips + Tag-Editor
+  (`TagAutocompleteField`, kanonisiert über die geteilte `TagRegistry`). Alles wandert
+  sofort in die DB.
+- **Kanten-Fix (die „zwei Zeilen"):** Kalender-Tags fließen jetzt ins Tag-Register
+  (`journal_screen`: `_calendarSources` gehalten, im `_rebuildTagRegistry` mitgefüttert,
+  nach Rückkehr aus den Einstellungen neu geladen). Ein nur an einem Kalender hängender
+  Tag taucht dadurch im Autocomplete auf.
+
+### Auf dem MatePad bestätigt
+- Kalenderliste lädt vollständig (Business, Familie, Feiertage, googlemail,
+  Kalenderwochen, Marvin-Kalender, harder-business).
+- Aktivieren funktioniert; `steffen@harder-business.com` aktiviert und mit `#Wärme`
+  getaggt.
+- **Neustart-Persistenz:** Schalter + Tag stehen nach komplettem Neustart direkt aus der
+  DB da, ohne erneutes Laden.
+- **Autocomplete-Kante:** neuer Journal-Eintrag mit `#Wärme` — der nur am Kalender
+  hängende Tag wurde vorgeschlagen.
+
+### Entscheidungen & Lektionen
+- **„In Produktion" (unverifiziert)** ist für die Ein-Personen-App der richtige Weg.
+  Das 100-Nutzer-Limit ist projektweit und permanent; die verifizierte Domain
+  `harder-business.com` läge für eine spätere Verifizierung (leichte Variante, ohne
+  jährliche Sicherheitsprüfung — Calendar ist *sensibel*, nicht *eingeschränkt*) bereit.
+- **Schema-Split:** v4 = nur Quellen (Teil 2), v5 = Termine (Session B). Kleine, für sich
+  testbare Migrationen statt eines großen Sprungs.
+- **Kalenderliste roh über `http`** (kein `googleapis`) — nichts Neues in den Deps; die
+  Paketfrage für den Sync bleibt für Session B offen und ändert das Design nicht.
+- **Merge statt Überschreiben:** lokaler Zustand (`enabled`, Tags) überlebt jedes erneute
+  Laden der Kalenderliste.
+
+### Offene Punkte
+- `Switch.activeColor` gilt in ganz neuen Flutter-Versionen als deprecated — bislang nur
+  eine mögliche Warnung, kein Fehler. Bei Bedarf auf `activeThumbColor` umstellen.
+- (bestehend) `googleapis`-vs-`http`-Entscheidung für die Sync-Engine (Session B),
+  Java-8-Warnungen aus einer Abhängigkeit, PowerShell Execution Policy (`-ExecutionPolicy
+  Bypass`), `adb` nicht im PATH.
+
+### Nächste Schritte
+- **Coding-Session B:** Schema **v5** (`calendar_events` + `event_tags`) via `_onUpgrade`,
+  Sync-Engine (`syncToken`, `singleEvents=true`, Fenster −30/+365, Delta-Sync + Resync bei
+  410), Einblendung als „TERMINE"-Sektion im Journal, „Sync jetzt"-Button.
+
+### Anforderungsdokument
+- *Google Calendar-Anbindung* bleibt 🟡 Core ⏳ — Teil 2 von zwei Coding-Sessions ist
+  erledigt (Auth + Kalenderauswahl + Tag-Mapping stehen); der eigentliche Termin-Sync
+  folgt in Session B.
+
+### Commits (heute)
+- `218eeb2` — docs: Architektur Google Calendar nachgezogen (In Produktion, Device-Flow
+  raus, Schema v4/v5 Split)
+- `a555f3c` — feat: Kalenderliste, Schema v4 und Tag-Mapping (Session A, Teil 2)
+- `docs:` — Fortschritt Session 20 (dieser Commit; zitiert `a555f3c`)
+- Vorgänger: `a41608c`
+
+---
+
+## Session 21 — 22. Juli 2026
+
+**Coding-Session B, Teil 1: der Datenweg.** Session B wurde — wie schon Session A —
+in zwei testbare Teile geschnitten: Teil 1 holt die Termine ins lokale Schema,
+Teil 2 blendet sie im Journal ein. Grund war das 45-Minuten-Fenster und die
+Größe von `journal_screen.dart`: Der Datenweg ist für sich prüfbar (Sync läuft,
+Zähler stimmt), die Einblendung ist danach reine UI-Arbeit auf fertigen Daten.
+
+### Erledigt — Commit `a5549a1`
+
+**1. Neues Modell** (`lib/models/calendar_event.dart`)
+- `CalendarEvent`: `calendarId` + `eventId` als zusammengesetzte Identität,
+  `iCalUid`, `summary`, `location`, `allDay`, `startDay`/`endDay` (`yyyy-MM-dd`),
+  `startTime`/`endTime` (`HH:mm`, lokale Zeit), geerbte `tags`.
+- **`endDay` ist inklusiv.** Google liefert bei ganztägigen Terminen ein
+  *exklusives* `end.date` (der Tag *nach* dem Ende). Die Umrechnung passiert
+  einmal beim Parsen — danach laufen alle Abfragen geradeaus.
+- `coversDay(day)` spiegelt `DailyInfo.coversDay` — dieselbe Mechanik für
+  „erscheint an jedem berührten Tag".
+- `timeLabelForDay(day)` liefert schon die Anzeigelogik für Teil 2
+  (`10:00–11:30`, bei mehrtägigen `ab 10:00` / `bis 11:30`, bei ganztägigen nichts).
+- **Bewusst kein `JournalEntry`:** eigene Identität, von außen gepflegt, lokal
+  nicht editierbar.
+
+**2. Repo auf Schema-v5** (`lib/data/journal_repository.dart`)
+- `_dbVersion` 4 → 5, `_onUpgrade` um eine Stufe ergänzt. Wie gehabt
+  stufenweise ohne `else`; `_createCalendarEventTables` von `_onCreate` **und**
+  `_onUpgrade` geteilt → kein Schema-Drift.
+- `calendar_events`: **zusammengesetzter Primärschlüssel** (`calendar_id`,
+  `event_id`) — dieselbe Einladung kann in mehreren aktivierten Kalendern
+  liegen und wäre über die Event-ID allein nicht eindeutig. FK auf
+  `calendar_sources` mit ON DELETE CASCADE. Index auf `start_day`.
+- `event_tags`: materialisiert die vom Kalender geerbten Tags (PK
+  `calendar_id` + `event_id` + `tag_key`, `ord`, zusammengesetzter FK mit
+  CASCADE). Damit haben Einträge, Aufgaben und Termine **dieselbe Form der
+  Tag-Abfrage**.
+- Neue Methoden: `replaceCalendarEvents` (transaktional, löschen + neu
+  schreiben), `deleteCalendarEventsFor`, `reapplyCalendarSourceTags`,
+  `calendarEventsForDay` (Bereichsabfrage über *aktivierte* Kalender, ganztägig
+  zuerst — die Grundlage der „TERMINE"-Sektion), `calendarEventsForTag`,
+  `countCalendarEvents`.
+
+**3. Sync-Engine** (`lib/services/google_calendar_service.dart`)
+- `fetchEvents(calendarId, tags)`: `singleEvents=true`, `showDeleted=false`,
+  `orderBy=startTime`, `maxResults=250`, Paginierung über `pageToken`
+  (Notbremse bei 40 Seiten).
+- Rollendes Fenster **−30 / +365 Tage**, gerechnet ab dem Sync-Zeitpunkt —
+  so läuft die Zukunft nie aus.
+- Robustes Parsen: abgesagte Termine, Einträge ohne ID oder ohne Startangabe
+  werden übersprungen, statt den Sync zu kippen. Termine, die exakt um
+  Mitternacht enden, werden dem Vortag zugeschlagen (sonst stünden sie einen
+  Tag zu lang im Journal).
+- Fehlermeldungen ziehen die Beschreibung aus Googles JSON-Body — statt einer
+  nackten Statusnummer.
+
+**4. „Termine jetzt synchronisieren"** (`calendar_settings_screen.dart`)
+- Läuft Kalender für Kalender und schreibt jeden **einzeln** weg: Bricht einer
+  ab, bleibt das bereits Gespiegelte erhalten und der betroffene Kalender wird
+  namentlich gemeldet.
+- Fortschritt am Button (laufender Kalendername), Ergebnismeldung mit
+  Terminzahl und Fenstergröße, darunter eine Dauerzeile mit dem lokalen
+  Bestand.
+- Kalender **ausschalten** wirft dessen Termine sofort weg (nicht erst beim
+  nächsten Sync). Tag-Änderung wird über `reapplyCalendarSourceTags` lokal
+  nachgezogen, ohne erneuten Abruf.
+
+### Architektur-Abweichung — `syncToken` entfällt
+
+Das Architekturdokument sah Delta-Sync über `syncToken` mit Resync bei HTTP 410
+vor. **Das ist mit dem Zeitfenster nicht kombinierbar:** Google akzeptiert
+`timeMin`/`timeMax` zusammen mit `syncToken` nicht (HTTP 400). Es gilt entweder
+Delta-Sync über den gesamten Kalender seit Anbeginn oder Vollabruf im Fenster.
+
+**Entschieden: Vollabruf im rollenden Fenster, lokal vollständig ersetzen.**
+Löschungen und Verschiebungen ergeben sich damit von selbst; es gibt keinen
+Token-Zustand, der ablaufen und wieder eingefangen werden müsste. Für einen
+persönlichen Kalender sind das wenige hundert Einträge pro Abruf —
+*Verlässlichkeit vor Bastelei*. Die Spalte `sync_token` bleibt ungenutzt im
+Schema stehen (keine Migration nötig, falls die Entscheidung je zurückgedreht
+wird).
+
+### Test auf dem MatePad — bestanden
+- App startet nach der Migration v4→v5, bestehende Daten unberührt (kein
+  Deinstallieren nötig).
+- Kalender aktivieren, Tags zuordnen, Sync → Termine gespiegelt, Zähler stimmt.
+- Kalender ausschalten → Zähler fällt sofort; wieder ein + Sync → Zahl zurück.
+- **Zweiter Sync direkt hinterher → gleiche Zahl** (belegt „ersetzen statt
+  anhängen", keine Dubletten).
+- App-Neustart → Bestand steht (Persistenz).
+- **Zusatztest von Steffen:** Termin im Google-Kalender neu angelegt → nach dem
+  Sync ging der Zähler um genau eins hoch. Belegt den vollständigen Rundlauf,
+  nicht nur den Erstabruf.
+
+### Erkenntnis — die Terminzahl wirkt zu hoch
+`singleEvents=true` löst Serientermine in **jedes einzelne Vorkommen** auf. Ein
+wöchentlicher Termin zählt im +365-Fenster rund 52-mal. Die Gesamtzahl liegt
+dadurch deutlich über dem, was man beim Blick in den Kalender im Kopf hat — das
+ist korrekt und gewollt: Im Journal erscheint pro Tag genau ein Vorkommen, und
+die App muss keine Wiederholungsregeln auswerten.
+
+### Offene Punkte
+- **Neu:** `use_null_aware_elements` in `google_calendar_service.dart`
+  (`if (pageToken != null) 'pageToken': …` in der Query-Map → `?'pageToken':`).
+- (bestehend) `Switch.activeColor` → `activeThumbColor`; `withOpacity` →
+  `withValues()` repo-weit; `unnecessary_underscores`; Tag löschen; Smoke-Test;
+  Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH.
+- Alle elf `flutter analyze`-Meldungen sind `info`, keine Fehler.
+
+### Nächste Schritte
+- **Coding-Session B, Teil 2:** Einblendung im Journal — „TERMINE"-Sektion pro
+  Tag über `calendarEventsForDay`, Uhrzeit-Anzeige über `timeLabelForDay`,
+  geerbte Tags sichtbar. Danach ist die Google-Calendar-Anbindung vollständig.
+- Danach: **Claude-API** (Architektur-Session vor dem Coden).
+
+### Anforderungsdokument
+- *Google Calendar-Anbindung* bleibt 🟡 Core ⏳ — Auth, Kalenderauswahl,
+  Tag-Mapping und Termin-Sync stehen; es fehlt die Einblendung.
+
+### Commits (heute)
+- `a5549a1` — feat: Termin-Sync und Schema v5 - Kalendertermine im rollenden
+  Fenster gespiegelt (Session B, Teil 1)
+- `docs:` — Fortschritt Session 21 (dieser Commit; zitiert `a5549a1`)
+- Vorgänger: `c0414ed`
+
+---
+
+## Session 21 (Fortsetzung) — 22. Juli 2026
+
+**Coding-Session B, Teil 2: die Einblendung.** Direkt im Anschluss an Teil 1 —
+aus den 45 Minuten wurde eine lange Sitzung. Damit ist die
+Google-Calendar-Anbindung funktional vollständig.
+
+### Erledigt — Commit `6386e2c`
+
+**1. TERMINE-Sektion im Journal** (`lib/screens/journal/journal_screen.dart`)
+- Neue Akzentfarbe **Violett** (`_kEventAccent`) — vierte und letzte Farbe im
+  Journal: Bernstein (Tagesinfo), Violett (Termine), Grün (Aufgaben), Blau
+  (Einträge).
+- `_EventsSection` + `_EventCard`: Zeit, Titel, optional Ort, geerbte Tags als
+  Chips. **Bewusst nicht editierbar** — Termine gehören dem Kalender, nicht dem
+  Journal. Kein Plus, kein Bearbeiten-Sheet; nur ein Zahnrad, das in die
+  Kalender-Einstellungen führt.
+- Zeitanzeige über `CalendarEvent.timeLabelForDay`: `10:00–11:30`, bei
+  mehrtägigen am Randtag `ab 10:00` / `bis 11:30`, sonst `ganztägig`.
+- **Sektion verschwindet vollständig, solange kein Kalender aktiviert ist** —
+  wer Google Calendar nicht nutzt, sieht keinen leeren Kasten.
+- `_openCalendarSettings` als eigene Methode: Nach der Rückkehr aus den
+  Einstellungen werden Quellen **und** Termine neu geladen, ein dort
+  ausgelöster Sync wirkt also sofort im Journal.
+- Reihenfolge Tagesinfo → Termine → Aufgaben: erst der Rahmen des Tages, dann
+  die festen Zeitpunkte, dann das Bewegliche. **Reversibel geflaggt** — reine
+  Anordnungsfrage.
+
+**2. Parser-Härtung** (`google_calendar_service.dart`)
+- `_dateOnly` schneidet einen etwaigen Zeitanteil von `start.date`/`end.date`
+  ab. Die API liefert dort ein reines `yyyy-MM-dd`; manche Darstellungen
+  liefern einen vollen Zeitstempel. Für reine Datumsstrings wirkungslos,
+  verhindert aber, dass so etwas je als Tages-Key in der DB landet.
+
+**3. Lint-Aufräumung** — nur in ohnehin angefassten Dateien
+- 4× `withOpacity` → `withValues(alpha:)` in `journal_screen.dart`
+- `Switch.activeColor` → `activeThumbColor` in `calendar_settings_screen.dart`
+- `task_overview_screen.dart` bewusst **nicht** angefasst.
+
+### Fehlersuche: „ganztägige Termine erscheinen nicht"
+
+Nach dem Einbau schien ein ganztägiger Testtermin nicht im Journal
+aufzutauchen, obwohl der Zähler hochging.
+
+**Vorgehen statt Raten:** Die SQL-Abfrage wurde gegen eine echte SQLite-DB mit
+genau solchen Zeilen geprüft (fand alle drei Fälle korrekt), der Parser auf dem
+Papier durchgerechnet. Da beides sauber war, kam ein **temporärer
+Diagnose-Build** in den Sync-Dialog: geparste Gesamtzahl, davon ganztägig,
+Treffer für heute, plus Probenzeilen mit `[start → end]`.
+
+**Ergebnis:**
+```
+geparst gesamt: 42, davon ganztägig: 2
+heute (2026-07-22): 1, davon ganztägig: 0
+• Ganztägig 2 Tage [2026-07-27 → 2026-07-27]
+• Ganztägig 1 Tag  [2026-07-27 → 2026-07-27]
+```
+
+Der Gegencheck über den Google-Calendar-Connector bestätigte es: Beide Termine
+liegen im Kalender `steffen@harder-business.com` am **27. Juli**
+(`start.date` 27., `end.date` 28. = eintägig), nicht am 22./23.
+**Kein Fehler in Disponere** — der Ganztages-Pfad inklusive der Umrechnung des
+exklusiven Enddatums arbeitet korrekt; beim Anlegen war das Datum verrutscht.
+Der Diagnoseblock wurde anschließend wieder ausgebaut und ist nicht im Commit.
+
+*Nebengewinn:* Der Ganztages-Pfad ist damit nicht mehr nur theoretisch,
+sondern an echten Daten belegt.
+
+### Prozess-Lektionen
+- **Kein Fix auf Verdacht.** Erst frei prüfbare Teile isoliert testen
+  (SQL gegen echte SQLite), dann ein Diagnose-Build, der die Hypothesen
+  trennt — statt einen Build-Zyklus zu raten.
+- **Lint-Fixes nur mit verifizierbarer Syntax.** Der freiwillig mitgenommene
+  `use_null_aware_elements`-Fix wurde falsch geschrieben (`?'pageToken':` statt
+  `'pageToken': ?…`) und hat den Build gebrochen. Ohne Dart-Compiler im
+  Container wird Syntax nicht aus dem Kopf geändert; die Zeile wurde auf die
+  bewährte `if (…)`-Form zurückgesetzt.
+- **Der Google-Calendar-Connector ist ein brauchbares Debugging-Werkzeug**,
+  wenn zu klären ist, was die API tatsächlich liefert.
+
+### Offene Punkte
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart` —
+  korrekte Form ist `'pageToken': ?pageToken`, beim nächsten Build mitnehmen.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH.
+- **Zeitzonen-Preis der lokalen Tages-Keys:** Ein Zeitzonenwechsel macht die
+  gespeicherten Tage falsch. Korrektur ist ein Druck auf „Sync jetzt".
+
+### Nächste Schritte
+- **Claude-API** — Architektur-Session vor dem Coden (inkl. Tinten-Auswertung
+  über die multimodale Bild-API).
+- Danach ist für v1.0 nur noch die Theme-Entscheidung offen.
+
+### Anforderungsdokument
+- *Google Calendar-Anbindung* **🟡 Core ⏳ → ✅** — Auth, Kalenderauswahl,
+  Tag-Mapping, Termin-Sync und Einblendung stehen. Nachzug im
+  Anforderungsdokument steht noch aus.
+
+### Commits (heute, Fortsetzung)
+- `docs:` — Architektur nachgezogen (Vollabruf statt `syncToken`, Schema v5 wie
+  gebaut, Session B geteilt)
+- `6386e2c` — feat: TERMINE-Sektion im Journal - Kalendertermine mit Zeit, Ort
+  und geerbten Tags (Session B, Teil 2)
+- `docs:` — Fortschritt Session 21, Teil 2 (dieser Commit; zitiert `6386e2c`)
+- Vorgänger: `3139d11`
+
+---
+
+## Session 22 — 23. Juli 2026
+
+Reine Entscheidungs-Session, kein Code. Vier Festlegungen, die den Umfang von
+v1.0 endgültig schließen — plus ein Termin, an dem sich ab jetzt alles misst.
+
+### Der Termin
+
+**Startklar am Freitag, 31. Juli 2026.** Danach zwei Wochen Urlaub (erste beide
+Augustwochen), im Anschluss geht Disponere im Alltag live. Acht Tage ab heute.
+
+*Wichtige Einordnung dazu:* Die App ist bereits jetzt einsatzfähig. Journal,
+Tags, Tinten-Modus, Aufgaben, Tagesinfo und der Google-Calendar-Sync sind gebaut
+und auf dem MatePad abgenommen. Der 31. ist kein Blocker, sondern ein Ziel — im
+Zweifel wird der Rest nach dem Urlaub nachgezogen, statt etwas zu überstürzen.
+
+### Entscheidung 1 — Wie aktiv ist Claude in Disponere?
+
+Das war die eigentliche offene Frage. Im Anforderungsdokument stand seit jeher
+der Satz *„Claude ist von Anfang an Teil der App"* — ohne dass je definiert
+wurde, was „Teil" bedeutet. Unter „Offene Punkte" hieß es entsprechend
+unbestimmt: *„Umfang und Einstiegspunkt der KI-Funktionen für v1.0 festlegen."*
+
+**Entschieden: Disponere ist ein Werkzeug, kein Beobachter.**
+
+- Claude spricht **nie ungefragt** ins Journal.
+- Jede KI-Funktion wird vom Nutzer ausgelöst, jedes Ergebnis vom Nutzer gelesen
+  und bewusst übernommen.
+- Kein Hintergrundbetrieb, keine automatischen Aufrufe beim Speichern.
+
+**Begründung:** Das Journal ist ein persönlicher Raum. Ungefragte Kommentare
+werden dort schneller zu Rauschen als in einer Inbox — beim Zurücklesen liest
+man sie jedes Mal wieder mit, und sie lassen sich nicht entfernen, ohne die
+Einträge selbst anzufassen. Zudem stand das aktive Claude bereits im Dokument:
+„Claude erkennt Terminverschiebung automatisch" ist dort 🟢 Enhancement der
+Perlenkette und damit v2.0. Die Entscheidung bestätigt eine Linie, die implizit
+längst gezogen war.
+
+**Technische Ehrlichkeit, die dazugehört:** Das Claude in Disponere ist ein
+API-Aufruf ohne Gedächtnis. Es kennt ausschließlich das, was die App in genau
+diesem Request mitschickt — kein Projektwissen, keine Vorgeschichte. Was es
+„weiß", entscheidet der Code. Präsenz ließe sich also ohnehin nur konstruieren,
+nicht voraussetzen.
+
+### Entscheidung 2 — Claude-Umfang für v1.0: zwei Knöpfe
+
+1. **Tinten-Auswertung** — Handschrift-Eintrag antippen, Claude liest ihn über
+   die multimodale Bild-API. Das Ergebnis wird gespeichert; damit wird Tinte
+   nach einmaliger Auswertung **lokal durchsuchbar** — ein Umweg um den seit
+   Juni offenen Punkt „lokale Tinten-Volltextsuche" (nicht on-device, aber
+   einmal pro Eintrag).
+2. **Wochenauswertung** — auf Knopfdruck in der App. Die Auswertung fließt als
+   Start in die neue Woche. Als Prompt-Vorlage dienen die Plaud-Vorlagen
+   (Abo vorhanden, kein Rad neu erfinden) — reine Prompt-Arbeit, kein Code.
+
+**Nach v2.0 verschoben:** Tag-Vorschläge beim Speichern, Fragen an den eigenen
+Wissensstand, automatisierte Wochenauswertung.
+
+### Entscheidung 3 — Wochenauswertung bleibt in der App
+
+Gewünscht war ursprünglich eine **automatisierte** Wochenauswertung: Bot auf der
+IONOS-Linux-Maschine, Ergebnis als PDF per Mail.
+
+**Verworfen für v1.0 — der Grund ist strukturell:** Das Journal liegt als
+SQLite **lokal auf dem MatePad**. Ein Server hat darauf keinerlei Zugriff. Ein
+Bot bräuchte daher zuerst Sync Gerät → Server — also genau das Cloud-Sync, das
+laut Anforderungsdokument bewusst außerhalb von v1.0 liegt — dazu Server-Job,
+PDF-Erzeugung, Mailversand und Schlüsselverwaltung auf dem Server. Zusammen mehr
+Aufwand als die gesamte bisherige Claude-Integration, und es würde die
+Grundentscheidung „Daten bleiben auf dem Gerät" durchlöchern.
+
+Der Knopf in der App leistet dasselbe: Die Daten sind bereits da, ein Aufruf
+genügt, das Ergebnis ist auf dem Tablet lesbar. Auch das aktive Lesen bleibt
+erhalten — das entsteht nicht durch den Zustellweg.
+
+**Der Automatisierungswunsch ist nicht gestrichen, sondern v2.0** — und dort an
+Cloud-Sync gekoppelt.
+
+### Entscheidung 4 — Theme: hell und dezent
+
+**Entschieden: ein einziges helles Theme. Kein Dunkelmodus in v1.0.**
+
+Vorlage ist Logseq auf dem MatePad (Screenshot vom 23.07.): fast weißer Grund,
+fast schwarzer Text, eine einzige gedämpft-blaue Akzentfarbe ausschließlich für
+Tags und Antippbares, Hierarchie über Größe und Gewicht statt über Farbe, keine
+Karten mit Rahmen und Schatten — Trennung über Weißraum und feine Linien.
+
+**Der bisherige Default (dunkel mit kühlen Blautönen) entfällt.** Er hatte einen
+echten Konflikt mit dem Tinten-Modus: Handschrift ist dunkler Strich auf hellem
+Grund; hell auf dunkel wirkt bei Handschrift wie Kreide auf Tafel, nie wie
+Notizbuch. Die Entscheidung löst diesen seit Monaten mitlaufenden Punkt.
+
+**Umsetzungsdetails:**
+- Kein reines `#FFFFFF` / `#000000` — flimmert auf dem MatePad-Display.
+- Tinte in dunklem Anthrazit, nicht Schwarz.
+- **Konflikt im Anforderungsdokument:** Dort steht, die Tagesinfo sei „farblich
+  abgesetzt". Das kollidiert mit dem Ein-Akzentfarben-Prinzip. Ersatz: leichte
+  Grautönung des Blocks plus Beschriftung — gleiches Muster für TERMINE und
+  AUFGABEN, damit sich alle drei Sektionen gleich verhalten.
+
+Ein Dunkelmodus lässt sich jederzeit nachrüsten; ein Theme statt zwei ist bei
+acht verbleibenden Tagen der spürbare Unterschied.
+
+### Entscheidung 5 — Plaud ist ein Datenweg, kein KI-Weg
+
+Plaud Note Pro liefert bereits ein **ausgewertetes** Dokument. Es erneut durch
+die API zu schicken hieße, zweimal für dieselbe Arbeit zu zahlen und eine
+Zusammenfassung der Zusammenfassung zu bekommen.
+
+- Der Import bleibt reine Datenübernahme: Transkript rein, Journal-Eintrag
+  daraus, Dateiname als Tag-Vorschlag — genau wie unter *Dokument-Import*
+  beschrieben.
+- **ToDos übernimmt der Nutzer selbst ins Journal.** Das ist kein Mangel, der
+  später wegautomatisiert wird, sondern der Moment, in dem das Transkript
+  tatsächlich gelesen und bewertet wird. Eine automatische Extraktion würde
+  diesen Schritt überspringen und trotzdem eine prüfpflichtige Liste liefern.
+- **Speicherort:** Entscheidend ist nicht, worauf Claude zugreifen kann, sondern
+  was das MatePad erreicht. Disponere liest über den Android-Dateidialog aus
+  einem **festen lokalen Ordner** (Downloads genügt; ein pCloud-Ordner geht
+  ebenso, sofern dessen Android-App lokal synchronisiert). Der konkrete Ordner
+  wird festgelegt, wenn der Import gebaut wird.
+- Falls Plaud den Text direkt exportiert (nicht als gescanntes PDF), wird für
+  diesen Weg **kein ML Kit** benötigt — der Import wäre dann deutlich schlichter
+  als im Anforderungsdokument beschrieben. Zu prüfen, wenn es soweit ist.
+
+*Dokument-Import* bleibt 🟢 Enhancement und damit außerhalb von v1.0. Sollte
+Plaud zu einem regelmäßigen Weg ins Journal werden, wäre die Einstufung neu zu
+bewerten — vorgemerkt, nicht entschieden.
+
+### Restliste bis zum 31. Juli
+
+1. **Architektur-Session Claude-API** → `docs:`-Commit (kein Code)
+2. **Eine Coding-Session** — die zwei Knöpfe
+3. **Theme umsetzen** — hell, dezent
+4. **Anforderungsdokument nachziehen** — Google Calendar auf ✅, Theme-
+   Entscheidung, Claude-Umfang, Tagesinfo-Formulierung
+5. **Lint-Reste** — `use_null_aware_elements`, `withOpacity`, `unnecessary_underscores`
+
+### Offene Punkte
+- (neu) **Tagesinfo „farblich abgesetzt"** muss im Anforderungsdokument an das
+  Ein-Akzentfarben-Prinzip angepasst werden.
+- (neu) **Fester Plaud-Ordner** auf dem MatePad noch nicht bestimmt — erst
+  relevant beim Dokument-Import.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart` —
+  korrekte Form ist `'pageToken': ?pageToken`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH;
+  Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Architektur-Session Claude-API.** Zu klären sind dort: API-Key-Ablage
+  (`flutter_secure_storage`, Eingabe über einen Einstellungs-Screen — das Repo
+  ist öffentlich, der Key darf nirgends im Code landen), Modellwahl und
+  Token-Kosten, die Tinten-Pipeline (Striche → Offscreen-Render → PNG → base64,
+  Auflösung als Abwägung zwischen Kosten und Erkennungsqualität), Persistenz des
+  Erkennungsergebnisses (voraussichtlich **Schema v6**), Kontextumfang der
+  Wochenauswertung, Einstiegspunkte in der UI und das Fehlerverhalten ohne Netz.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session — gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅ (seit Session 21), Theme-
+  Entscheidung, Claude-Umfang für v1.0, Tagesinfo-Formulierung.
+- Der Punkt *„Claude-Integration — Umfang und Einstiegspunkt der KI-Funktionen
+  für v1.0 festlegen"* kann aus der Liste der offenen Punkte gestrichen werden.
+
+### Commits (heute)
+- **Keine Code-Änderung (reine Entscheidungs-Session) → kein feat-Commit.**
+- `docs:` — Fortschritt Session 22 (dieser Commit)
+- Vorgänger: `6386e2c`
+
+## Session 23 — 23. Juli 2026 (Architektur Claude-API)
+
+**Architektur-Session.** Kein Code. Ergebnis ist das Dokument
+`docs/disponere_architektur_claude_api_v1_0.md` (15 Abschnitte) und dieser
+Fortschrittseintrag.
+
+### Zwei Befunde aus dem frischen Clone
+
+- **Die PNG-Pipeline aus den ML-Kit-Tagen existiert nicht mehr.**
+  `_renderForOcr()` und das T-Icon sind mit der Umstellung auf Vektor-Tinte
+  verschwunden. Kein Verlust: Damals wurde das *Widget* über `RepaintBoundary`
+  abfotografiert; jetzt wird aus gespeicherten `InkData` gerendert, und das
+  braucht ohnehin einen anderen Weg (`PictureRecorder`) — der Eintrag soll
+  auswertbar sein, ohne dass sein Editor offen ist.
+- **Disponere hat keine Suche.** Kein `LIKE`, kein Suchfeld, nichts; im
+  Anforderungsdokument taucht Suche auch nicht als Punkt mit Priorität auf,
+  nur als Eigenschaft („durchsuchbar") und als offener Punkt „lokale
+  Tinten-Volltextsuche ungelöst". Der Satz aus Session 22 — *„damit wird Tinte
+  lokal durchsuchbar"* — stimmte damit nur zur Hälfte: Die Auswertung macht
+  Tinte **text-tragend**, auffindbar ist sie deswegen noch lange nicht.
+  Konsequenz siehe Entscheidung 8.
+
+### Getroffene Entscheidungen
+
+| # | Thema | Entscheidung |
+|---|---|---|
+| 1 | Schlüssel-Ablage | `flutter_secure_storage` (Keystore), Eingabe über Einstellungs-Screen |
+| 2 | Direktaufruf | Gerät ruft `api.anthropic.com` unmittelbar, kein Proxy |
+| 3 | Modell | `claude-sonnet-5`, **eine Konstante** im Service, nicht konfigurierbar |
+| 4 | Bildaufbereitung | Offscreen-Render aus `InkData`, **schwarz auf weiß**, lange Kante ≤ 1568 px |
+| 5 | Ergebnis-Ablage | **Schema v6** — `ink_text` / `ink_text_at` auf `entries`, **nicht** in `content` |
+| 6 | Landeplatz Wochenauswertung | Erst Anzeige, dann Übernahme per Knopf als Eintrag `#Wochenauswertung` |
+| 7 | Zeitfenster | Kalenderwoche Mo–So; **ab Freitag 12:00 die laufende**, davor die vorige; dazu Wochenpfeile |
+| 8 | Suche | **Minimal-Suche in v1.0** über `content` und `ink_text`, Filterung **in Dart** |
+
+### Begründungen, die tragen
+
+- **`ink_text` statt `content`.** `content` ist, was der Nutzer geschrieben hat;
+  `ink_text`, was die Maschine geraten hat. Diese Grenze zu verwischen wäre in
+  einem Journal die falsche Sparsamkeit — beim Zurücklesen in zwei Jahren will
+  man wissen, welches von beidem vor einem liegt. Der Zeitstempel macht
+  „erneut auswerten" sauber möglich.
+- **Die Umlaut-Falle in der Suche.** SQLites `LIKE` und `LOWER()` sind
+  **ASCII-only**: `LOWER(content) LIKE '%über%'` findet „Über" **nicht**. Bei
+  deutschen Texten ist das der Normalfall, kein Randfall. Das Projekt löst das
+  an anderer Stelle bereits richtig — `tag_key` wird in **Dart** mit
+  `toLowerCase()` normalisiert. Die Suche folgt demselben Weg: Kandidaten laden
+  (nur vier Spalten, keine Tinte), in Dart filtern. Bei einigen tausend
+  Einträgen unproblematisch; der Ausbauweg wäre eine mitgeführte, normalisierte
+  Suchspalte — vorgemerkt, nicht gebaut.
+- **Freitag 12:00 als Schwelle.** Erste Fassung war „letzte abgeschlossene
+  Woche" — im Gespräch verworfen, weil die alte Woche dann erst am Montag
+  auswertbar gewesen wäre. Am Freitagmittag ist die Arbeitswoche faktisch
+  gelaufen. Wer erst am Montag auswertet, bekommt dieselbe Woche, nur
+  vollständig inklusive Wochenende.
+- **Wochenpfeile statt Datumsauswahl.** Nach dem Urlaub fehlen zwei Wochen, die
+  automatische Regel kennt nur eine. Das Fenster wird ohnehin berechnet — der
+  Pfeil zieht einen Wert ab. Vorwärts gedeckelt bei der vorgeschlagenen Woche.
+  Der Kopf zeigt KW und Datumsspanne, sonst weiß man nach dem Blättern nicht
+  mehr, wo man ist.
+- **Ein Bild pro Eintrag.** Der Zeichenbereich ist `Expanded` +
+  `SizedBox.expand()`, also fest und nicht scrollbar. Keine Mehrseitigkeit,
+  kein Zusammensetzen von Teilbildern.
+- **Strichbreite mit Untergrenze 2 px.** Zu dünne Striche nach dem Verkleinern
+  sind der eigentliche Erkennungskiller — deutlich eher als eine zu geringe
+  Auflösung.
+- **Kein Zustand nach Fehlschlag.** Keine halb ausgewerteten Einträge, keine
+  leeren `ink_text`-Spalten, keine Wiederaufnahme-Logik. Der zweite Versuch
+  beginnt bei null.
+
+### Technisch bestätigt
+
+- **Kein neues Paket nötig.** `http` und `flutter_secure_storage` liegen bereits
+  im Projekt; letzteres hält schon die Google-Tokens.
+- **Kein GMS-Bezug.** Reines HTTPS gegen `api.anthropic.com`, kein SDK.
+
+### Umfang ist gewachsen
+
+Mit der Suche kommt ein Feature dazu, das im Anforderungsdokument bisher gar
+nicht als Punkt geführt wird. Die Coding-Session teilt sich deshalb in zwei
+Teile. Wenn es eng wird, ist **Teil 2 der Kandidat zum Verschieben, nicht
+Teil 1**: Schema v6 ohne Suche ist ein sauberer Zwischenstand, Suche ohne
+erkannten Text wäre sinnlos.
+
+- **Coding-Session C, Teil 1** — Einstellungs-Screen, `claude_service.dart`,
+  `ink_renderer.dart`, Schema v6, Tinten-Auswertung mit Vorschau
+- **Coding-Session C, Teil 2** — Wochenauswertung (Fensterlogik, Pfeile,
+  Übernahme) und Minimal-Suche
+
+### Restliste bis zum 31. Juli
+
+1. ~~Architektur-Session Claude-API~~ ✅ (diese Session)
+2. **Coding-Session C, Teil 1** — Tinte
+3. **Coding-Session C, Teil 2** — Wochenauswertung + Suche
+4. **Theme umsetzen** — hell, dezent
+5. **Anforderungsdokument nachziehen** — Google Calendar auf ✅, Theme-
+   Entscheidung, Claude-Umfang, **Suche als neuer Punkt**, Tagesinfo-Formulierung
+6. **Lint-Reste** — `use_null_aware_elements`, `withOpacity`, `unnecessary_underscores`
+
+### Offene Punkte
+- (neu) **Modell-ID und aktuelle Preise** gegen die Dokumentation abgleichen,
+  bevor die Konstante festgeschrieben wird.
+- (neu) **Skalierungswert 1568 px** an echter Handschrift gegenprüfen. Wenn die
+  Erkennung enttäuscht: erst Strichbreite, dann Auflösung.
+- (neu) **Suche gehört ins Anforderungsdokument** — sie ist dort bisher kein
+  Feature mit Priorität.
+- (weiterhin) Tagesinfo „farblich abgesetzt" an das Ein-Akzentfarben-Prinzip
+  anpassen; fester Plaud-Ordner auf dem MatePad.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart` —
+  korrekte Form ist `'pageToken': ?pageToken`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH;
+  Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Coding-Session C, Teil 1.** Schlüssel eintragen, Tinten-Eintrag auswerten,
+  Text erscheint — das ist das Testkriterium auf dem MatePad.
+
+### Anforderungsdokument
+- Weiterhin kein Nachzug. Gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅, Theme-Entscheidung, Claude-Umfang
+  für v1.0, **Suche als neuer 🟡-Punkt**, Tagesinfo-Formulierung.
+
+### Commits (heute, Teil II)
+- **Keine Code-Änderung (Architektur-Session) → kein feat-Commit.**
+- `docs:` — Architektur Claude-API (`6218f3a`)
+- `docs:` — Fortschritt Session 23 (dieser Commit)
+- Code-Vorgänger unverändert: `6386e2c`
+
+
+## Session 24 — 23. Juli 2026 (Teil III)
+
+### Charakter der Session
+- **Coding-Session C, Teil 1** aus dem Architekturdokument §13: Schlüssel, Service,
+  Renderer, Schema v6, Auswerten-Symbol im Tinten-Editor.
+- Besonderheit dieser Session: Der Arbeitsstand lag zu Sitzungsbeginn bereits als
+  **nicht committete Änderung im Arbeitsverzeichnis** vor — offenbar aus einem
+  abgebrochenen Anlauf. Statt ihn blind zu übernehmen oder wegzuwerfen, wurde er
+  vollständig gegen das Architekturdokument geprüft (§7 Ablauf, §10 Secrets,
+  §11 Fehlerverhalten) und an einer Stelle korrigiert.
+- Der Ritual-Schritt „frischer `git clone`" hat dabei genau das geleistet, wofür er
+  gedacht ist: Er hat den Unterschied zwischen *committet* und *vorgefunden* sofort
+  sichtbar gemacht.
+
+### Erledigt — Claude-Anbindung Teil 1 (🟡 Core), Commit `6fe8ff3`
+
+**1. Schlüsselverwaltung** (`lib/screens/settings/claude_settings_screen.dart`, neu)
+- Eintragen, ersetzen, löschen, Verbindung testen. Verdecktes Feld mit Auge-Umschalter,
+  auf Einfügen aus der Zwischenablage ausgelegt.
+- Der Schlüssel wird nach dem Speichern **sofort aus dem Eingabefeld gelöscht** — er
+  muss nicht länger auf dem Bildschirm stehen als nötig.
+- Einstieg über ein Funkel-Symbol in der Journal-Kopfzeile, neben dem Kalender-Symbol.
+
+**2. API-Service** (`lib/services/claude_service.dart`, neu)
+- Direktaufruf gegen `api.anthropic.com/v1/messages`, Schlüssel aus
+  `flutter_secure_storage` (Android Keystore). Kein neues Paket nötig.
+- Fehlerarten als `enum ClaudeErrorKind` (`noKey`, `auth`, `rateLimit`, `network`,
+  `server`, `response`), damit die UI mehr kann als eine Meldung anzeigen — bei
+  `auth` und `noKey` führt der Dialog direkt in die Einstellungen.
+- Antwort wird über `response.bodyBytes` als UTF-8 dekodiert. Ohne das legt `http`
+  bei fehlendem `charset` Latin-1 zugrunde — aus „Frühstück" würde Buchstabensalat.
+- Der Schlüssel taucht in **keiner** Fehlermeldung auf, auch nicht in Auszügen.
+
+**3. Tinten-Renderer** (`lib/utils/ink_renderer.dart`, neu)
+- `InkData` → `PictureRecorder` → PNG → base64. Kein Widget, keine `RepaintBoundary`.
+- Schwarz auf Weiß, unabhängig vom App-Theme; Strichbreite skaliert mit, Untergrenze 2 px.
+
+**4. Schema v6** (`journal_repository.dart`, `journal_entry.dart`)
+- `entries.ink_text` + `entries.ink_text_at` via `_addInkTextColumns`, in `_onCreate`
+  **und** `_onUpgrade` — Neuinstallation und Migration erzeugen dasselbe Schema.
+- `setInkText()` als gezieltes `UPDATE`; gibt den Zeitstempel zurück, damit die UI ihn
+  ohne Neuladen anzeigen kann.
+
+**5. Auswertung im Tinten-Editor** (`drawing_screen.dart`)
+- Auswerten-Symbol in der Kopfzeile → Ladeanzeige → Vorschau mit „Übernehmen" und
+  „Verwerfen". Bei „Verwerfen" wird nichts geschrieben.
+- Übernommener Text erscheint als einklappbares Feld „ERKANNTER TEXT" mit Zeitstempel.
+- Der Editor schreibt **nicht** selbst in die Datenbank — Persistenz liegt beim Aufrufer
+  über einen Callback, derselbe Schnitt wie beim Aufgaben-Sheet.
+
+### Der Fehler, der beinahe drin geblieben wäre
+
+`ConflictAlgorithm.replace` in `_upsertInTxn` schreibt die **ganze** Zeile neu. Wären
+`ink_text` und `ink_text_at` dort nicht mitgeführt worden, hätte **jedes Nachbearbeiten
+eines Tinten-Eintrags die Auswertung stillschweigend gelöscht** — ohne Fehlermeldung,
+ohne sichtbare Ursache, erst Wochen später bemerkbar. Die Kette
+`setInkText` → `_entries[index]` → `_updateInkEntry` wurde deshalb durchverfolgt; sie hält.
+
+Daraus der Testschritt, der in die Abnahmeliste gehört: *Strich dazuschreiben, speichern,
+Eintrag erneut öffnen — der erkannte Text muss noch da sein.*
+
+### Geprüft gegen die Dokumentation (Architektur §15)
+- **Modell-ID `claude-sonnet-5`** bestätigt (1M Kontext, 128k max output, Vision).
+- **Preis** $2/$10 je Mio. Token als Einführungspreis bis 31.08.2026, danach $3/$15.
+  Ein Tinten-PNG bei 1568 px liegt bei rund 2.000–2.500 Input-Token — **unter einem
+  halben Cent je Auswertung**. Der Skalierungswert bleibt unverändert.
+- **`thinking: {'type': 'disabled'}` ist für Sonnet 5 gültig und wichtig.** Sonnet 5
+  unterstützt nur adaptives Thinking, hat es **standardmäßig an** und weist `"enabled"`
+  mit 400 zurück; `"disabled"` wird akzeptiert. Ohne diese Zeile käme zu jeder
+  Transkription ungefragt Thinking-Aufwand dazu.
+
+### Korrektur gegenüber dem vorgefundenen Stand
+- Im Editor eines **neuen** Eintrags war das Auswerten-Symbol sichtbar, warf beim Tippen
+  aber eine Absage („erst übernehmen"). Ein Knopf, der da ist und nein sagt, ist
+  schlechter als kein Knopf → Symbol erscheint jetzt nur bei bestehenden Einträgen.
+  Die Absage bleibt als Absicherung im Code.
+
+### Abweichungen vom Architekturdokument (§6, nachgezogen statt zurückgebaut)
+1. **Zuschnitt auf die tatsächlich beschriebene Fläche** statt auf den vollen
+   Zeichenbereich. Fünf Zeilen am oberen Rand ergäben sonst ein halb leeres Bild, auf
+   dem die Schrift nur einen Bruchteil der Auflösung hätte.
+2. **Mindestgröße 768 px** an der langen Kante. §6 sagt „nur hochskalieren, wenn nötig" —
+   bei Vektorstrichen ist Hochskalieren verlustfrei und kostet nur wenige Token.
+
+### Testergebnis auf dem MatePad (teilweise)
+- ✅ App startet, **Schema-v6-Migration hat die vorhandenen Einträge überlebt**
+- ✅ Funkel-Symbol öffnet die Claude-Einstellungen
+- ✅ Tinten-Eintrag: im Neu-Modus kein Auswerten-Symbol, nach dem Übernehmen ist es da
+- ⏳ Transkription selbst **nicht abgenommen** — siehe Blocker
+
+### Blocker (nicht im Code)
+- Die **Organisation in der Anthropic Console ist gesperrt** („Cannot purchase credits
+  for a banned organization"). Ohne Guthaben kein Schlüssel und kein Aufruf.
+  **Einspruch ist eingereicht.** Der Code ist geprüft; es fehlt allein der Zugang.
+- Folge für den Plan: Die Abnahme von Teil 1 (Erkennung sichtbar) steht aus. Teil 2
+  (Wochenauswertung, Suche) ist davon **nicht** blockiert — die Suche funktioniert
+  offline, und die Wochenauswertung lässt sich bis zum Aufruf hin bauen.
+
+### Offene Punkte
+- (neu) **Stellhebel, falls die Erkennung enttäuscht** — in dieser Reihenfolge:
+  Strichbreite, Auflösung, und als dritter das **Wiedereinschalten von Thinking**
+  (die Zeile `body['thinking']` weglassen). Kontext hilft beim Entziffern schwieriger
+  Handschrift.
+- (neu) `stop_reason: max_tokens` wird nicht gesondert behandelt — bei sehr langer
+  Handschrift käme ein abgeschnittener Text ohne Warnung zurück. Bei 4096 Token
+  theoretisch; falls es je auftritt, ist es hier notiert.
+- (weiterhin) Skalierungswert 1568 px an echter Handschrift gegenprüfen.
+- (weiterhin) **Suche gehört ins Anforderungsdokument** als eigener 🟡-Punkt.
+- (weiterhin) Tagesinfo „farblich abgesetzt" an das Ein-Akzentfarben-Prinzip anpassen;
+  fester Plaud-Ordner auf dem MatePad; Theme-Umsetzung (hell) steht noch aus — die neuen
+  Screens sind vorläufig im bestehenden dunklen Stil gehalten.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen; Smoke-Test;
+  Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH.
+
+### Nächste Schritte
+- **Sobald der Zugang steht:** Teil 1 abnehmen — Schlüssel eintragen, Tinten-Eintrag
+  auswerten, Text erscheint. Dazu der Nachbearbeitungs-Test aus dem Abschnitt oben.
+- **Coding-Session C, Teil 2:** Wochenauswertung (Kontext einer KW, Fensterlogik ab
+  Freitag 12:00, Wochenpfeile) und lokale Suche über `content` + `ink_text`.
+
+### Anforderungsdokument
+- Weiterhin kein Nachzug. Gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅, Theme-Entscheidung, Claude-Umfang für
+  v1.0, **Suche als neuer 🟡-Punkt**, Tagesinfo-Formulierung.
+
+### Commits (heute, Teil III)
+- `6fe8ff3` — feat: Claude-Anbindung Teil 1 (Schlüssel, Renderer, Schema v6, Auswertung)
+- `docs:` — Fortschritt Session 24 + Architektur §6/§15 nachgezogen (dieser Commit)
+- Vorgänger: `3ad9277`
+
+
+---
+
+## Session 25 — 24. Juli 2026 (Coding-Session C, Teil 2 · Suche)
+
+**Coding-Session.** Punkt 8 aus Architektur §13 — die Suche. Punkte 6 und 7
+(Wochenauswertung) folgen in der nächsten Session.
+
+### Warum die Suche vorgezogen wurde
+
+Der Zugang zur Anthropic-Console stand zu Sitzungsbeginn weiterhin nicht (erneut
+geprüft, Organisation weiter gesperrt, Einspruch weiter offen). Damit war die
+Abnahme von Teil 1 auch heute nicht möglich.
+
+Die Suche ist der einzige Teil von Session C, der davon **völlig unabhängig**
+ist: Sie läuft offline gegen die lokale SQLite-Datenbank und war deshalb heute
+vollständig abnehmbar. Die Wochenauswertung hingegen ließe sich nur bis zum
+Aufruf hin bauen — sie wäre am Ende der Session ein halbes Ergebnis gewesen.
+Reihenfolge deshalb: erst das, was fertig werden kann.
+
+### Erledigt — Volltextsuche (🟡 Core), Commit `93e9ac3`
+
+Vier Dateien, **134 eingefügte Zeilen, keine gelöschte** — reine Ergänzung.
+
+**1. Trefferobjekt** (`lib/models/search_hit.dart`, neu)
+- `SearchHit` mit `entryId`, `timestamp`, `source`, `snippet`, `isInk`;
+  `SearchHitSource` als `enum` (`content` | `inkText`).
+- Bewusst **kein** `JournalEntry`: Die Suche lädt nie die Tinte. Ein
+  `JournalEntry` mit leerem `ink`-Feld sähe aus wie ein Text-Eintrag und wäre
+  eine Lüge über den geladenen Zustand.
+
+**2. `searchEntries()`** (`journal_repository.dart`)
+- Volltext über `entries.content` **und** `entries.ink_text`, Treffer nach
+  Zeitstempel absteigend.
+- Gefiltert wird in **Dart**, nicht in SQL — siehe unten.
+- Geladen werden vier Spalten plus `(ink IS NOT NULL) AS is_ink`. Von der Tinte
+  wird nur gefragt, *ob* sie da ist; der JSON-Blob bleibt liegen.
+- `_snippetAround()` schneidet 40 Zeichen vor und 120 nach der Fundstelle
+  heraus, zieht Zeilenumbrüche zu Leerzeichen zusammen und setzt `…` an den
+  abgeschnittenen Rändern.
+
+**3. Such-Screen** (`lib/screens/search/search_screen.dart`, neu)
+- Suchfeld in der Kopfzeile, Autofokus, Leeren-Kreuz. Ab **zwei Zeichen**,
+  250 ms Verzögerung nach dem letzten Tastendruck.
+- Ein bereits angezeigtes Ergebnis bleibt während der nächsten Abfrage stehen —
+  sonst flackerte bei jedem Buchstaben eine Ladeanzeige durch die Liste.
+- Veraltete Antworten werden verworfen (Vergleich gegen den aktuellen
+  Feldinhalt), damit kein zwischenzeitlich überholtes Ergebnis gewinnt.
+- Trefferkarte: Datum + Uhrzeit, Ausschnitt (max. 3 Zeilen), Pinsel-Symbol bei
+  Tinten-Einträgen, Markierung **„erkannter Text"** bei Treffern aus `ink_text`.
+- Der Screen **liest nur**. Er gibt via `Navigator.pop` die Id zurück; geöffnet
+  wird im Journal.
+
+**4. Einstieg** (`journal_screen.dart`)
+- Lupe als erstes Symbol in der Journal-Kopfzeile, `_openSearch()` daneben.
+
+### Die Umlaut-Falle — an echten Daten belegt
+
+SQLites `LIKE` und `LOWER()` sind ASCII-only: `LOWER('Über')` bleibt `Über`. Eine
+Suche nach „über" fände den Satz nicht. Bei deutschen Texten ist das kein
+Randfall, sondern der Normalfall — und der Grund, warum in Dart gefiltert wird.
+Dieselbe Entscheidung liegt bereits `tag_key` zugrunde.
+
+Der Test auf dem MatePad lief nicht an einem Testeintrag, sondern an einem
+**echten Eintrag vom 08.07.**: klein `üb` getippt, `Überraschung` mit großem Ü
+gefunden. Genau der Fall, an dem SQL gescheitert wäre.
+
+### Entscheidungen dieser Session
+
+1. **Ein Treffer öffnet den Eintrag, statt im Journal dorthin zu scrollen.**
+   §9 sagt „springt zum Eintrag". Das Journal ist aber ein `ListView.builder`
+   mit unterschiedlich hohen Karten — eine Position außerhalb des
+   Sichtbereichs lässt sich darin ohne Zusatzpaket nicht verlässlich
+   ansteuern. Der Such-Screen gibt nur die Id zurück, das Journal öffnet dann
+   genau die Wege, die auch das Antippen einer Karte nimmt (Text-Sheet bzw.
+   Tinten-Editor). Persistenz bleibt an einer Stelle, die Suche bleibt ein
+   reiner Lese-Screen — derselbe Schnitt wie beim Aufgaben-Sheet.
+2. **Der Ausschnitt liegt um die Fundstelle, nicht am Textanfang.** Bei einem
+   langen Eintrag wären die ersten drei Zeilen genau das, was mit dem Treffer
+   nichts zu tun hat. Das ist **keine** Trefferhervorhebung im Sinne von §9 —
+   der Begriff selbst wird nicht ausgezeichnet, nur sein Umfeld gezeigt.
+3. **Ab zwei Zeichen wird gesucht.** Ein einzelner Buchstabe wäre keine
+   Antwort, sondern eine Liste. Umkehrbar.
+
+### Prozess-Lektionen
+
+- **`clamp()` vermieden.** `matchIndex.clamp(0, text.length)` hätte je nach
+  Typinferenz `num` statt `int` liefern können — und `substring` nimmt kein
+  `num`. Ohne Dart-Compiler im Container wird eine solche Frage nicht aus dem
+  Kopf entschieden, sondern umgangen: zwei `if`-Zeilen, kein Zweifel.
+- **Der Klammerprüfer im Container** (Strings, Kommentare und
+  `${…}`-Interpolation überspringend) ersetzt den Compiler nicht, fängt aber
+  die Fehlerklasse ab, die beim Schreiben langer Dateien tatsächlich auftritt.
+- **Lieferung als Datei ist die Regel, nicht die Ausnahme.** Wurde in dieser
+  Session versehentlich als Neuerung angekündigt — sie ist seit Langem
+  abgemacht, um Copy-und-Paste-Fehler auszuschließen.
+
+### Testergebnis auf dem MatePad — Suche vollständig abgenommen
+- ✅ Lupe in der Kopfzeile, Suchfeld mit Autofokus
+- ✅ Ein Zeichen → keine Suche; zwei Zeichen → Treffer
+- ✅ **Umlaut-Test an echten Daten:** `üb` klein → `Überraschung` gefunden
+- ✅ Ausschnitt um die Fundstelle, führendes `…` korrekt gesetzt
+- ✅ Treffer antippen öffnet den Eintrag
+- ✅ Trefferzähler („1 Treffer" / „2 Treffer")
+- ✅ Suche per M-Pencil über die Gboard-Handschrift funktioniert im Suchfeld
+  (Nebenbefund, nicht geplant — „voll stä" geschrieben, „vollstä" gesucht)
+- ⏳ Markierung „erkannter Text" **nicht prüfbar**, solange kein ausgewerteter
+  Tinten-Eintrag existiert → hängt am Zugang
+
+### Offene Punkte
+- (neu) Markierung „erkannter Text" in der Trefferliste noch nie im Betrieb
+  gesehen — nachzuholen, sobald eine Auswertung vorliegt.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen.
+  Ohne Zugang keine Abnahme von Teil 1 und keine Wochenauswertung im Betrieb.
+- (weiterhin) Stellhebel, falls die Erkennung enttäuscht: Strichbreite,
+  Auflösung, Thinking wieder einschalten — in dieser Reihenfolge.
+- (weiterhin) `stop_reason: max_tokens` wird nicht gesondert behandelt.
+- (weiterhin) Skalierungswert 1568 px an echter Handschrift gegenprüfen.
+- (weiterhin) **Suche gehört ins Anforderungsdokument** — jetzt gebaut, dort
+  aber immer noch kein Punkt mit Priorität.
+- (weiterhin) Tagesinfo „farblich abgesetzt" an das Ein-Akzentfarben-Prinzip
+  anpassen; fester Plaud-Ordner auf dem MatePad; Theme-Umsetzung (hell) steht
+  aus — auch der neue Such-Screen ist vorläufig im dunklen Stil gehalten.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im
+  PATH; Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Coding-Session C, Teil 2 (Rest): Wochenauswertung.** Kontext-Zusammenstellung
+  einer KW Mo–So aus Einträgen (`content` + `ink_text`), Aufgaben, Tagesinfos und
+  Terminen; Fensterlogik ab Freitag 12:00; Wochenpfeile; Prompt als Konstante in
+  `claude_prompts.dart`; Anzeige-Screen mit Übernahme als `#Wochenauswertung`.
+  **Vorab zu klären:** Einstieg über ein Überlauf-Menü (⋮) laut §12 — die
+  Kopfzeile trägt inzwischen vier Symbole, und die Claude-Einstellungen würden
+  dann mit dorthin wandern.
+- Danach ist für v1.0 nur noch die Theme-Umsetzung offen.
+
+### Anforderungsdokument
+- Weiterhin kein Nachzug. Gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅, Theme-Entscheidung, Claude-Umfang
+  für v1.0, **Suche als neuer 🟡-Punkt (jetzt gebaut)**, Tagesinfo-Formulierung.
+
+### Commits (heute)
+- `93e9ac3` — feat: Volltextsuche ueber Eintraege und erkannten Tinten-Text
+- `docs:` — Fortschritt Session 25 (dieser Commit; zitiert `93e9ac3`), dazu die
+  beiden Nachzügler `disponere_fortschritt_2026-07-22_v1_1.md` und
+  `disponere_fortschritt_nachtrag_session18.md`
+- Vorgänger: `3a91e0a`
+
+## Session 26 — 24. Juli 2026 (Part II)
+
+### Charakter der Session
+- Zweite Sitzung dieses Tages. Part I hatte am Morgen die **Volltextsuche**
+  abgeschlossen (`93e9ac3`); hier folgt der verbliebene Rest von
+  **Coding-Session C, Teil 2: die Wochenauswertung** — der letzte
+  Funktionsbaustein vor der Theme-Umsetzung.
+- Erste Aufgabe war keine technische: Die in Session 25 offen gelassene Frage
+  nach dem Einstieg musste erst verstanden und dann entschieden werden. Sie
+  war im Fortschrittsdokument in einem Halbsatz vermerkt und dadurch nicht
+  aus sich heraus lesbar — ausformuliert ging es um zwei Dinge auf einmal:
+  ein neues Überlauf-Menü **und** den Umzug der Claude-Einstellungen dorthin.
+
+### Vorab-Entscheidung — Einstieg (Variante C)
+§12 des Architekturdokuments sieht für Wochenauswertung *und*
+Claude-Einstellungen das Überlauf-Menü (⋮) des Journals vor. Wörtlich
+umgesetzt hätte das bedeutet, in derselben Session etwas Neues zu bauen und
+etwas Vertrautes zu verschieben — das Funkel-Symbol wäre aus der Kopfzeile
+verschwunden.
+
+Drei Wege standen zur Wahl: §12 wörtlich (A), gar kein Menü und stattdessen
+ein fünftes Symbol (B), oder das Menü nur für die Wochenauswertung, Funkel
+bleibt stehen (C). **Entschieden wurde C.** Damit entsteht der Ort, an dem
+künftig alles Seltene landet, ohne dass sich in derselben Session
+Bedienwege verschieben, die schon im Gebrauch sind. Ob die
+Claude-Einstellungen nachziehen, wird entschieden, wenn das Menü im Betrieb
+erlebt wurde — der Kommentar an der Stelle im Code sagt das ausdrücklich.
+
+Nebenbefund für den Prozess: **Eine vertagte Frage gehört ausformuliert ins
+Dokument, nicht als Stichwort.** Wer sie in der Folgesession liest, hat den
+Kontext nicht mehr im Kopf, in dem sie entstanden ist.
+
+### Erledigt — Wochenauswertung (🟡 Core), Commit `594e4b1`
+
+**1. Bereichsabfragen** (`lib/data/journal_repository.dart`)
+- Vier neue Abfragen für ein Wochenfenster: `entriesInRange`, `tasksInRange`,
+  `dailyInfosInRange`, `calendarEventsInRange`. Genau die vier Quellen, die
+  §8 nennt.
+- `entriesInRange` liefert **aufsteigend** — die Reihenfolge, in der eine
+  Woche gelesen wird; `loadAll` bleibt absteigend für das Journal. Obere
+  Grenze ist Mitternacht des Folgetages, exklusiv, damit kein Eintrag vom
+  Sonntagabend herausfällt.
+- `tasksInRange` nimmt **offene und erledigte** Aufgaben — für eine
+  Wochenauswertung ist gerade das Erledigte die Auskunft. Aufgaben ganz ohne
+  Fälligkeits-Day gehören zu keiner Woche und bleiben draußen.
+- `dailyInfosInRange` und `calendarEventsInRange` fragen auf **Berührung**
+  ab, nicht auf Enthaltensein: Ein über die Woche hinausreichender Urlaub
+  gehört in den Kontext.
+- Neu ausgelagert: **`_hydrateEntries`** — das Gegenstück zu den längst
+  vorhandenen `_hydrateTasks` und `_hydrateCalendarEvents`. `loadAll` nutzt
+  es mit ungefilterter Tag-Abfrage (alle Einträge sind ohnehin gemeint), der
+  Wochenausschnitt mit `IN`-Einschränkung auf die betroffenen Ids.
+
+**2. Wochenfenster** (`lib/services/week_context.dart`, neu — `WeekWindow`)
+- Fensterlogik nach §8: **Freitag ab 12:00 bis Sonntag** → laufende Woche,
+  Montag bis heute; **Montag bis Freitag 11:59** → vorige Woche, vollständig.
+- `shiftedWithin` verschiebt wochenweise und deckelt vorwärts beim
+  vorgeschlagenen Fenster. Landet die Verschiebung genau darauf, wird dieses
+  Fenster zurückgegeben — mit seinem **verkürzten** Ende, nicht als volle
+  Woche. Sonst hätte Zurück-und-wieder-Vor aus „bis heute" heimlich „bis
+  Sonntag" gemacht.
+- ISO-Kalenderwoche über die Donnerstags-Regel, damit auch der Jahreswechsel
+  stimmt.
+
+**3. Kontext-Zusammenstellung** (`week_context.dart` — `WeekContext.build`)
+- Ein Text, nach Tagen gegliedert: Tagesinfo, Termine, Aufgaben, Einträge.
+  Tags bleiben als ` · #Tag`-Suffix erhalten — sie sind für die Auswertung
+  die eigentliche Struktur.
+- Tage ohne alles stehen als `(keine Aufzeichnungen)` statt zu fehlen.
+- Am Ende eine **Tag-Übersicht mit Häufigkeiten** (absteigend), die zeigt,
+  worauf die Woche verteilt war.
+- Handschrift **ohne** Auswertung fließt nicht ein — es gibt keinen Text, den
+  man schicken könnte. Wie viele es waren, steht als Hinweiszeile am Ende:
+  Sonst entstünde der Eindruck, an diesen Tagen sei nichts gewesen.
+
+**4. Prompt** (`lib/utils/claude_prompts.dart` — `weekReview`)
+- Fünf Abschnitte: Überblick, Was vorangekommen ist, Was liegen geblieben
+  ist, Beobachtungen, Für die kommende Woche.
+- Grenze wie bei der Transkription: Was nicht dasteht, wird nicht ergänzt.
+  Ist das Material für einen Abschnitt zu dünn, soll das dastehen statt
+  aufgefüllt zu werden. Kein Coaching-Ton, keine Bewertung der Person.
+
+**5. Service** (`lib/services/claude_service.dart`)
+- `reviewWeek(context)`, `weekTimeout` 120 s (§8), `maxTokens` 8192.
+- Thinking bleibt hier auf der Vorgabe — anders als bei der Tinte. Eine Woche
+  zusammenzufassen ist Abwägung, kein Wahrnehmen.
+
+**6. Anzeige-Screen** (`lib/screens/review/week_review_screen.dart`, neu)
+- Kopf mit `KW 30 · 20.07.–26.07.` und zwei Pfeilen; bei laufender Woche der
+  Zusatz „läuft noch — bis einschließlich TT.MM.JJJJ". Vorwärts wird das
+  Symbol blass und reagiert nicht.
+- **Aufklapper „Kontext anzeigen"** mit dem Rohtext und der Zeichenzahl.
+  Diese Session eingebaut, weil ohne API-Zugang sonst nichts prüfbar gewesen
+  wäre — und er hat sich sofort bewährt: Er war am Ende das Einzige, woran
+  die Arbeit dieser Session überhaupt zu beurteilen war. Bleibt dauerhaft
+  nützlich beim Feilen am Prompt.
+- Ergebnis mit „Ins Journal übernehmen" und „Verwerfen". Fehlerdialog wie im
+  Tinten-Editor: Statuscode und API-Meldung im Klartext, bei Schlüsselfehlern
+  ein Knopf direkt in die Einstellungen.
+- Der Screen **schreibt nichts**. Er gibt den Text via `Navigator.pop`
+  zurück; das Journal legt den Eintrag über `_addEntry` an — derselbe Schnitt
+  wie beim Such-Screen und beim Aufgaben-Sheet.
+
+**7. Einstieg** (`journal_screen.dart`)
+- `PopupMenuButton` als fünftes Element der Kopfzeile, ein Punkt:
+  Wochenauswertung. Übernahme landet als gewöhnlicher Eintrag von heute mit
+  dem Tag `#Wochenauswertung`.
+
+### Prüfung ohne Compiler
+Im Container gibt es kein Dart. Statt zu hoffen, wurde die reine Logik
+**nachgebaut und getestet**: Die Wochenrechnung wurde Zeile für Zeile nach
+Python portiert und gegen die eingebaute ISO-Rechnung laufen gelassen —
+alle Tage von 2019 bis 2035, inklusive Schaltjahre und Jahreswechsel: ohne
+Abweichung. Dazu das Freitag-12:00-Umschalten stundengenau und die
+Vorwärts-Deckelung über mehrere Schritte.
+
+Dazu wie üblich der Klammerprüfer über alle sechs Dateien und der
+Erste-Zeile-Check. Der musste diesmal erweitert werden: `journal_screen.dart`
+und `week_review_screen.dart` beginnen **beide** mit
+`import 'package:flutter/material.dart';` — die erste Zeile unterscheidet sie
+also nicht. Stattdessen wurde die erste `class`-Zeile geprüft. Auf dem
+Rechner kam die erwartete Reihenfolge zurück (`JournalRepository`,
+`WeekWindow`, `ClaudeException`, `ClaudePrompts`, `WeekReviewScreen`,
+`JournalScreen`) — nichts vertauscht.
+
+### Die Zeitumstellungs-Falle
+Datumsrechnung läuft in `week_context.dart` durchweg über
+`DateTime(y, m, d + n)` und **nie** über `add(Duration(days: n))`. Ein
+`Duration` verschiebt die absolute Zeit: Über den Umstellungssonntag Ende
+Oktober hinweg landet Mitternacht plus sieben Tage auf 23:00 des Vortages —
+der Datums-Schlüssel wäre um einen Tag daneben und die Wochengrenze mit ihm.
+Aus demselben Grund werden die Tage des Fensters in einer Schleife
+aufgezählt statt über `difference().inDays`: Zwischen zwei Mitternachten
+liegen über die Umstellung hinweg nur 6 Tage 23 Stunden, und `inDays`
+schneidet auf 6 ab.
+
+Dieselbe Klasse von Fehler wie seinerzeit die Umlaut-Falle in der Suche:
+nicht falsch zu *rechnen*, sondern eine bequeme Standardfunktion zu nehmen,
+die für den Normalfall stimmt und zweimal im Jahr nicht.
+
+### Testergebnis auf dem MatePad
+- ✅ Build und Installation (Install-Schritt dauerte spürbar länger als sonst
+  — bei HarmonyOS wartet dort gern eine Bestätigung auf dem Gerät)
+- ✅ Klassenzeilen-Check auf dem Rechner in erwarteter Reihenfolge
+- ✅ **Kontext-Zusammenstellung gegen echte Daten geprüft** — über den
+  Aufklapper „Kontext anzeigen"; Aufbau und Inhalt von Steffen als gut
+  befunden. Genau der Zweck, für den der Aufklapper in dieser Session
+  eingebaut wurde.
+- ✅ **Fensterlogik vor 12:00 korrekt:** Der Sprung auf KW 30 kam *nicht* —
+  angezeigt wurde die vorige Woche. Das ist das erwartete Verhalten und
+  damit ein bestandener Test, kein ausstehender.
+- ⏳ Sprung auf **KW 30 nach Freitag 12:00** noch offen — die andere Hälfte
+  derselben Regel, prüfbar nur an genau einem Wochentag.
+- ⏳ Wochenpfeile und Vorwärts-Deckelung nicht einzeln zurückgemeldet.
+- ⛔ **Die Auswertung selbst war nicht abnehmbar** — siehe unten.
+
+### Der Blocker steht weiter
+Die **Anthropic-Organisation ist weiterhin gesperrt**, der Einspruch offen.
+Die Wochenauswertung ist damit gebaut, aber wie Teil 1 nie im Betrieb
+gelaufen. Aufgestaut bleiben:
+- Abnahme von **Teil 1** (Tinten-Auswertung) gegen echte Handschrift.
+- Die Markierung **„erkannter Text"** in der Trefferliste der Suche, die
+  mangels ausgewertetem Tinten-Eintrag nie zu sehen war.
+- Die Stellhebel für die Erkennungsqualität (Strichbreite, Auflösung,
+  Thinking) und der Skalierungswert 1568 px an echter Handschrift.
+- **Neu dazu:** das Ergebnis der Wochenauswertung selbst. Ton, Länge und
+  Nutzen des Prompts lassen sich erst beurteilen, wenn eine Antwort kommt.
+
+Das trifft den angekündigten Feinschliff unmittelbar: Der Prompt lässt sich
+am Beispiel-Dokument **formen**, aber nicht **prüfen**. Was dabei
+herauskommt, bleibt bis zur Freischaltung eine begründete Vermutung.
+
+### Offene Punkte
+- (neu) **Feinschliff der Wochenauswertung** — Steffen hat ein
+  Beispiel-Dokument angekündigt, an dem Aufbau und Ton ausgerichtet werden
+  sollen. Betrifft in erster Linie `weekReview` in `claude_prompts.dart`,
+  möglicherweise auch die Gliederung des Kontexts in `week_context.dart`.
+- (neu) Testliste dieser Session nachhalten (siehe oben), vor allem der
+  Freitag-12:00-Sprung.
+- (neu) Ob die Claude-Einstellungen ins ⋮ nachziehen — offen gehalten, bis
+  das Menü im Gebrauch war.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen.
+  Daran hängen: Abnahme Teil 1; Markierung „erkannter Text"; Erkennungs-
+  Stellhebel; Skalierungswert 1568 px; jetzt auch das Ergebnis der
+  Wochenauswertung.
+- (weiterhin) `stop_reason: max_tokens` wird nicht gesondert behandelt.
+- (weiterhin) **Suche und Wochenauswertung gehören ins Anforderungsdokument** —
+  beide gebaut, dort weiter kein Punkt mit Priorität.
+- (weiterhin) Tagesinfo „farblich abgesetzt" an das Ein-Akzentfarben-Prinzip
+  anpassen; fester Plaud-Ordner auf dem MatePad; Theme-Umsetzung (hell) steht
+  aus — auch der neue Wochen-Screen ist vorläufig im dunklen Stil gehalten.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im
+  PATH; Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Feinschliff der Wochenauswertung** am angekündigten Beispiel-Dokument.
+  Reine Prompt- und Formatarbeit, kein Schema, kein neuer Dienst — mit der
+  ausdrücklichen Einschränkung, dass das Ergebnis ohne API-Zugang nicht
+  gegengeprüft werden kann.
+- Danach ist für v1.0 nur noch die **Theme-Umsetzung** offen — und der
+  Nachzug des Anforderungsdokuments.
+
+### Anforderungsdokument
+- Weiterhin kein Nachzug. Gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅, *Claude-Integration* (Umfang und
+  Einstiegspunkt) ⏳ → ✅, Theme-Entscheidung, **Suche** und
+  **Wochenauswertung** als neue 🟡-Punkte (beide gebaut),
+  Tagesinfo-Formulierung.
+
+### Commits (heute, Part II)
+- `594e4b1` — feat: Wochenauswertung - Kontext einer Kalenderwoche aus
+  Eintraegen, Aufgaben, Tagesinfos und Terminen, Fensterlogik ab Freitag 12
+  Uhr mit Wochenpfeilen, Anzeige-Screen mit Kontext-Aufklapper und
+  Uebernahme als #Wochenauswertung, Einstieg ueber Ueberlauf-Menue
+  (Session C, Teil 2 - Wochenauswertung)
+- `docs:` — Fortschritt Session 26 (dieser Commit; zitiert `594e4b1`)
+- Vorgänger: `bfdbb38`
+
+## Session 27 — 24. Juli 2026 (Part III)
+
+### Charakter der Session
+- Dritte Sitzung dieses Tages, kurzes Fenster am späten Freitagnachmittag.
+  Zugeschnitten auf einen Baustein, der in eine Stunde passt — der
+  Freitagabend ist Familienzeit.
+- Vorgeschlagen war zunächst der **Nachzug des Anforderungsdokuments**: Der
+  angekündigte Feinschliff der Wochenauswertung schien mangels
+  Beispieldokument nicht möglich, und das Theme ist zu groß für ein
+  Reststundenfenster. Steffen hat das Beispieldokument dann geliefert — damit
+  war die eigentlich vorgesehene Arbeit dran und der Ausweichvorschlag vom
+  Tisch.
+
+### Das Beispieldokument
+Eine Plaud-Zusammenfassung einer Kundenberatung (UC4/Automic, 29.06.), als PDF
+und als Mindmap. Gliederung dort: Zusammenfassung · Kontext · Schmerzpunkte ·
+Erwartungen · Zusätzliche Informationen · Aufgabenliste · KI-Vorschläge.
+
+**Übernommen wurde:**
+- Die **Aufgabenliste mit `[x]` / `[ ]`** — der stärkste Punkt. Bis dahin
+  steckte das Liegengebliebene in Prosa; abhakbar ist es scannbar. Und es ist
+  keine Erfindung, sondern Wiedergabe: Die Aufgaben der Woche liegen im
+  Kontext, erledigte wie offene.
+- **Nummerierte Vorschläge** statt eines Prosa-Absatzes „Für die kommende
+  Woche". Im Beispiel ist jeder der vier Vorschläge eine benennbare Handlung
+  mit Adressat — genau das fehlte.
+- **Schmerzpunkte**, geschärft zu „Woran es hakte": nicht nur *was* offen
+  blieb, sondern *woran es klemmte*.
+
+**Nicht übernommen wurden Kontext und Erwartungen.** Beide setzen ein
+Gegenüber und ein Ziel voraus; ein Kundengespräch hat das, eine Kalenderwoche
+nicht. Dazu ein Befund am Beispiel selbst: *Zusammenfassung* und *Kontext*
+überlappen dort zu etwa zwei Dritteln. Bei einem einmalig gelesenen
+Meetingprotokoll fällt das nicht auf, bei einer wöchentlich wiederkehrenden
+Auswertung wäre es doppelte Leseleistung.
+
+### Zwei Funde beim Lesen des Codes
+
+**1. Der bisherige Prompt hätte Sternchen produziert.** Er forderte
+`**Überblick**` an — aber `week_review_screen.dart` zeigt das Ergebnis in
+einem `SelectableText`, und als Journaleintrag landet es ebenfalls in reinem
+Text. An beiden Stellen gibt es keinen Markdown-Renderer; die Sternchen wären
+sichtbare Zeichen gewesen, keine Auszeichnung. Aufgefallen ist das nie, weil
+der Prompt nie gelaufen ist — ein Fehler, den erst der zweite Blick auf eine
+nie ausgeführte Zeile findet.
+
+**2. Die `#`-Wörter im Ergebnis werden nicht zu Tags.** `_addEntry` bekommt
+die Tags als Parameter und parst den Inhalt nicht. Die Auswertung landet also
+mit genau einem Tag, `Wochenauswertung` — kein Tag-Schwall aus dem Fließtext.
+Damit war die Sorge erledigt, bevor sie eine wurde.
+
+### Erledigt — Wochen-Prompt neu gegliedert (🟡 Core), Commit `c7c8bae`
+
+Eine Datei, **60 eingefügte Zeilen, 11 gelöschte**, alles innerhalb der
+Konstante `weekReview`. `inkTranscription` und `connectionTest` unberührt.
+
+**Sechs feste Überschriften, feste Reihenfolge, immer alle vorhanden:**
+
+    Überblick
+    Was vorangekommen ist
+    Woran es hakte
+    Beobachtungen
+    Aufgaben
+    Vorschläge
+
+Ohne jede Auszeichnung, jede auf eigener Zeile. Das ist kein Formalismus,
+sondern hat zwei Gründe: Der Text wird als reiner Text angezeigt (siehe Fund
+1), und der feste Satz an Überschriften hält die Tür für eine spätere
+Baum- oder Mindmap-Darstellung offen — die wäre dann Anzeige auf vorhandenem
+Text, kein Umbau.
+
+Dazu die ausdrückliche Regel, **keine Markdown-Zeichen** zu setzen: keine
+Sternchen, Rauten, Unterstriche, keine Bindestriche als Aufzählungszeichen.
+Ausgenommen sind allein die Kästchen der Aufgabenliste und die Nummern der
+Vorschläge — die beiden Stellen, an denen das Zeichen selbst die Information
+trägt.
+
+Der Abschnitt **Aufgaben** nimmt den Wortlaut aus dem Material, erledigte
+zuerst, und leitet ausdrücklich keine Aufgaben aus Fließtext ab, der keine
+ist. **Vorschläge** sind auf höchstens vier gedeckelt; ergibt sich nichts
+Konkretes, soll genau das in einem Satz dastehen statt vier ausgedachter
+Ratschläge.
+
+Die Regel „Ergänze nichts, was nicht im Material steht" bleibt unverändert —
+sie ist bei einer Auswertung, die man später für bare Münze nimmt, der
+eigentliche Kern.
+
+**Benennung:** „Aufgaben" statt „Aufgabenliste" wie im Vorbild, weil das in
+Disponere bereits das Wort für die Sache ist (Aufgaben-Übersicht,
+Aufgaben-Sheet). Konsistenz im Haus schlägt Nähe zur fremden Vorlage.
+Umkehrbar.
+
+### Prüfung ohne Compiler
+Wie üblich im Container, diesmal mit einer auf Dart-Strings zugeschnittenen
+Liste:
+- Klammerprüfer (Strings und Kommentare überspringend) — ausgeglichen.
+- **Suche nach `$`** — in einem `'''`-String wäre jedes Dollarzeichen eine
+  Interpolation und damit ein Compilerfehler. Keines vorhanden.
+- **Vier `'''`-Grenzen** — zwei Block-Strings, je auf und zu. Stimmt.
+- **Suche nach Sternchen im Prompt-Bereich** — die Vorgabe, keine zu
+  produzieren, wäre wenig glaubwürdig, wenn im Prompt selbst welche stünden.
+- Diff-Kontrolle, dass ausschließlich `weekReview` betroffen ist.
+
+### Der Freitag-12:00-Test ist zu
+Session 26 hatte die eine Hälfte der Regel bestanden: vormittags kam
+*nicht* die laufende Woche, sondern die vorige. Die andere Hälfte stand als
+⏳ und war nur an genau einem Wochentag prüfbar.
+
+Sie kam in dieser Sitzung von selbst: Steffen meldete, er könne jetzt die
+aktuelle Woche auswerten. Nach 12:00 an einem Freitag springt das Fenster auf
+die laufende Woche — belegt. **Beide Hälften derselben Regel an echten
+Uhrzeiten desselben Tages.** Dass die Sitzung auf einen Freitagnachmittag
+fiel, war Glück; die nächste Gelegenheit wäre eine Woche später gewesen.
+
+### Die „24" im Kopf der Anzeige — kein Fehler, sondern mein falsches Kriterium
+Als Prüfkriterium war „läuft noch — bis einschließlich **26.07.2026**"
+ausgegeben worden. Angezeigt wurde **24.07.2026**. Steffen meldete es mit dem
+Zusatz, das sei wohl eine Kleinigkeit.
+
+Richtig war die App. `WeekWindow.suggested` setzt bei laufender Woche
+ausdrücklich `lastDay = heute`, und dieses `lastDay` begrenzt nicht nur die
+Beschriftung, sondern **alle vier Abfragen** — Einträge, Aufgaben,
+Tagesinfos, Termine. Der Kontexttext sagt es der API selbst: „Die Woche läuft
+noch; ausgewertet wird bis einschließlich …". Alles andere wäre unsinnig:
+Samstag und Sonntag sind noch nicht passiert, im Fenster stünden Termine aus
+der Zukunft und keine Zeile Journal.
+
+Die beiden Zeilen im Kopf sagen zwei verschiedene, beide wahre Dinge:
+`KW 30 · 20.07.–26.07.` ist die **Kalenderwoche**, „bis einschließlich
+24.07.2026" ist die **Reichweite der Daten**. Genau die Unterscheidung, für
+die `isPartial` gebaut wurde.
+
+**Lektion: Prüfkriterien werden aus dem Code gelesen, nicht aus dem Kopf.**
+Der Clone lag offen; die Antwort stand in `week_context.dart`. Hätte Steffen
+das Kriterium geschluckt, wäre korrektes Verhalten „repariert" worden — ein
+Schaden, den kein Compiler und kein Klammerprüfer abgefangen hätte. Dieselbe
+Fehlerklasse wie die Sternchen aus Fund 1: eine Annahme über etwas, das man
+hätte nachsehen können.
+
+### Testergebnis auf dem MatePad
+- ✅ Build und Start, kein Compilerfehler
+- ✅ ⋮ → Wochenauswertung öffnet wie gehabt
+- ✅ **Sprung auf die laufende Woche nach Freitag 12:00** —
+  `KW 30 · 20.07.–26.07.`, Zusatz „läuft noch — bis einschließlich
+  24.07.2026"
+- ✅ Kontext-Aufklapper vorhanden, 1021 Zeichen für die laufende Woche
+- ⛔ Die Auswertung selbst weiter nicht abnehmbar — der Zugang steht aus
+
+### Der Blocker steht weiter
+Die Anthropic-Organisation ist weiterhin gesperrt, der Einspruch offen.
+Aufgestaut bleibt unverändert: Abnahme von **Teil 1** (Tinten-Auswertung) an
+echter Handschrift; die Markierung **„erkannter Text"** in der Trefferliste;
+die Stellhebel für die Erkennungsqualität und der Skalierungswert 1568 px.
+**Neu dazu:** die Wirkung der heutigen Gliederung. Der Prompt ließ sich am
+Beispieldokument **formen**, aber nicht **prüfen** — das war vor Beginn so
+angesagt und ist so eingetreten.
+
+### Offene Punkte
+- (neu) **Mindmap-Darstellung der Wochenauswertung** — als 🟢 Enhancement ins
+  Anforderungsdokument. Plaud rendert dort dieselben Abschnitte, die im Text
+  ohnehin stehen; auf den sechs festen Überschriften wäre das reine Anzeige.
+  Voraussetzung ist, dass die Gliederung stabil bleibt — jede spätere
+  Änderung an den Überschriften ist damit auch eine Änderung an dieser
+  Aussicht.
+- (neu) **Soll die Wochenauswertung beim Übernehmen die Tags der Woche
+  tragen** statt nur `#Wochenauswertung`? Dann tauchte sie unter jedem
+  berührten Projekt auf — nah an dem, was die App im Kern ausmacht. Ist aber
+  Journal-Arbeit (`_addEntry`), nicht Prompt-Arbeit, und wurde deshalb
+  bewusst nicht in dieser Sitzung angefasst.
+- (neu) Benennung „Aufgaben" statt „Aufgabenliste" — umkehrbar, falls die
+  Nähe zum Vorbild wichtiger ist.
+- (weiterhin) Testliste aus Session 26: Wochenpfeile und Vorwärts-Deckelung
+  nicht einzeln zurückgemeldet. Der Freitag-12:00-Sprung ist erledigt.
+- (weiterhin) Ob die Claude-Einstellungen ins ⋮ nachziehen — offen gehalten,
+  bis das Menü im Gebrauch war.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen.
+- (weiterhin) `stop_reason: max_tokens` wird nicht gesondert behandelt.
+- (weiterhin) **Suche und Wochenauswertung gehören ins Anforderungsdokument** —
+  beide gebaut, dort weiter kein Punkt mit Priorität.
+- (weiterhin) Tagesinfo „farblich abgesetzt" an das Ein-Akzentfarben-Prinzip
+  anpassen; fester Plaud-Ordner auf dem MatePad; Theme-Umsetzung (hell) steht
+  aus.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im
+  PATH; Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Theme-Umsetzung (hell)** — der letzte offene Funktionspunkt für v1.0.
+  Bewusst *nicht* in dieses Zeitfenster gequetscht: acht Screens, Farben
+  durchweg hart im Code, dazu die Wechselwirkung mit der Tinte (dunkel auf
+  hell statt hell auf dunkel). Das ist eine ganze Session mit einer
+  Entscheidung am Anfang, keine halbe.
+- **Nachzug des Anforderungsdokuments.** Steht seit sechs Sessions als
+  „weiterhin kein Nachzug" und ist inzwischen sichtbar veraltet — die
+  Tabelle nennt noch `shared_preferences` mit SQLite als ⏳. Das Dokument ist
+  der Ort, an dem beim Theme-Start ohnehin nachgeschlagen würde.
+
+### Anforderungsdokument
+- Weiterhin kein Nachzug. Gesammelt für den nächsten `docs:`-Commit:
+  *Google Calendar-Anbindung* 🟡 Core ⏳ → ✅, *Claude-Integration* (Umfang und
+  Einstiegspunkt) ⏳ → ✅, Theme-Entscheidung, **Suche** und
+  **Wochenauswertung** als neue 🟡-Punkte, **Mindmap-Darstellung** als neuer
+  🟢-Punkt, Tagesinfo-Formulierung.
+
+### Commits (heute, Part III)
+- `c7c8bae` — feat: Wochen-Prompt nach Beispieldokument gegliedert - sechs
+  feste Ueberschriften ohne Markdown-Auszeichnung, Aufgabenliste mit
+  Kaestchen, nummerierte Vorschlaege
+- `docs:` — Fortschritt Session 27 (dieser Commit; zitiert `c7c8bae`)
+- Vorgänger: `0468c94`
+
+---
+
+## Session 28 — 24. Juli 2026 (Part IV)
+
+### Charakter der Session
+- Vierte Sitzung dieses Tages, ein Fenster von rund zwanzig Minuten am frühen
+  Freitagabend. Keine Codearbeit — dafür war die Zeit zu knapp und das Theme,
+  der einzige verbliebene Funktionspunkt, zu groß.
+- Gewählt wurde deshalb der Punkt, der seit **Session 12** in jedem
+  Fortschrittsbericht als „weiterhin kein Nachzug" stand: das
+  **Anforderungsdokument**. Fünfzehn Sitzungen Rückstand, aber kein Risiko und
+  ein klar begrenzter Umfang — genau der Zuschnitt für ein Reststundenfenster.
+
+### Erledigt — Anforderungsdokument v3.0 → v4.0, Commit `b5cba74`
+
+Das Dokument war sichtbar veraltet: Es nannte `shared_preferences` als
+Persistenz mit SQLite als ⏳, führte Google Calendar und die Claude-Integration
+als geplant, und kannte Suche und Wochenauswertung überhaupt nicht — beide
+gebaut, beide 🟡 Core.
+
+**Nachgezogen wurde:**
+- **Persistenz** auf SQLite, **Schema v6** (v3 normalisierte Tag-Tabellen ·
+  v4 Kalender-Quellen · v5 Termine · v6 erkannter Tinten-Text).
+- **Google Calendar-Anbindung** 🟡 Core ⏳ → ✅, mit den tatsächlich getroffenen
+  Entscheidungen: read-only, AppAuth/PKCE ohne GMS, Vollabruf im rollenden
+  Fenster −30/+365 statt Delta-Sync, „Sync jetzt" statt Hintergrunddienst.
+- **Claude-Integration** ⏳ → ✅, Umfang festgeschrieben: **genau zwei**
+  nutzerausgelöste Funktionen, dazu der Leitsatz *Claude spricht nie ungefragt
+  ins Journal* und die Trennung `content` (geschrieben) vs. `ink_text` (geraten).
+- **Suche** und **Wochenauswertung** als zwei neue 🟡-Core-Kernkonzepte — in v3.0
+  gab es sie nicht einmal als Begriff.
+- **Theme-Entscheidung** aufgenommen: ein helles Theme, kein Dunkelmodus in v1.0,
+  mit der Begründung über den Tinten-Konflikt.
+- **Tagesinfo-Formulierung** korrigiert: „farblich abgesetzt" → Grautönung plus
+  Beschriftung, gleiches Muster für TERMINE und AUFGABEN.
+- **Tinten-Modus, Aufgaben, Daily Info, Tag-Verwaltung** von ⏳/🔧 auf ✅.
+- Die **Perlenkette-Tabelle** zeigt jetzt, dass beide 🔴-Blocker (Tag-System,
+  Google Calendar) stehen — das Fundament für v2.0 ist gelegt.
+
+### Zwei Stellen, an denen bewusst ⏳ steht
+
+Der Nachzug hätte sich runder lesen lassen, wenn alles auf ✅ gegangen wäre.
+Beides wäre falsch gewesen:
+
+1. **Anthropic API-Zugang** bleibt 🟡 Core ⏳ mit dem Klartext „Konto-Zugang
+   blockiert, Einspruch läuft". Der Code der Tinten-Auswertung ist geprüft und
+   ausgeliefert, aber **nicht abgenommen**. Ein ✅ an dieser Stelle hätte in
+   vier Wochen niemand mehr aufgelöst.
+2. **Theme** steht als „entschieden, Umsetzung offen" — und ausdrücklich als
+   *der letzte* 🟡-Core-Punkt für v1.0. Eine getroffene Entscheidung ist kein
+   gebautes Feature.
+
+### Selbstkorrektur noch in derselben Sitzung
+Beim Schreiben dieses Berichts fiel auf, dass die in Session 27 gesammelte
+**Mindmap-Darstellung der Wochenauswertung** (🟢) im ersten Wurf von v4.0
+fehlte. Nachgetragen: als Zeile in der Feature-Tabelle und als Absatz bei
+Kernkonzept 8, mit der Bedingung, die dort schon stand — die sechs
+Überschriften müssen stabil bleiben, sonst ändert sich mit ihnen auch diese
+Aussicht. Ebenso ergänzt: die offene Frage, ob die Wochenauswertung beim
+Übernehmen die **Tags der Woche** tragen soll.
+
+Das ist genau die Fehlerklasse, gegen die die gesammelte Liste im
+Fortschrittsbericht gedacht ist — sie hat funktioniert, nur einen Durchgang zu
+spät.
+
+### Was dieser Nachzug für die Restarbeit bedeutet
+Das Anforderungsdokument ist der Ort, an dem beim Theme-Start ohnehin
+nachgeschlagen wird. Genau dort standen bis heute die Farbangaben aus der alten
+Dunkel-Vorgabe. Der Nachzug war insofern keine Buchhaltung, sondern
+Vorbereitung: Die nächste Session findet dort das vor, wonach sie sucht.
+
+### Offene Punkte
+- (erledigt) **Nachzug des Anforderungsdokuments** — erstmals seit Session 12
+  wieder auf Stand.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen;
+  damit steht die Abnahme der Tinten-Auswertung weiter aus.
+- (weiterhin) **Theme-Umsetzung (hell)** — der letzte Funktionspunkt für v1.0.
+- (weiterhin) Tags der Wochenauswertung beim Übernehmen; Benennung „Aufgaben"
+  statt „Aufgabenliste" (umkehrbar); Claude-Einstellungen ins ⋮ nachziehen;
+  `stop_reason: max_tokens` unbehandelt; fester Plaud-Ordner auf dem MatePad.
+- (weiterhin) Testliste aus Session 26: Wochenpfeile und Vorwärts-Deckelung
+  nicht einzeln zurückgemeldet.
+- (weiterhin) `use_null_aware_elements` in `google_calendar_service.dart`.
+- (bestehend) 4× `withOpacity` in `task_overview_screen.dart`;
+  `unnecessary_underscores` in `tag_management_screen.dart`; Tag löschen;
+  Smoke-Test; Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im
+  PATH; Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Nächste Schritte
+- **Theme-Umsetzung (hell)** — eine ganze Session: acht Screens, Farben durchweg
+  hart im Code, dazu die Wechselwirkung mit der Tinte (dunkel auf hell statt
+  hell auf dunkel). Die Entscheidung steht seit Session 22 und liegt jetzt auch
+  im Anforderungsdokument.
+- Danach ist der Funktionsumfang für v1.0 beisammen; offen bleibt allein die
+  **Abnahme der Tinten-Auswertung**, die am Konto-Zugang hängt und nicht am Code.
+
+### Anforderungsdokument
+- **Nachzug erledigt.** Die gesammelte Liste ist abgearbeitet und damit leer.
+  Neu gesammelt für den nächsten `docs:`-Commit: *nichts.*
+
+### Commits (heute, Part IV)
+- `b5cba74` — docs: Anforderungsdokument v4.0 - Nachzug nach Session 27
+- `docs:` — Fortschritt Session 28 + Mindmap-Nachtrag in v4.0 (dieser Commit;
+  zitiert `b5cba74`)
+- Vorgänger: `c7c8bae`
+
+## Session 29 — 26. Juli 2026
+
+### Charakter der Session
+- Erste Coding-Session nach der Design-Session vom selben Tag. Umgesetzt: das
+  **helle Theme im Journal** (Fahrplan-Schritt 1). Bewusst nur der Journal-Screen
+  plus die zentrale Farb-Grundlage; die uebrigen Screens bleiben vorerst dunkel
+  ("Journal zuerst"). Grundlage: `disponere_design_v1_0.md` und
+  `disponere_naechste_session_plan.md`.
+
+### Erledigt
+
+**Zentrale Farbquelle `lib/theme/app_colors.dart` (neu).**
+- Alle Tokens aus `disponere_design_v1_0.md` §2 an *einer* Stelle, plus
+  `buildLightTheme()`. Da kein Dunkelmodus fuer v1.0 geplant ist: feste
+  Konstanten + ein Light-`ThemeData`, keine Doppel-Theme-Mechanik.
+- Drei abgeleitete Toene ergaenzt (nicht in der Design-Tabelle, aber noetig):
+  `fieldFill`, `tagChipBg`, `danger`.
+
+**`main.dart`** von `ThemeData.dark()` auf `AppColors.buildLightTheme()`
+umgestellt.
+
+**`journal_screen.dart` komplett auf hell** (1662 -> 1841 Zeilen, als ganze
+Datei geliefert):
+- Die drei **provisorischen Akzente** (Bernstein/Gruen/Violett) entfernt; alles
+  traegt jetzt das eine **Akzentblau `#185FA5`**.
+- **Zweizeiliger Datumskopf** im Journal-Body (Wochentag klein grau, darunter
+  grosses Datum) statt der kleinen Datumszeile in der AppBar.
+- **Tagesinfo-Band** grau getoent (`#F4F3EC`) mit Info-Icon.
+- **Termine** mit blauem Kalender-Icon + Uhrzeit statt violettem Kasten.
+- **Aufgaben**: offenes Kaestchen in gedaempftem Blau, erledigt als gefuelltes
+  Kaestchen mit Haekchen und durchgestrichenem grauem Text.
+- **Tinte dunkel auf hell** — der Vorschau-Painter bekommt jetzt `AppColors.ink`.
+- **Leerer Heute-Zustand** (§6): wartender Punkt + blauer Cursor + Platzhalter,
+  wenn noch kein Eintrag da ist.
+- **Untere Icon-Leiste** (§8): Journal (aktiv, blau), Suche, Aufgaben, Neuer
+  Eintrag — der alte FAB ist weg. Oben links Menue (Tags, Google Calendar,
+  Wochenauswertung), oben rechts das Funkel (Claude). Damit sind auch die
+  Session-28-Punkte "Wochenauswertung aus dem ueberladenen Kopf" und
+  "Claude ins Funkel" mit erledigt.
+- Eintrags- und Tagesinfo-Sheet auf hell.
+
+**Auf dem MatePad getestet und bestaetigt** (Screenshots): Journal hell,
+zweizeiliger Datumskopf, grau getoentes Band, blaues Termin-Icon, Tinte
+dunkel-auf-hell (Handschrift-Eintrag liest sich sauber), Tag-Chips im
+Akzentblau, untere Leiste mit vier Icons.
+
+### Bewusst nicht in diesem Commit
+- **Uebrige Screens** (Aufgaben-Uebersicht, Suche, Zeichnen, Einstellungen,
+  Wochenauswertung, Tag-Verwaltung) und das geteilte **TagAutocompleteField**
+  bleiben dunkel — der Screen-Nachzug ist ein eigener Schritt. Sichtbar auf den
+  Screenshots (dunkle Aufgaben-Uebersicht, Suche, Tag-Verwaltung).
+- **Sidebar-Umschalter** (Design §8, oben rechts) noch nicht gebaut — es gibt
+  keine Sidebar; bewusst verschoben.
+
+### Offene Frage aus dem Test: #Tag oben
+Rueckmeldung: der `#Tag` soll **ueber** dem Eintrag stehen. In der laufenden App
+standen die Chips bisher immer *unten* — das wurde heute nicht veraendert. Zwei
+Lesarten, Entscheidung steht aus:
+1. **Nur die Chip-Position** — Tag ueber den Eintragstext. Reiner Kosmetik-Umbau,
+   passt noch in einen Theme-Nachzug.
+2. **Echte Gruppierung (Design §4)** — Tag als Ueberschrift, Eintraege mit feiner
+   Fuehrungslinie darunter eingerueckt. Struktur-Schritt, greift direkt in die
+   **Tag-Ansicht (Fahrplan-Schritt 2)** ueber und gehoert dort hin.
+
+### Offene Punkte
+- (neu) **#Tag oben**: Chip-Position vs. §4-Gruppierung — vor bzw. mit der
+  Tag-Ansicht klaeren.
+- (neu) **Screen-Nachzug hell**: uebrige Screens, TagAutocompleteField, das
+  Tag-Feld in den Sheets.
+- (neu) **Sidebar-Umschalter** aus §8 — offen, solange es keine Sidebar gibt.
+- (weiterhin) Blocker: Anthropic-Organisation gesperrt, Einspruch offen; damit
+  steht die Abnahme der Tinten-Auswertung weiter aus.
+- (weiterhin) Tags der Wochenauswertung beim Uebernehmen; `stop_reason:
+  max_tokens` unbehandelt; fester Plaud-Ordner auf dem MatePad.
+- (bestehend) `use_null_aware_elements` in `google_calendar_service.dart`;
+  `withOpacity`/`unnecessary_underscores` in aelteren Screens; Smoke-Test;
+  Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH;
+  Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Naechste Schritte
+- **Fahrplan-Schritt 2: Tag-Ansicht** (neuer Screen) — und in dem Zug die
+  #Tag-oben-Frage entscheiden (Lesart 2 landet ohnehin hier).
+- Davor oder danach: **Screen-Nachzug hell**, damit die App durchgehend hell ist.
+- Erst *nach* Umsetzung + Aufraeumen: die **Fable-Review** (Fahrplan-Schritt 4).
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Fuer den naechsten `docs:`-Commit gesammelt:
+  Theme-Punkt von "entschieden, Umsetzung offen" auf "Journal umgesetzt, uebrige
+  Screens offen"; #Tag-oben-Frage und Screen-Nachzug als Notizen.
+
+### Commits (heute)
+- `8d838a2` — feat: helles Theme (Journal) - AppColors zentral, Light-Theme
+  in main, Datumskopf, Tagesinfo-Band, Tinte dunkel-auf-hell, untere Icon-Leiste
+- `docs:` — Fortschritt Session 29 (dieser Commit; zitiert `8d838a2`)
+- Vorgaenger: `d75ddda`
+
+## Session 30 — 27. Juli 2026
+
+### Charakter der Session
+- Zweite Coding-Session zum hellen Theme. Fahrplan-Schritt 1 fortgesetzt:
+  **Screen-Nachzug hell** (Spur A), dazu zwei vom Nutzer gewuenschte Zusaetze
+  (graue Rahmen weg, Eintraege von Hand loeschbar). Knappe Stunde, API weiter
+  gesperrt — die Claude-Anbindung (Fahrplan-Schritt 6) blieb aussen vor.
+
+### Erledigt
+
+**Screen-Nachzug hell — fuenf Dateien auf das zentrale `AppColors` umgestellt
+(je als ganze Datei geliefert):**
+- `task_overview_screen.dart`, `search_screen.dart`,
+  `native_text_entry_screen.dart` (nur die Flutter-Huelle; das native
+  FreeScript-Feld rendert selbst), `task_sheet.dart`,
+  `tag_autocomplete_field.dart`.
+- **Provisorisches Aufgaben-Gruen retired:** `_kTaskAccent = 0xFF5FA86A` in
+  task_sheet und task_overview zeigt jetzt auf `AppColors.accent` — alles traegt
+  das eine Akzentblau `#185FA5`.
+- Suche: Treffer-Karten vom harten Rahmen auf weiche Fuellung (`fieldFill`)
+  umgestellt.
+
+**Zusatz 1 — graue Rahmenlinien weg (`journal_screen.dart`):**
+- `_EntryCard`-Rahmen, Tinten-Vorschau-Rahmen und die beiden Leer-Kaesten
+  ("Heute keine Termine", "Keine offenen Aufgaben") entrahmt. Eintraege und
+  Tinte stehen jetzt rahmenlos auf Papier.
+- Aufgaben-Uebersicht: der gerahmte Leer-Hinweis ist flacher Text. Der linke
+  Farbstreifen der Karten bleibt (offen / ueberfaellig / erledigt).
+
+**Zusatz 2 — Eintraege von Hand loeschbar (`journal_screen.dart`):**
+- Eintrags-Sheet (getippt): Papierkorb links neben "Speichern", ohne
+  Rueckfrage.
+- **Langes Druecken auf einen beliebigen Eintrag → Rueckfrage → Loeschen.** Der
+  eine Weg fuer getippte *und* Tinten-Eintraege — Tinte oeffnet sonst den
+  Zeichnen-Editor, der (noch) keinen Loeschen-Knopf hat.
+
+**Auf dem MatePad getestet und bestaetigt** (Screenshots): Journal rahmenlos,
+Aufgaben-Uebersicht / Suche / Sheets hell, Aufgaben in Blau statt Gruen,
+Lang-Druecken-Loeschen fuer einen Tinten-Eintrag funktioniert, Test-Eintraege
+sauber weggeraeumt.
+
+### Bewusst nicht in diesem Commit
+- **Noch dunkel:** Zeichnen-Editor (`drawing_screen.dart`), Tag-Verwaltung,
+  Wochenauswertung, Kalender- und Claude-Einstellungen. Eigener Nachzug-Schritt.
+- **In-Editor-Loeschen fuer Tinte** kommt, wenn der Zeichnen-Editor auf hell
+  gezogen wird.
+
+### Offene Punkte
+- (bestaetigt, weiterhin offen) **#Tag steht unten, soll oben stehen.**
+  Rueckmeldung wiederholt: der `#Tag` gehoert ueber den Eintrag. Steht seit
+  Session 29 als Frage (reine Chip-Position vs. echte §4-Gruppierung) — mit der
+  Tag-Ansicht zu entscheiden. In dieser Session bewusst nicht angefasst
+  (Spur A war Theme), also keine Regression.
+- (neu, vom Nutzer geklaert) **Klappbares Seiten-Panel fuer Termine +
+  Aufgaben.** Idee nach LogSeq-Vorbild: Kalender/Termine und Aufgaben in ein
+  ausklappbares Seiten-Panel, damit der Tagesstrom die Buehne bekommt. Grund am
+  realen Tag sichtbar — vier Termine druecken den Eintrag weit nach unten.
+  Betrifft **nur** Termine und Aufgaben, sonst nichts. Design-Entscheidung →
+  Design-Dokument + eigene Session (greift in Journal-Layout und Tag-Ansicht).
+- (neu) **Handschrift zu klein.** Die Tinten-Vorschau zeichnet die Striche in
+  Aufnahme-Groesse in einen 140-px-Kasten → wirkt geschrumpft. Fix:
+  Bounding-Box auf die Vorschaubreite skalieren (`ink_painter.dart`). Eigener
+  kleiner Schritt.
+- (neu) **Screen-Nachzug hell — Rest:** Zeichnen-Editor, Tag-Verwaltung,
+  Wochenauswertung, Kalender- und Claude-Einstellungen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen;
+  damit steht die Abnahme der Tinten-Auswertung weiter aus.
+- (bestehend) `withOpacity`-Lints in `task_overview_screen.dart`;
+  `use_null_aware_elements` in `google_calendar_service.dart`; Smoke-Test;
+  Java-8-Warnungen; PowerShell Execution Policy; `adb` nicht im PATH;
+  Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Naechste Schritte
+- **Fahrplan-Schritt 2: Tag-Ansicht** (neuer Screen) — und dabei die
+  #Tag-oben-Frage entscheiden (Lesart "echte Gruppierung" landet ohnehin hier).
+- Rest-Screens auf hell nachziehen (siehe oben).
+- Design-Session zum **klappbaren Seiten-Panel** (Termine + Aufgaben).
+- Kleiner Schritt: **Handschrift-Vorschau groesser** skalieren.
+- Erst nach Umsetzung + Aufraeumen: die **Fable-Review** (Fahrplan-Schritt 4).
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Fuer den naechsten `docs:`-Commit gesammelt:
+  Journal-Umgebung jetzt hell (Aufgaben-Uebersicht, Suche, Sheets, Stift-Feld);
+  provisorisches Gruen retired; rahmenlose Eintraege + Loesch-Gesten;
+  #Tag-oben bestaetigt offen; klappbares Seiten-Panel als neue Design-Notiz;
+  Handschrift-Skalierung.
+
+### Commits (heute)
+- `77faadc` — feat: helles Theme Screen-Nachzug + rahmenlose Eintraege + Eintraege loeschbar
+- `docs:` — Fortschritt Session 30 (dieser Commit; zitiert `77faadc`)
+- Vorgaenger: `0e2543a`
+
+---
+
+## Session 31 — 27. Juli 2026 (Teil II)
+
+### Charakter der Session
+- Coding-Session, **Fahrplan-Schritt 2: Tag-Ansicht** (neuer Screen). Bewusst
+  eng gefasst: **nur** die Tag-Ansicht. Die #Tag-oben-/§4-Gruppierungs-Frage
+  wurde *nicht* mitgenommen — sie gehoert zum Journal-Layout-Thema (siehe unten).
+  Start mit vollem Budget nach Reset; drei Dateien, davon zwei grosse ganz
+  geliefert.
+
+### Erledigt
+
+**Datenschicht (`journal_repository.dart`, ganze Datei):**
+- Neu `entriesForTag(tag)` — Einträge mit dem Tag, getippt **und** Tinte (Tinte
+  ist nur ein Eintrag mit `ink != null`), neu nach alt. Join ueber `entry_tags`,
+  Muster wie `tasksForTag`.
+- Neu `dailyInfosForTag(tag)` — Tagesinfos ueber **Inline-`#Tag` im Text**.
+  Grund: eine `DailyInfo` hat (Modell/Schema) **kein Tag-Feld**. So taucht
+  „#Urlaub in Italien" trotzdem unter `#Urlaub` auf, ganz **ohne Schema-Eingriff**.
+- Neu Helfer `textContainsTag` (+ statische Unicode-Regex `#([\p{L}\p{N}_]+)`):
+  greift den **ganzen** Tag-Token, damit `#Urlaub` **nicht** `#Urlaubsplanung`
+  trifft; Umlaute zaehlen mit.
+- `tasksForTag` und `calendarEventsForTag` waren bereits vorhanden und liefern
+  genau das Richtige — unveraendert genutzt.
+
+**Neuer Screen (`lib/screens/tags/tag_view_screen.dart`):**
+- Kopf: `#Tag` gross im Akzentblau + Zaehlzeile („N Einträge · M Aufgaben · …",
+  nur nicht-leere Typen).
+- Inhalt **nach Kalendertag gruppiert, neu nach alt**, mit haarfeinem Trenner
+  zwischen den Tagen. Der heutige Tag ist als **„HEUTE"** ausgezeichnet.
+- Reihenfolge je Tag wie Journal-Design §4: **Tagesinfo → Termine → Aufgaben →
+  Einträge**. Aufgaben **ohne** Faelligkeit sammeln sich in einer eigenen Gruppe
+  „Ohne Datum" ganz am Ende.
+- Karten spiegeln die Journal-Optik (Termin-Icon+Zeit, Aufgabe mit
+  Kästchen/Durchstreichung/„ueberfaellig"-Rot, Eintrag mit Uhrzeit, Tinte-Vorschau
+  via `InkPreviewPainter`).
+- **Reine Lese-Ansicht** — kein Bearbeiten, kein Abhaken; das lebt weiter im
+  Journal.
+- **Quervernetzung:** die *uebrigen* Tags jedes Elements stehen als **antippbare
+  Chips** darunter → Sprung in die jeweilige Tag-Ansicht (Perlenkette im Kleinen).
+- Lade- und Leerzustand („Noch nichts unter #Tag").
+
+**Navigation (`journal_screen.dart`, ganze Datei):**
+- `_TagChip` ist jetzt **antippbar** → oeffnet die Tag-Ansicht. Der Chip
+  navigiert ueber seinen **eigenen** `context`; die Karten (Eintrag, Termin,
+  Aufgabe) muessen **nichts durchreichen** — minimal-invasiv. Import ergaenzt.
+
+**Auf dem MatePad getestet:** Chip → Tag-Ansicht oeffnet sauber, Kopf blau +
+Zaehler, Elemente korrekt nach Tag gruppiert, Chip-Sprung und Zurueck-Weg
+funktionieren, Leerfall ohne Absturz. Wegen frisch geleerter Datenbank liessen
+sich nicht alle Faelle durchspielen — das Geruest ist aber bestaetigt.
+
+### Entscheidungen dieser Session
+- **Nur Tag-Ansicht** gebaut (Nutzer-Wahl). #Tag-oben / §4-Gruppierung im
+  Haupt-Journal **bewusst nicht** — greift dasselbe Journal-Layout an wie das
+  klappbare Seiten-Panel und gehoert mit ihm zusammen entschieden.
+- **Tagesinfo per Inline-`#Tag`** statt Schema-Eingriff (DailyInfo hat kein
+  Tag-Feld). Leichtgewichtig, umkehrbar.
+- **Tag-Ansicht als Lese-Ansicht** — direkte Interaktion (Bearbeiten/Abhaken)
+  kann spaeter nachziehen.
+
+### Offene Punkte
+- **(DRINGEND, mit realem Referenzfall) Journal-Layout an vollen Tagen.**
+  Screenshot 27.07., 15:48: zwei Tagesinfos + drei Termine (alle `#Wärme`) +
+  eine Aufgabe druecken die eigenen Journal-Einträge (13:58, 09:28 …) so weit
+  nach unten, dass sie beim Oeffnen praktisch **unsichtbar** sind. Das ist das
+  konkrete Argument fuer (a) das **klappbare Seiten-Panel** fuer Termine +
+  Aufgaben und (b) die **§4-Gruppierung mit #Tag oben**. Vom Nutzer als dringend
+  markiert → **Thema der naechsten Session** (Journal-Layout, Design-Entscheidung
+  zuerst).
+- **(neu, vom Nutzer gewuenscht) Tagesinfo nebeneinander** statt gestapelt: im
+  Journal `_DailyInfoSection` von Spalte auf **`Wrap`** umstellen; ab der vierten
+  Info bricht es von selbst in eine zweite Zeile um. Kleiner Journal-Change.
+- **(weiterhin) #Tag oben / §4-Gruppierung** — jetzt konkret Teil des
+  Journal-Layout-Themas (zusammen mit dem Seiten-Panel).
+- (weiterhin, aus Session 30) **Handschrift-Vorschau zu klein** — Bounding-Box
+  auf die Vorschaubreite skalieren (`ink_painter.dart`).
+- (weiterhin) **Screen-Nachzug hell — Rest:** Zeichnen-Editor, Tag-Verwaltung,
+  Wochenauswertung, Kalender- und Claude-Einstellungen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen;
+  damit steht die Abnahme der Tinten-Auswertung weiter aus.
+- (bestehend) `withOpacity`-Lints; `use_null_aware_elements` in
+  `google_calendar_service.dart`; Smoke-Test; Java-8-Warnungen; PowerShell
+  Execution Policy; `adb` nicht im PATH; Zeitzonen-Preis der lokalen Tages-Keys.
+
+### Naechste Schritte
+- **Naechste Session: Journal-Layout (dringend).** Design-Entscheidung +
+  Design-Dokument fuer das **klappbare Seiten-Panel** (Termine + Aufgaben) und
+  die **§4-Gruppierung mit #Tag oben**; danach Umsetzung. Referenzfall: Screenshot
+  vom 27.07.
+- Kleiner Schritt: **Tagesinfo nebeneinander** (`Wrap`).
+- Kleiner Schritt: **Handschrift-Vorschau groesser** skalieren.
+- Rest-Screens auf hell nachziehen.
+- Erst nach Umsetzung + Aufraeumen: die **Fable-Review** (Fahrplan-Schritt 4).
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Fuer den naechsten `docs:`-Commit gesammelt:
+  **Tag-Ansicht** umgesetzt (Fahrplan-Schritt 2) — Chip-Navigation, „alles zu
+  einem Tag ueber alle Tage", Tagesinfo per Inline-Tag, Lese-Ansicht; sowie die
+  Journal-Layout-Notizen (Seiten-Panel, #Tag oben, Tagesinfo nebeneinander).
+
+### Commits (heute)
+- `d6743eb` — feat: Tag-Ansicht - alles zu einem Tag ueber alle Tage,
+  Chip-Navigation
+- `docs:` — Fortschritt Session 31 (dieser Commit; zitiert `d6743eb`)
+- Vorgaenger: `77faadc`
+
+## Session 32 — 28. Juli 2026
+
+### Charakter der Session
+- **Design-Session** (Design + Dokument, **kein Code**). Thema: das als dringend
+  markierte **Journal-Layout** — die zwei zusammengehoerigen Entscheidungen
+  „klappbares Seiten-Panel" und „§4-Gruppierung mit `#Tag` oben". Grundlage:
+  `disponere_design_v1_0.md` und der Referenzfall vom 27.07. (voller Tag, eigene
+  Eintraege zugeschuettet).
+
+### Reframing zu Beginn
+- Klargestellt: Auf dem Referenz-Screenshot waren **alle** Elemente `#Waerme`.
+  Eine reine `#Tag`-Gruppierung haette die eigenen Eintraege **nicht** befreit —
+  alles saesse weiter unter `#Waerme`. Damit adressieren die zwei Entscheidungen
+  **zwei verschiedene Schmerzen**: das **Seiten-Panel** loest das Zuschuetten;
+  die **`#Tag`-Gruppierung** ist eine thematische Ordnung fuer mehrere Projekte.
+  Reihenfolge daher: Panel zuerst festzurren, Gruppierung danach.
+
+### Entscheidungen (alle in dieser Session getroffen)
+
+**Seiten-Panel:**
+- **Feste Heute-Agenda** — zeigt immer Termine + Aufgaben von *heute*,
+  unabhaengig von der Scrollposition.
+- **Modell B** — nur *heute* wird freigeraeumt (Termine/Aufgaben ins Panel);
+  **vergangene Tage behalten** ihr inline-Auftauchen. Das „Auftauchen am richtigen
+  Tag" bleibt als Seele erhalten; das Zuschuetten wird dort geloest, wo es weh tut
+  (heute, beim Oeffnen/Schreiben).
+- **Arbeits-Panel, nur Abhaken** — Aufgabe direkt im Panel abhakbar; **kein**
+  Springen/Oeffnen (bewusst schlank).
+- **Overlay ueberall** — schiebt in Hoch- und Querformat gleich von rechts, ein
+  Layout-Pfad („Verlaesslichkeit vor Bastelei").
+- **Standard geschlossen**, Zahl-Badge (Akzentblau) am Sidebar-Umschalter =
+  Termine + offene Aufgaben. **Leerfall:** „Heute nichts geplant", kein Badge.
+- Tagesinfo-Band **bleibt** oben in der Spalte — nur Termine + Aufgaben wandern.
+
+**`#Tag`-Gruppierung (vergangene Tage):**
+- Gruppierung **nur auf vergangenen Tagen**; heute bleibt chronologischer
+  Schreibstrom.
+- **Mehrfach-Auftauchen ist gewollt** — ein Element mit mehreren Tags erscheint
+  unter **jedem** seiner Tags. Begruendung Steffen: Schnittstellen sind der
+  Normalfall (Disponere selbst ist voll davon), sie sollen sichtbar sein.
+  Mein urspruenglicher „selten"-Einwand wurde als falsch zurueckgenommen.
+- **Abhaken streicht alle Vorkommen** gleichzeitig — technisch ueber
+  **Repository-Neuaufbau** nach dem Abhaken statt aus einer Widget-Kopie; keine
+  Sync-Logik noetig. (Merkzeile fuer die Umsetzung.)
+- **Tag-lose Notizen oben, chronologisch** — vor den Clustern. Bewusst als
+  leiser Erzieher: das Fehlen eines Tags draengt sanft dazu, den Eintrag zu
+  taggen.
+- **Cluster-Reihenfolge nach erster Uhrzeit** des Tags (folgt dem zeitlichen
+  Verlauf). Reihenfolge *innerhalb* eines Clusters vorlaeufig chronologisch,
+  bei der Umsetzung feinjustierbar.
+
+**Kleiner Mitnahme-Change:**
+- **Tagesinfo nebeneinander** (`Wrap` statt Spalte) — ins Design uebernommen.
+
+### Geparkt (spaetere Versionen, nicht v1.0)
+- **Tag-Kategorien** — von Steffen als Idee eingebracht und bewusst auf spaeter
+  verschoben (Scope-Bremse gezogen).
+- **`iCalUID`-Deduplizierung** gleicher Termine aus zwei Kalendern — relevant ab
+  dem zweiten Kalender/Projekt.
+
+### Ergebnis / Lieferung
+- **`disponere_design_v2_0.md`** geschrieben und geliefert (Datei, nicht
+  Code-Block). Aenderungen ggue. v1.0: §4 neu (heute/Vergangenheit getrennt,
+  `#Tag`-Gruppierung), neues §5 „Seiten-Panel", §6–§10 verschoben, neues §11
+  „Spaetere Versionen", §12 mit Umsetzungs-Reihenfolge. `v1.0` bleibt als
+  Vorgaenger im Repo.
+- **Kein Code** — reine Design-Session.
+
+### Nachtrag (28.07., nach Session-Schluss) — zwei Bugs im Live-Test gefunden
+
+Beim Blick aufs MatePad (Screenshot 06:18) fielen zwei Dinge auf. Diagnose am
+frischen Clone (Repository 1195 Z., Journal 1899 Z.):
+
+- **Bug 1 — Tageswechsel-Staleness (bestaetigt).** Eine Einzeltag-Tagesinfo vom
+  27.07. („Disponere – Hyper Care") hing am 28.07. noch im Journal. Ursache ist
+  **nicht** die Abfrage — `dailyInfosForDay` ist korrekt (`start_date <= tag AND
+  COALESCE(end_date, start_date) >= tag`) und schliesst eine Einzeltag-Info vom
+  Vortag sauber aus. Ursache: Die **Heute-Daten** (`_todayInfos`, `_todayTasks`,
+  `_todayEvents`) werden **nur in `initState`** geladen; es gibt **keinen**
+  Lifecycle-Beobachter fuer Resume/Datumssprung. Der Datumskopf holt sich in
+  jedem `build` ein frisches `DateTime.now()` und springt auf 28.07., die
+  Tagesinfo-Liste bleibt aber auf dem `initState`-Stand vom 27.07. **Neustart-Test
+  bestaetigt:** nach Schliessen/Neuoeffnen ist die Info weg (initState laeuft mit
+  frischem Tag). → Fix = Reload der Heute-Daten bei Resume und Tageswechsel
+  (`WidgetsBindingObserver` / Datumsvergleich). **Gehoert in die Panel-Session**
+  (Schritt 1), weil das feste Heute-Panel dieselben Daten haelt und genauso frisch
+  sein muss. In `disponere_design_v2_0.md` §5 (Anforderung) und §12 (Schritt 1)
+  nachgetragen.
+- **Bug 2 — kein Datum an den Eintraegen (loest sich im Redesign).** „Das heutige
+  Datum fehlt im Journal." Der Datumskopf *wird* gerendert (Index 0, fest ganz
+  oben) — im Screenshot nur weggescrollt. Die echte Luecke: Das Journal hat
+  **keine Datumsköpfe pro Tag**. Es ist *ein* fester Heute-Block oben, darunter
+  eine **flache Liste ALLER Eintraege** (`loadAll`, neu nach alt) nur mit Uhrzeit,
+  ohne Tages-Trenner — deshalb steht der 06:18-Eintrag von heute nahtlos ueber
+  13:58/09:28 von gestern. Genau das behebt **§4b** (jeder vergangene Tag mit
+  eigenem Datumskopf). Kein separater Fix noetig, faellt in die
+  Gruppierungs-Umsetzung.
+
+### Naechste Schritte
+- **Coding-Session (eigene, nach Reset mit vollem Budget):**
+  1. **Seiten-Panel zuerst** — loest das Dringende. Overlay von rechts, Badge,
+     Abhaken; Termine + Aufgaben aus der heutigen Spalte nehmen. **Mitfix:**
+     Tageswechsel-Reload der Heute-Daten (Bug 1, s. Nachtrag).
+  2. **`#Tag`-Gruppierung** auf vergangenen Tagen (tag-los oben, Cluster nach
+     Uhrzeit, Mehrfach-Auftauchen, Abhaken via Repository-Neuaufbau).
+  3. **Tagesinfo `Wrap`** (kleiner Change).
+- Budget-Hinweis: `journal_screen.dart` (groesste Datei) wird ganz geliefert —
+  Panel und Gruppierung fassen sie an. Nach Reset starten.
+- (weiterhin) Rest-Screens auf hell nachziehen; Handschrift-Vorschau groesser;
+  Fable-Review erst nach Umsetzung + Aufraeumen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen —
+  Claude-API-Anbindung und Abnahme der Tinten-Auswertung warten weiter.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Fuer den naechsten `docs:`-Commit gesammelt:
+  Journal-Layout entschieden — festes Heute-Panel (Overlay, Badge, Abhaken),
+  `#Tag`-Gruppierung auf vergangenen Tagen mit Mehrfach-Auftauchen, tag-lose
+  Notizen oben, Tagesinfo nebeneinander; Tag-Kategorien geparkt.
+
+### Commits (heute)
+- **Kein `feat`** — Design-Session ohne Code.
+- `docs:` — Design v2.0: Seiten-Panel (Heute-Agenda) und `#Tag`-Gruppierung
+  (dieser Commit; fuegt `disponere_design_v2_0.md` hinzu)
+- Vorgaenger (feat): `d6743eb`
+
+---
+
+## Session 33 — 28. Juli 2026
+
+### Charakter der Session
+- **Coding-Session** (Code + Docs-Commit, MatePad-testbar). Umsetzung von
+  **Schritt 1** des Design-v2.0-Fahrplans (§12): das **Heute-Panel** plus der
+  **Bug-1-Fix** (Tageswechsel-/Resume-Reload). Grundlage:
+  `disponere_design_v2_0.md` §4a/§5/§9/§12 und der Nachtrag aus Session 32.
+
+### Scope (vorab bestaetigt)
+- Bewusst **nur Schritt 1**. Schritt 2 (`#Tag`-Gruppierung vergangener Tage,
+  §4b) und Schritt 3 (Tagesinfo `Wrap`) bleiben eigene Sessions. Grund:
+  `journal_screen.dart` (jetzt 2034 Z.) wird nach der Komplett-Datei-Regel ganz
+  geliefert; Panel *und* Gruppierung fassen dieselbe Datei an — zwei grosse
+  Lieferungen in einer Session waeren unnoetig riskant. Schritt 1 ist der
+  dringende (Zuschuetten heute + nachhaengender Vortag).
+
+### Umgesetzt
+- **Heute-Panel als `endDrawer`** — Overlay von rechts, ein Layout-Pfad fuer
+  Hoch- und Querformat. Bewusst das Framework-Overlay genutzt
+  („Verlaesslichkeit vor Bastelei"): Scrim, Rechtswisch und Zurueck-zum-
+  Schliessen kommen gratis. Standard geschlossen.
+  - Inhalt: heutige **Termine** (Uhrzeit, Ort, Tags) und **Aufgaben**
+    (Kaestchen, Meta, Tags). Kopf „HEUTE" + Datum.
+  - **Aufgabe direkt im Panel abhakbar** (`_togglePanelTask`): das einzige
+    interaktive Element der Zeile. In-place-Aktualisierung → die eben erledigte
+    Aufgabe bleibt **durchgestrichen sichtbar**, statt sofort zu verschwinden;
+    beim naechsten frischen Aufbau (Panel neu oeffnen / Resume / Tageswechsel)
+    faellt sie heraus (`surfacedTasksForDay` liefert nur offene). Kein Springen,
+    kein Termin-Oeffnen (`_TaskCard.onTap` jetzt nullbar).
+  - **Leerfall:** keine Termine/Aufgaben → „Heute nichts geplant".
+- **Sidebar-Umschalter oben rechts** (`_PanelToggleButton`,
+  `Icons.view_sidebar_outlined`) neben dem Funkel, mit **Akzentblau-Badge** =
+  heutige Termine + offene Aufgaben. Null → kein Badge. Auf dem MatePad
+  bestaetigt: **Badge 7** = 4 Termine + 3 offene Aufgaben.
+- **Heute-Spalte freigeraeumt:** Termine- und Aufgaben-Sektion aus der
+  Journal-Spalte entfernt (`_EventsSection`/`_TasksSection` geloescht). Es
+  bleiben Datumskopf, Tagesinfo-Band und die Eintraege. Body-`itemCount` von
+  `4 + entryCount` auf `2 + entryCount`, Entry-Index `index - 2`.
+- **Bug 1 gefixt (Tageswechsel-Staleness):** `_JournalScreenState` implementiert
+  jetzt `WidgetsBindingObserver`. `_refreshToday()` laedt Tagesinfo/Termine/
+  Aufgaben neu und zieht `_shownDay` nach — ausgeloest bei **App-Resume**
+  (`didChangeAppLifecycleState`) und, falls die App im Vordergrund ueber
+  Mitternacht offen bleibt, ueber einen **Datumswaechter in `build`**
+  (Post-Frame-Callback, idempotent). Vorher wurden diese Listen nur in
+  `initState` geladen und hingen vom Vortag nach.
+
+### Bewusste, umkehrbare Entscheidungen (markiert)
+- **„+" im Panel-Kopf legt eine neue Aufgabe an.** Noetig, weil die
+  Aufgaben-Uebersicht nur bearbeiten/abhaken/loeschen kann — der einzige
+  Anlege-Einstieg sass im jetzt entfernten Spalten-Block. Lockert „nur Abhaken"
+  minimal (nur der Kopf, nicht die Zeilen). Kippbar.
+- **Abhaken bleibt im offenen Panel durchgestrichen sichtbar** (in-place statt
+  Repository-Neuaufbau). Bewusst: die „Repository-Neuaufbau statt Widget-Kopie"-
+  Regel aus §4b betrifft das Mehrfach-Auftauchen an vergangenen Tagen
+  (Schritt 2) — heute liegen Aufgaben nur im Panel, kein Duplikat-Streichen
+  noetig.
+- **Overview-Knopf NICHT im Panel** — bleibt ueber die untere „Aufgaben"-Leiste
+  erreichbar, Panel bleibt schlank.
+
+### MatePad-Test
+- Panel oeffnet per Umschalter und per Rechtswisch, gleich in beiden Lagen.
+  Termine/Aufgaben korrekt dargestellt, Badge 7 stimmt, Heute-Spalte frei.
+  Bestaetigt ✅ (Screenshots 11:23 / 11:24).
+
+### Offen / als Naechstes
+- **Bug 2 ist NICHT behoben und gehoert in Schritt 2:** Im Journal fehlt der
+  Datumskopf fuer vergangene Tage — die Eintraege stehen als flache Liste (nur
+  Uhrzeit) unter dem einen Heute-Kopf, daher „kein Datum fuer gestern". Behebt
+  §4b (Datumskopf je vergangenem Tag + `#Tag`-Cluster). Im Live-Test sichtbar
+  geworden, hier bewusst nicht gefixt.
+- **Schritt 2 (eigene Session, frisches Budget):** `#Tag`-Gruppierung
+  vergangener Tage — Datumskoepfe je Tag, tag-lose Notizen oben, Cluster nach
+  erster Uhrzeit, Mehrfach-Auftauchen, Abhaken via Repository-Neuaufbau.
+- **Schritt 3:** Tagesinfo nebeneinander (`Wrap`).
+- (weiterhin) Rest-Screens auf hell nachziehen; Fable-Review erst nach
+  Umsetzung + Aufraeumen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen —
+  Claude-API-Anbindung wartet.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Fuer den naechsten `docs:`-Commit gesammelt
+  (aus Session 32 uebernommen + heute): Journal-Layout — Heute-Panel (Overlay,
+  Badge, Abhaken) umgesetzt; `#Tag`-Gruppierung + Tagesinfo-`Wrap` noch offen
+  (Schritt 2/3).
+
+### Commits (heute)
+- `8a9af90` — feat: Heute-Panel (Overlay) mit Terminen und Aufgaben,
+  Heute-Spalte freigeraeumt, Tageswechsel-Reload
+- `docs:` — Fortschritt Session 33 (dieser Commit; zitiert `8a9af90`)
+- Vorgaenger (feat): `37c7252`
+
+## Session 34 — 28. Juli 2026
+
+### Charakter der Session
+- **Refactor-Session** (Code + Docs-Commit, MatePad-testbar). Umsetzung des am
+  Ende von Session 33 vereinbarten **Journal-Splits**: die 2000-Zeilen-Wand
+  `journal_screen.dart` aufteilen, damit kuenftige Lieferungen schlank und
+  gezielt sind. Kein Verhaltenswechsel — reines Aufraeumen zugunsten der
+  Weiterentwicklung.
+
+### Scope (vorab bestaetigt)
+- Bewusst **nur der Split**. Die `#Tag`-Gruppierung vergangener Tage (§4b,
+  Schritt 2) und Tagesinfo-`Wrap` (Schritt 3) bleiben eigene Sessions. Grund:
+  Split und Gruppierung fassen dieselbe Datei an — erst der getestete Split,
+  dann baut die Gruppierung auf festem Grund auf („neu rein + testen, dann ist
+  der Rueckweg sicher").
+
+### Umgesetzt
+- **13 reine Anzeige-Widgets ausgelagert** aus `journal_screen.dart` nach
+  `lib/screens/journal/widgets/`. Der grosse `_JournalScreenState` bleibt als
+  Einheit zusammen (ein Zustandsobjekt laesst sich nicht sinnvoll zerschneiden).
+- **Widgets public gemacht** (`_EventCard` → `EventCard` usw.), damit jede Datei
+  eigene Imports traegt und einzeln lieferbar ist.
+- **Thematische Buendelung in 8 Dateien:**
+  - `date_header.dart` — `DateHeader`, `DateRow`
+  - `daily_info.dart` — `DailyInfoSection`, `DailyInfoCard`
+  - `event_card.dart` — `EventCard`
+  - `task_card.dart` — `TaskCard`
+  - `entry_card.dart` — `EntryCard`, `EmptyEntryInvitation`
+  - `tag_chip.dart` — `TagChip`
+  - `bottom_bar.dart` — `BottomBar`, `BottomBarButton`, `PanelToggleButton`
+  - `today_panel.dart` — `TodayPanel`
+- **`journal_screen.dart` von 2034 → 1185 Zeilen** geschrumpft. Imports
+  bereinigt: `ink_painter` und `tag_view_screen` fielen weg (jetzt nur noch in
+  den ausgelagerten Widgets); importiert werden die 5 tatsaechlich direkt
+  genutzten Widget-Dateien (`date_header`, `daily_info`, `entry_card`,
+  `bottom_bar`, `today_panel`). `event_card`/`task_card`/`tag_chip` werden
+  transitiv ueber die Karten bzw. das Panel gezogen — daher kein Import im
+  Screen (keine „unused import"-Warnungen).
+
+### Bewusste, umkehrbare Entscheidung (markiert)
+- **Public statt `part`/`part of`.** Die Widgets sind jetzt oeffentlich statt
+  library-privat — jede Datei selbststaendig mit eigenen Imports, einzeln
+  lieferbar. Die `part`-Alternative haette die Namen privat gehalten, aber alle
+  Imports in der Hauptdatei gebuendelt. Kippbar.
+
+### MatePad-Test
+- **Verhaltensidentisch bestaetigt ✅:** Journal rendert (Datumskopf,
+  Tagesinfo-Band, getippte + Tinte-Eintraege), Heute-Panel per Umschalter *und*
+  Rechtswisch mit Badge, Aufgabe abhakbar, Tag-Chip → Tag-Ansicht, Eintrag
+  antippen/lang druecken, untere Leiste. Kein sichtbarer Unterschied — genau das
+  Ziel eines reinen Refactors.
+
+### Kein Performance-Effekt (festgehalten)
+- Dart/Flutter kompiliert AOT zu *einem* Kompilat; die Datei-Aufteilung ist eine
+  Ordnungsfrage fuer Menschen und das Liefer-Budget, nicht fuer die Maschine.
+  Laufzeit auf dem MatePad und Build-Zeit auf Vega bleiben gleich.
+
+### Randnotiz (Umgebung)
+- Nach Vega-Neustart erkannte Flutter/adb das MatePad nicht. Ursache war
+  **nicht** VMware (Durchreichung an Vega hatte den Haken), sondern:
+  **USB-Debugging war nach dem Neustart aus** (springt bei Huawei gern um).
+  Wieder einschalten → Geraet meldet sich zurueck. Fuers naechste Mal gemerkt:
+  bei „adb devices leer" trotz VMware-Haken zuerst USB-Debugging pruefen.
+
+### Offen / als Naechstes
+- **Schritt 2 (§4b, eigene Session):** `#Tag`-Gruppierung vergangener Tage —
+  Datumskoepfe je Tag (behebt **Bug 2**), tag-lose Notizen oben, Cluster nach
+  erster Uhrzeit, Mehrfach-Auftauchen, Abhaken via Repository-Neuaufbau, feine
+  Fuehrungslinien. Baut jetzt auf der aufgeraeumten Struktur auf und fasst
+  voraussichtlich `journal_screen.dart` + `journal_repository.dart` an.
+- **Schritt 3:** Tagesinfo nebeneinander (`Wrap`), kleiner Change.
+- (weiterhin) Rest-Screens auf hell nachziehen; Fable-Review erst nach
+  Umsetzung + Aufraeumen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen —
+  Claude-API-Anbindung wartet.
+
+### Anforderungsdokument
+- Kein Nachzug. Fuer den naechsten `docs:`-Commit weiter gesammelt (aus Session
+  32/33): Journal-Layout — Heute-Panel umgesetzt; `#Tag`-Gruppierung +
+  Tagesinfo-`Wrap` noch offen (Schritt 2/3).
+
+### Commits (heute)
+- `81774b7` — refactor: journal_screen aufgeteilt - Anzeige-Widgets nach
+  screens/journal/widgets ausgelagert
+- `docs:` — Fortschritt Session 34 (dieser Commit; zitiert `81774b7`)
+- Vorgaenger (feat): `8a9af90`
+
+## Session 35 — 28. Juli 2026
+
+### Charakter der Session
+- **Coding-Session** (feat + Docs-Commit, MatePad-getestet). Umsetzung von
+  **Schritt 2 (§4b): `#Tag`-Gruppierung vergangener Tage** im Journal — behebt
+  zugleich **Bug 2** (fehlender Datumskopf fuer vergangene Tage). Baut auf dem
+  aufgeraeumten Split aus Session 34 auf.
+
+### Scope (vorab bestaetigt)
+- Nur §4b. Heute (§4a) bleibt unveraendert freie Schreibflaeche; Tagesinfo-`Wrap`
+  (Schritt 3) bleibt eigene Session. Aufgaben-nach-Faelligkeitstag-Regel
+  ausdruecklich mitbestaetigt.
+
+### Architektur-Befund (wichtig)
+- **Kein Repository-Eingriff noetig.** `journal_repository.dart` hatte bereits
+  alle Range-Abfragen: `entriesInRange`, `tasksInRange` (offen UND erledigt,
+  Faelligkeit im Bereich; Aufgaben ohne Day bleiben draussen — genau die
+  Vergangenheits-Semantik), `dailyInfosInRange`, `calendarEventsInRange`. §4b
+  liess sich rein als Praesentation ueber vorhandene Daten bauen.
+- **Vergangenheits-Semantik der Aufgaben:** an vergangenen Tagen zaehlt der
+  **Faelligkeitstag** (`dueDay`), offen *und* erledigt. Bewusst NICHT die
+  rollende `surfacedTasksForDay`-Logik (`due_day <= key`) — die ist ein
+  *Heute*-Begriff (Panel) und wuerde jede ueberfaellige Aufgabe an *jedem*
+  vergangenen Tag duplizieren. Aufgaben ohne `dueDay` erscheinen in keiner
+  Vergangenheit (sie leben im Heute-Panel). So steht eine ueberfaellige offene
+  Aufgabe an *ihrem* Faelligkeitstag in der Vergangenheit **und** heute im Panel
+  — jede an ihrem Ort.
+
+### Umgesetzt
+- **Neu: `lib/screens/journal/widgets/past_day.dart` (382 Zeilen).** Enthaelt
+  das Timeline-Modell und das Render-Widget:
+  - `JournalItem` (Vereinheitlichung Eintrag/Aufgabe/Termin mit Uhrzeit + Tags),
+    `TagCluster` (Tag, erste Uhrzeit, Elemente), `PastDay` (Tag, Infos,
+    tag-lose Notizen, Cluster).
+  - `PastDay.buildTimeline(...)` — rein funktional: gruppiert nach Kalendertag,
+    tag-lose Notizen oben (chronologisch), je Tag ein Cluster pro `#Tag`
+    (Element unter JEDEM seiner Tags = dasselbe Objekt), Cluster nach erster
+    Uhrzeit sortiert, Tage neu nach alt. Datumsarithmetik ueber
+    `DateTime(y,m,d+1)` (DST-sicher), nie ueber `Duration`.
+  - `PastDayView` — Hairline-Trenner, zweizeiliger Datumskopf, Tagesinfo-Band,
+    tag-lose Notizen, `#Tag`-Cluster mit Akzentblau-Kopf (antippbar →
+    Tag-Ansicht) und **feiner Fuehrungslinie links** (`AppColors.guide`). Nutzt
+    die vorhandenen Karten (`EntryCard`/`TaskCard`/`EventCard`/`DailyInfoCard`).
+- **Geaendert: `journal_screen.dart` (1185 → 1255 Zeilen).**
+  - Neuer State `_pastTasks`/`_pastEvents`/`_pastInfos` (vergangene **Eintraege**
+    kommen aus `_entries`, das ohnehin in-place gepflegt wird).
+  - Neue Methode `_reloadPastAgenda()` (Range vom festen Boden bis gestern),
+    eingehaengt an **allen 6 Mutations-Trichtern**: `_init`, `_reloadTasks`,
+    `_reloadTodayInfos`, `_reloadCalendarSources`, `_refreshToday`,
+    `_togglePanelTask`.
+  - `build` teilt in Heute (Datumskopf, Tagesinfo, eigene Eintraege) und
+    Vergangenheit (`PastDay.buildTimeline` → `PastDayView` je Tag). Eine flache
+    Widget-Liste im `ListView.builder` (traeges Element-Building bleibt).
+  - **Abhaken einer vergangenen Aufgabe** laeuft ueber das vorhandene
+    `_togglePanelTask` — Persistenz + `_reloadPastAgenda()` bauen die Timeline
+    neu auf, so streichen **alle** Vorkommen (Mehrfach-Auftauchen) gleichzeitig
+    mit. Kein Widget-Cache, keine Sync-Logik (§4b).
+
+### Kniff (festgehalten)
+- Vergangenen `TaskCard`s wird als `today` der **jeweilige vergangene Tag**
+  uebergeben. Dadurch greift `isOverdue` nicht → keine rote „Ueberfaellig"-
+  Markierung an vergangenen Tagen; die Karte zeigt schlicht Uhrzeit bzw.
+  erledigtes Haekchen. „Ueberfaellig" bleibt ein reiner Heute-Begriff.
+
+### Bewusste, umkehrbare Entscheidungen (markiert)
+- **Untagged Aufgaben/Termine landen im „Tag-los"-Block** oben (chronologisch),
+  damit nichts verschwindet. Das Design nennt dort nur „Eintraege"; hier
+  ausgeweitet. Kippbar.
+- **Ganze Vergangenheit gerendert** (fester Boden bis gestern; Einzelnutzer,
+  kleine Datenmenge). Bei Bedarf spaeter auf ein Fenster begrenzen. Kippbar.
+- **Tagesinfos sind ambient:** sie schmuecken nur Tage mit echter Aktivitaet
+  (Eintrag/Aufgabe/Termin) und erzeugen **keinen** leeren Tagesblock — sonst
+  spammt ein mehrtaegiger Urlaub die Vergangenheit mit inhaltslosen Tagen zu.
+  Mehrtaegige **Termine** dagegen erscheinen an jedem beruehrten Tag (sie sind
+  Aktivitaet). Kippbar.
+- **Vergangene Tagesinfo-Karten ohne „TAGESINFO"-Kopf und Hinzufuegen-Knopf** —
+  nur die Karten selbst, antippbar zum Bearbeiten. Heute behaelt den vollen
+  Kopf mit „+". Kippbar.
+
+### MatePad-Test
+- Bestaetigt ✅ („sieht gut aus"): Heute unveraendert; vergangene Tage mit
+  eigenem Datumskopf (Bug 2 weg), tag-lose Notizen oben, `#Tag`-Cluster mit
+  Fuehrungslinien, Mehrfach-Auftauchen, Abhaken streicht alle Vorkommen,
+  Tag-Kopf/Chip → Tag-Ansicht.
+
+### Statische Pruefung
+- Bracket-Checker (`/home/claude/check_brackets.py`) nach Container-Reset neu
+  angelegt — interpolations-bewusst (behandelt `${...}` mit verschachtelten
+  Anfuehrungszeichen wie `'${x.padLeft(4, '0')}'` korrekt, statt Fehlalarm).
+  Beide Dateien balanciert; ganzes `lib/` ohne Fehlalarm.
+
+### Offen / als Naechstes
+- **Schritt 3:** Tagesinfo nebeneinander (`Wrap`) — kleiner Change in
+  `daily_info.dart`, betrifft heute UND vergangene Tage.
+- Feinschliff bei Bedarf: Reihenfolge innerhalb eines Clusters (aktuell
+  chronologisch, laut Design feinjustierbar).
+- (weiterhin) Rest-Screens auf hell nachziehen; Fable-Review erst nach
+  Umsetzung + Aufraeumen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen —
+  Claude-API-Anbindung wartet.
+
+### Anforderungsdokument
+- Kein Nachzug. Fuer den naechsten `docs:`-Commit weiter gesammelt: Journal-
+  Layout — Heute-Panel (S33) + `#Tag`-Gruppierung vergangener Tage (S35)
+  umgesetzt; Tagesinfo-`Wrap` (Schritt 3) noch offen.
+
+### Commits (heute)
+- `952a549` — feat: journal 4b Tag-Gruppierung vergangener Tage (Bug 2 behoben)
+- `docs:` — Fortschritt Session 35 (dieser Commit; zitiert `952a549`)
+- Vorgaenger (docs): `a3a7d88` (Session 34, zitiert Refactor `81774b7`)
+
+## Session 36 — 29. Juli 2026
+
+### Charakter der Session
+- **Coding-Session** (feat + Docs-Commit, MatePad-getestet). Umsetzung von
+  **Schritt 3: Tagesinfo nebeneinander (`Wrap`)** (Design v2.0 §4a/§4b). Kleiner,
+  klar umrissener Change; baut auf dem Split (S34) und der Vergangenheits-
+  Gruppierung (S35) auf.
+
+### Scope (vorab bestaetigt)
+- Nur Schritt 3. Tagesinfos stehen nebeneinander statt gestapelt: drei gleich
+  breite Karten pro Zeile, ab der vierten Umbruch. Gilt **heute UND vergangene
+  Tage**. Sonst nichts angefasst.
+
+### Umgesetzt
+- **Neu: gemeinsames Widget `DailyInfoWrap`** in `daily_info.dart`. Ein
+  `LayoutBuilder` rechnet die Drittelbreite aus (verfuegbare Breite minus zwei
+  Zwischenraeume, geteilt durch drei), sodass exakt drei Karten in eine Zeile
+  passen und die vierte zuverlaessig umbricht. `Wrap` mit `spacing`/`runSpacing`
+  = 8. Spaltenzahl und Abstand als Konstanten (`_columns`, `_gap`).
+- **Beide Verwendungsstellen nutzen jetzt dasselbe Widget:** `DailyInfoSection`
+  (heute) und `PastDayView` (Vergangenheit). Damit sieht das Band ueberall
+  gleich aus, und die Umbruch-Logik liegt an EINER Stelle.
+- **`DailyInfoCard`: aeusseres `bottom: 8`-Padding entfernt** — die Abstaende
+  macht jetzt das `Wrap`. Ohne das haette sich der Zeilenabstand gedoppelt.
+- **`daily_info.dart` (133 -> 173 Zeilen)**, **`past_day.dart`** (Karten-
+  schleife -> Einzeiler `DailyInfoWrap(...)`, 382 -> 381 Zeilen). Kopf, "+"-Knopf
+  und leerer Heute-Zustand unveraendert.
+
+### Bewusste, umkehrbare Entscheidung (markiert)
+- **Eine einzelne Tagesinfo rendert auf Drittelbreite** (zwei Drittel bleiben
+  rechts leer). Das Design sagt "drei nebeneinander"; hier bewusst nicht
+  ungefragt abgewichen. Kippbar: den Einzel-Fall auf volle Breite legen. Im Test
+  nie aufgetreten (Steffen hatte stets mehrere Infos), daher offen gelassen.
+
+### MatePad-Test
+- Bestaetigt (Screenshots): vier Tagesinfos -> drei in Zeile 1, "Test info 4"
+  bricht in Zeile 2 um, gleichmaessige Abstaende. Heute und vergangener Tag
+  identisch. "Funktion passt und wird jetzt gut angezeigt."
+
+### Statische Pruefung
+- Bracket-Checker (`/home/claude/check_brackets.py`) nach Container-Reset erneut
+  neu angelegt — interpolations-bewusst (`${...}` mit verschachtelten Anfuehrungs-
+  zeichen wird als Code behandelt, kein Fehlalarm). Ganzes `lib/` sauber; beide
+  geaenderten Dateien balanciert.
+
+### Aus dem Test aufgenommen (Bugs, fuer eine leichte Sitzung)
+- **Bug 3 — leerer Heute-Zustand zu eng:** solange es heute noch keinen Eintrag
+  gibt, klebt die Compose-Zeile ("Tippen oder mit dem Stift schreiben ...")
+  direkt unter der letzten Tagesinfo. Wirkt eng/verwirrend. Fix: zusaetzlicher
+  Abstand zwischen Tagesinfo-Band und Schreibzeile **nur im leeren Zustand**,
+  faellt weg sobald der erste Eintrag steht. (Bild
+  `Disponere_4-tagesinfos_20260729_053809`.)
+- **Bug 4 — grauer Kartenhintergrund beim allerersten Eintrag:** im Zustand
+  "genau ein Eintrag heute" hat dieser eine Eintrag eine graue Flaeche; ab dem
+  zweiten Eintrag verschwindet sie und die Eintraege sind schlicht. Tritt also
+  nur bei genau einem Eintrag auf. (Bilder
+  `Disponere_Erster_Eintrag_grau_Hinterlegt_20260729_054226` vs.
+  `Disponere_zweiter_Eintrag_alle_schick_20260729_054843`.)
+
+### Offen / als Naechstes
+- **Bug 3** und **Bug 4** (oben) — beide leicht, fuer eine ruhige Sitzung.
+- Markierter Design-Punkt: einzelne Tagesinfo auf Drittelbreite — nur falls es
+  stoert.
+- (weiterhin) Rest-Screens auf hell nachziehen; **Fable-Review** erst nach
+  Umsetzung + Aufraeumen.
+- (weiterhin) **Blocker:** Anthropic-Organisation gesperrt, Einspruch offen —
+  Claude-API-Anbindung wartet.
+
+### Anforderungsdokument
+- Kein Nachzug. Fuer den naechsten `docs:`-Commit weiter gesammelt: Journal-
+  Layout jetzt vollstaendig umgesetzt — Heute-Panel (S33), `#Tag`-Gruppierung
+  vergangener Tage (S35), Tagesinfo-`Wrap` (S36). Design §4/§5 damit in der App.
+  Offen fuers Anforderungsdokument: Bug 3 / Bug 4.
+
+### Commits (heute)
+- `2cac6ab` — feat: journal tagesinfo nebeneinander (wrap, drei pro zeile)
+- `docs:` — Fortschritt Session 36 (dieser Commit; zitiert `2cac6ab`)
+- Vorgaenger (docs): `11c7290` (Session 35, zitiert feat `952a549`)
+
+---
+
+## Session 37 — 30. Juli 2026
+
+### Charakter der Session
+- **Kurze Coding-Session** (fix + Docs-Commit, MatePad-getestet). Ruhige
+  Morgenrunde, ~40 Minuten. Abarbeiten der beiden im S36-Test aufgenommenen
+  Bugs (Bug 3 + Bug 4) — beide klein, exakt fuer eine solche Sitzung gedacht.
+- **Wichtige Aenderung der Lage: die Claude-API laeuft wieder.** Der
+  wochenlange Blocker (Anthropic-Organisation durch automatische Safeguards
+  gesperrt, Einspruch offen) ist aufgehoben. Damit ist die Claude-API-
+  Anbindung in der App entsperrt.
+
+### Scope (vorab bestaetigt, Scope-Bremse gezogen)
+- Nur Bug 3 + Bug 4. Die API-Anbindung wurde **bewusst NICHT** in diese kurze
+  Sitzung gequetscht: sie fasst `journal_repository.dart` (~1148 Zeilen) an und
+  ist nach der Komplett-Datei-Regel eine grosse Lieferung — laut Budget-Hinweis
+  „mit vollem Budget starten". Sie bekommt eine eigene, dedizierte Session.
+
+### Umgesetzt
+- **Bug 3 — leerer Heute-Zustand zu eng:** In `EmptyEntryInvitation`
+  (`entry_card.dart`) das aeussere Padding von `symmetric(vertical: 6)` auf
+  `only(top: 20, bottom: 6)` geaendert. Der Abstand zum Tagesinfo-Band steht
+  damit **nur im leeren Zustand** — das Widget wird ausschliesslich dann
+  gerendert; sobald der erste Eintrag steht, ersetzt eine `EntryCard` die
+  Einladung und der Abstand faellt automatisch weg. Kein Zutun in
+  `journal_screen.dart` noetig.
+- **Bug 4 — grauer Hintergrund beim allerersten Eintrag:** Eindeutige
+  `ValueKey`s vergeben — `ValueKey('today-empty-invitation')` auf die Einladung,
+  `ValueKey(entry.id)` auf jede Heute-`EntryCard`. Beide Konstruktoren nehmen
+  jetzt `super.key`.
+- **Dateien:** `entry_card.dart` (134 -> 139 Zeilen), `journal_screen.dart`
+  (1255 -> 1262 Zeilen). Beide komplett geliefert.
+
+### Diagnose (Bug 4, festgehalten)
+- Die graue Flaeche war **kein** Kartenhintergrund — `EntryCard` nutzt fest
+  `AppColors.paper`. Ursache ist **Element-Recycling**: bei genau einem Eintrag
+  ersetzt die `EntryCard` das `EmptyEntryInvitation` an **derselben** ListView-
+  Position (Index 2). Beide beginnen mit einem `InkWell`; Flutter recycelt das
+  Element positions-basiert und schleppt den Highlight-/Pressed-State vom
+  Antippen der Einladung (die das Sheet oeffnete) auf die neue Karte. Ab dem
+  zweiten Eintrag entsteht eine Karte an neuer Position — kein State-Transfer,
+  daher „ab dem zweiten alles schick". Eindeutige Keys zwingen Flutter zum
+  frischen Element-Aufbau statt zum Recyceln. **Merke: bei Listen, in denen
+  ein Widget-Typ an fester Position durch einen anderen ersetzt wird, Keys
+  setzen — sonst wandern InkWell-States mit.**
+
+### MatePad-Test
+- Bestaetigt („sieht gut aus, genau was wir wollten"): Bug 3 weg (Luft zwischen
+  Tagesinfo-Band und Schreibzeile im leeren Zustand), Bug 4 weg (erster Eintrag
+  ohne graue Flaeche, schlicht wie die Folge-Eintraege), zweiter Eintrag und
+  vergangene Tage unveraendert.
+
+### Statische Pruefung
+- Bracket-Checker (`/home/claude/check_brackets.py`) nach Container-Reset erneut
+  neu angelegt — interpolations-bewusst (`${...}` als Code, verschachtelte
+  Anfuehrungszeichen wie `'${x.padLeft(2, '0')}'` erzeugen keinen Fehlalarm;
+  gegen genau dieses Muster in `entry_card.dart` gegengeprueft). Ganzes `lib/`
+  sauber; beide geaenderten Dateien balanciert.
+
+### Offen / als Naechstes
+- **Claude-API-Anbindung in der App** — jetzt entsperrt (API laeuft). **Naechste,
+  dedizierte Session mit vollem Budget.** Zwei user-getriggerte Funktionen:
+  Ink-Transkription (Ergebnis gespeichert, ermoeglicht lokale Suche) + Weekly
+  Review. Fasst `journal_repository.dart` an -> grosse Lieferung. Grundlage:
+  `disponere_architektur_claude_api_v1_0.md`.
+- Markierter Design-Punkt aus S36: einzelne Tagesinfo auf Drittelbreite — nur
+  falls es stoert; im Test nie aufgetreten.
+- (weiterhin) Rest-Screens auf hell nachziehen; **Fable-Review** erst nach
+  Umsetzung + Aufraeumen.
+
+### Anforderungsdokument
+- Kein Nachzug. Bug 3 / Bug 4 (im S36-Bericht noch als offen fuers Anforderungs-
+  dokument vermerkt) sind jetzt behoben. Fuer den naechsten `docs:`-Commit
+  gesammelt: Journal-Layout vollstaendig (Heute-Panel S33, `#Tag`-Gruppierung
+  S35, Tagesinfo-`Wrap` S36) + Bug 3/4 gefixt (S37).
+
+### Commits (heute)
+- `931505a` — fix: journal empty-state spacing and first-entry grey highlight (bug 3+4)
+- `docs:` — Fortschritt Session 37 (dieser Commit; zitiert `931505a`)
+- Vorgaenger (docs): `beee071` (Session 36, zitiert feat `2cac6ab`)
+
+---
+
+## Session 38 — 31. Juli 2026
+
+### Charakter der Session
+- **Reine Abnahme-Session, kein Code geaendert.** Die Claude-Anbindung wurde zum
+  ersten Mal gegen eine laufende API abgenommen — der Moment, auf den seit
+  Session 24 gewartet wurde. Der wochenlange Blocker (Anthropic-Organisation
+  durch automatische Safeguards gesperrt) ist aufgehoben; die Organisation hat
+  wieder Guthaben (20,00 $ Organisations-Credits in der Console bestaetigt).
+- **Richtigstellung zum S37-Bericht.** Dessen "naechste Schritte" rahmten die
+  Claude-Anbindung als noch zu bauende, grosse Lieferung, die
+  `journal_repository.dart` anfasst. Das war ein Erinnerungsfehler: Der Code war
+  laengst gebaut — Teil 1 in Session 24 (`6fe8ff3`), Suche in Session 25
+  (`93e9ac3`), Wochenauswertung in Session 26 (`594e4b1`). Blockiert war nie das
+  Bauen, immer nur die Abnahme gegen eine echte API. Genau diese wurde heute
+  nachgeholt. Der Ritual-Schritt "frischer `git clone` + Inventur" hat den
+  tatsaechlichen Stand sofort sichtbar gemacht.
+
+### Abgenommen auf dem MatePad (alle fuenf Punkte)
+1. **Schluessel + Verbindung.** Frischer API-Schluessel in der Anthropic Console
+   erstellt (`sk-ant-...`), in die Claude-Einstellungen eingefuegt, im Android
+   Keystore hinterlegt. "Verbindung testen" meldet "Verbindung steht — der
+   Schluessel wurde akzeptiert". Modell `claude-sonnet-5` unten bestaetigt.
+2. **Tinten-Auswertung — Transkription makellos.** Testeintrag "Tinteneintrag -
+   Test der Auswertung und fuer Umlaute geeignet" fehlerfrei erkannt. Die
+   schweren Stellen sassen: der Umlaut in "fuer", und das cursiv fast wie "and"
+   geschriebene "und" wurde aus dem Kontext korrekt gelesen — die eigentliche
+   Staerke des multimodalen Modells, an der Huaweis ML Kit im Juni scheiterte
+   (Session 7). Gedankenstrich und Zeilenumbrueche erhalten.
+3. **Persistenz-Regressionstest bestanden.** Der in Session 24 gefuerchtete
+   Fehler (`ConflictAlgorithm.replace` in `_upsertInTxn` koennte `ink_text` beim
+   erneuten Speichern stillschweigend loeschen) tritt nicht auf: erkannten Text
+   uebernommen, Strich dazugeschrieben, mit dem Haken gespeichert, Eintrag erneut
+   geoeffnet — der erkannte Text war noch da. `ink_text` faehrt beim `replace`
+   sauber mit.
+4. **Suche.** Nach einem nur in der Handschrift stehenden Wort gesucht, Treffer
+   erscheint, als Tinten-Herkunft markiert. Der Kreis erkennen → speichern →
+   wiederfinden ist geschlossen — der eigentliche Sinn der Tinten-Auswertung.
+5. **Wochenauswertung — letzter ungetesteter API-Pfad, laeuft sauber.** Vor 12:00
+   aufgerufen, daher korrekt die Vorwoche vorgeschlagen (Kopf: "KW 30 ·
+   20.07.–26.07.", Entscheidung 7 des Architekturdokuments). Kontext-Zusammen-
+   stellung greift (955 Zeichen aus Eintraegen, Terminen, Tagesinfo und Aufgaben
+   der Woche, sichtbar unter "Kontext anzeigen"). Ausgabe sauber nach der
+   Prompt-Struktur aus `claude_prompts.dart` (Ueberblick / Was vorangekommen ist
+   / Woran es hakte / Beobachtungen / Aufgaben / Vorschlaege). Der Tag `#Waerme`
+   als durchgaengiges Muster ueber alle neun Eintraege erkannt — genau die Rolle,
+   die Tags laut §8 fuer die Auswertung spielen. Ueber "Ins Journal uebernehmen"
+   als heutiger Eintrag mit Tag `#Wochenauswertung` gelandet — kein automatischer
+   Schreibzugriff, bewusst uebernommen (Leitsatz §1).
+
+### Qualitaets-Befund
+- **Kein Nachjustieren noetig.** Die in Session 24 vorgemerkten Stellhebel (erst
+  Strichbreite, dann Aufloesung 1568 px, dann Thinking wieder einschalten)
+  bleiben unberuehrt — die Erkennung war auf Anhieb makellos. Skalierungswert und
+  Strichbreite bleiben unveraendert.
+- **Die Wochenauswertung halluziniert nicht.** Diese Testwoche war duenn (nur
+  Termine unter `#Waerme`, drei komplett leere Tage, keine Aufgaben). Die
+  Auswertung hat das ehrlich benannt ("kein konkreter Vorschlag ableitbar"; "ob
+  dort nichts stattfand oder nur nicht notiert wurde, ist aus dem Material nicht
+  erkennbar") statt Substanz zu erfinden — genau das Verhalten, das man in einem
+  Journal will.
+
+### Offen / als Naechstes
+- **Voller KW-31-Durchlauf ueber eine echte Woche** — kein Testpunkt mehr,
+  sondern der erste Alltagsnutzen. Ab Freitag 12:00 schlaegt die Auswertung die
+  laufende Woche mit den frischen Eintraegen vor. Erlebt sich beim normalen
+  Arbeiten, nicht als Abnahmeschritt.
+- (aus S24, weiterhin offen) `stop_reason: max_tokens` wird nicht gesondert
+  behandelt — bei sehr langer Handschrift theoretisch ein abgeschnittener Text
+  ohne Warnung; bislang nie aufgetreten, hier nur notiert.
+- (aus Fundament/Plan) "Erstmals mit Disponere arbeiten" — die App ist jetzt
+  funktional vollstaendig, dieser Schritt ist damit erreichbar.
+
+### Bogen (festgehalten)
+- Von "Huawei liest keine Handschrift" (Session 7, Juni) ueber den wochenlangen
+  Organisations-Blocker (Sessions 24–37) bis zu makelloser Transkription und
+  belastbarer Wochenauswertung heute Morgen. Die Claude-Anbindung — beide
+  Funktionen samt Suche — ist abgenommen. Disponere ist funktional vollstaendig.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session. Weiterhin gesammelt fuer den naechsten
+  `docs:`-Commit ins Anforderungsdokument: Journal-Layout vollstaendig (Heute-
+  Panel S33, `#Tag`-Gruppierung S35, Tagesinfo-`Wrap` S36), Bug 3/4 gefixt (S37)
+  und neu **Claude-Anbindung abgenommen (S38): Tinten-Auswertung, Wochenaus-
+  wertung und Suche jeweils 🟡 → ✅.**
+
+### Commits (heute)
+- **Kein `feat:`** — reine Abnahme, kein Code geaendert. Code-Stand unveraendert
+  `d800bac` (aus S37).
+- `docs:` — Fortschritt Session 38 (dieser Commit; kein feat-Bezug, da nichts
+  gebaut wurde)
+- Vorgaenger (docs): `d800bac` (Session 37, zitiert fix `931505a`)
+
+
+## Session 39 — 31. Juli 2026
+
+### Charakter der Session
+- **Reine Umfaerbe-Session.** Die fuenf letzten Screens, die noch das alte
+  dunkle Provisorium trugen, wurden auf das helle `AppColors`-Theme gezogen.
+  Damit ist der Theme-Rollout **komplett** — nichts Dunkles mehr in der App
+  ausser den bewusst dunklen Snackbar-Chips. Keine Logik geaendert, nur Farben.
+- Der offene Faden aus S37 ("Rest-Screens auf hell nachziehen") ist damit
+  geschlossen. Der Einstieg der Session war Steffens Frage nach genau diesen
+  Screens; eine Code-Inventur (`AppColors`-Nutzung je Datei) hat die fuenf
+  Kandidaten eindeutig gemacht.
+
+### Umgestellt (alle auf hell)
+1. **`claude_settings_screen.dart`** — Handverlesen neu geschrieben (die lokalen
+   `_k`-Konstanten ganz entfernt, direkt `AppColors`).
+2. **`calendar_settings_screen.dart`** — groesster der Settings-Screens; Kacheln
+   jetzt hell umrandet statt dunkel erhoben, Bottom-Sheet und Dialog auf Papier.
+3. **`tag_management_screen.dart`** — Liste mit haarfeinen Trennern, Umbenennen-
+   Dialog hell.
+4. **`week_review_screen.dart`** — Ergebnis-Karte hell (`fieldFill`) mit blauem
+   Akzent-Streifen links, kraeftig lesbarer Auswertungstext; Kontext-Expander
+   hell.
+5. **`drawing_screen.dart`** (Canvas) — die einzige nicht rein mechanische
+   Umstellung: dunkle Tinte auf hellem Papier statt heller Striche auf dunklem
+   Grund. Dazu in **`ink_painter.dart`** der Strich-Default beider Painter von
+   `Colors.white` auf `AppColors.ink` (dunkles Blau-Schwarz).
+
+### Bewusst NICHT angefasst
+- **`ink_renderer.dart`** bleibt schwarz-auf-weiss und theme-unabhaengig — das
+  ist das Bild, das zur Erkennung an Claude geht. Der Theme-Wechsel aendert an
+  der Transkription nichts (auf dem MatePad bestaetigt: Auswerten laeuft weiter
+  sauber). Die weisse Anzeige-Voreinstellung der Painter war dagegen eine stille
+  Falle auf hellem Grund; sie ist jetzt weg. Journal-Vorschauen (Eintragskarte,
+  Tag-Ansicht) uebergaben die Tintenfarbe ohnehin schon explizit — betroffen war
+  nur der Canvas, der sich auf den Default verliess.
+
+### Farb-Rampe (festgehalten, gilt fuer kuenftige Screens)
+- Flaechen/AppBar/Dialoge/Sheets → `paper`; Eingabefelder → `fieldFill`; Trenner
+  → `hairline`; Text-Rampe `text` (primaer) / `iconInactive` (sekundaer, Labels,
+  gedaempfte Icons) / `placeholder` (Feinschrift, Hints) plus `weekday` fuer die
+  leisesten Captions; Akzent → `accent`; Rot → `danger`; Tag-Chips `tagChipBg` +
+  `accent`. Karten sind umrandet, nicht dunkel erhoben.
+- **`_kCard` war dreifach belegt** und musste kontextabhaengig aufgeloest werden:
+  echte Karte → `fieldFill`, Dialog → `paper`, **Snackbar → `AppColors.text`**
+  (bewusst dunkler Chip, damit der helle Standard-Snackbar-Text lesbar bleibt —
+  ein heller Snackbar waere schlecht lesbar).
+
+### Lektionen
+- **Der `text70`-Fehler.** Ein globales `Colors.white` → `AppColors.text` hat ein
+  uebersehenes `Colors.white70` zu `AppColors.text70` verstuemmelt — ein Member,
+  den es nicht gibt. Das haette erst beim Kompilieren geknallt (tat es auch
+  einmal, weil die alte Datei noch auf der Platte lag). **Merke: nach
+  mechanischen Farb-Swaps jeden `AppColors.<name>` gegen die echten Member
+  pruefen — der Bracket-Checker faengt Tippfehler in Membernamen NICHT. Und
+  suffigierte Weiss-Toene (white70/54/38/…) immer VOR dem nackten `Colors.white`
+  ersetzen, sonst frisst der nackte Swap die Ziffern-Suffixe an.** Seither laeuft
+  eine strenge Namenspruefung ueber jede umgefaerbte Datei.
+- **`const`-Kontext.** `const Color(0xFF…)` muss beim Ersetzen das `const`
+  verlieren (`AppColors.accent`), denn `const AppColors.accent` ist ungueltige
+  Syntax. Ein nacktes `Color(0xFF…)` innerhalb eines `const`-Elternteils bleibt
+  dagegen gueltig, weil die `AppColors`-Member selbst Kompilierzeit-Konstanten
+  sind. Danach zusaetzlich auf `const AppColors.` gegengeprueft (fand keins).
+- **Bracket-Checker nach Container-Reset neu.** Die erste Neufassung hatte einen
+  Modus-Fehler (bei `${…}` blieb sie im String-Modus statt den Inhalt als Code zu
+  lesen). Fix: sauberer Modus-Stack (Basis `code`; String pusht einen String-
+  Modus; `${` pusht wieder `code`, bis das passende `}` kommt). Gegen
+  `'${x.padLeft(2, '0')}'`, verschachtelte Interpolations-Anfuehrungszeichen,
+  Raw- und Triple-Strings sowie einen Negativfall gegengeprueft, bevor eingesetzt.
+
+### MatePad-Abnahme
+- **Welle 1** (Claude-/Kalender-Einstellungen, Tag-Verwaltung): "Alles schick im
+  neuen Gewand." Ein Build-Fehler zuvor, weil die alte `tag_management`-Datei
+  (noch mit `text70`) auf der Platte lag — nach Ablegen der korrigierten Fassung
+  weg.
+- **Welle 2** (Wochenauswertung, Canvas + Painter): "Das sieht gut aus." Tinte
+  erscheint als dunkles Blau-Schwarz auf Papier, Auswerten laeuft weiter sauber.
+- Steffens Fazit: **"alle fuenf Screens hell."**
+
+### Offen / als Naechstes
+- **Anforderungsdokument-Nachzug** (`docs:`-Commit) — jetzt der groesste
+  gesammelte Batch: Journal-Layout vollstaendig (Heute-Panel S33, `#Tag`-
+  Gruppierung S35, Tagesinfo-`Wrap` S36), Bug 3/4 gefixt (S37), Claude-Anbindung
+  abgenommen (S38: Tinten-Auswertung/Wochenauswertung/Suche 🟡 → ✅) und neu
+  **Theme-Rollout komplett (S39): alle Screens hell.**
+- **Fable-Review** — war terminiert auf "nach Umsetzung + Aufraeumen"; dieser
+  Punkt ist mit dem Rollout erreicht. Laeuft im Chat uebers Abo. Fokus:
+  Kohaerenz gegen `disponere_design_v2_0.md`, Robustheit, Flutter-Konventionen.
+- **Erster voller KW-31-Durchlauf** der Wochenauswertung ueber eine echte Woche
+  (aus S38, kein Testpunkt mehr, sondern Alltagsnutzen).
+- (aus S24, weiterhin) `stop_reason: max_tokens` wird bei sehr langer Handschrift
+  nicht gesondert behandelt — theoretisch abgeschnittener Text ohne Warnung, nie
+  aufgetreten.
+- Klein: `native_text_test_screen.dart` ist verwaister Test-Code (nirgends
+  importiert) — koennte bei Gelegenheit weg.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session; der Rueckstand oben wandert im naechsten
+  `docs:`-Commit gesammelt ins Anforderungsdokument.
+
+### Commits (heute)
+- `01bae64` — feat: helles Theme fuer restliche fuenf Screens + Ink-Default dunkel
+- `docs:` — Fortschritt Session 39 (dieser Commit; zitiert `01bae64`)
+- Vorgaenger (docs): `d0c9280` (Session 38, kein feat-Bezug)
+
+## Session 40 — 31. Juli 2026
+
+### Charakter der Session
+- **Kleiner Quick-Win am Journal.** Die Handschrift-Vorschau auf der
+  Eintragskarte (und in der Tag-Ansicht) skalierte bisher die **volle
+  Aufnahme-Leinwand** in die 140px-Box statt die tatsaechlich beschriebene
+  Flaeche. Wer ein kurzes Wort irgendwo auf die grosse Zeichenflaeche schrieb,
+  bekam eine winzige Schrift mit viel Leerraum drumherum. Ein offener Faden aus
+  der Design-Phase (S33-Horizont), heute geschlossen.
+- Kein Feature, keine Architektur — eine Datei, ein Painter.
+
+### Ursache
+- `InkData.width/height` ist die **Aufnahme-Leinwand**, nicht die Bounding-Box
+  der Striche (steht so im Modell-Kommentar). `InkPreviewPainter` skalierte
+  genau diese ganze Leinwand — daher die winzige Schrift bei kurzen Notizen.
+- Aufschlussreiche Asymmetrie: `ink_renderer.dart` (das Bild, das zur Erkennung
+  an Claude geht) schneidet **schon** eng auf die Bounding-Box zu (`minX/minY`
+  + Rand). Nur die Bildschirm-Vorschau zog noch die volle Flaeche. Der Fix holt
+  die Vorschau auf dieselbe Zuschnitt-Idee.
+
+### Umgesetzt (`ink_painter.dart`, nur `InkPreviewPainter.paint`)
+- Umschliessendes Rechteck aller Stroke-Punkte bestimmen (`minX/minY/maxX/maxY`).
+- Nulllinien (waagerecht/senkrecht → eine Achse Ausdehnung 0) auf mindestens 1
+  begrenzen, damit die Skalierung nicht durch Null teilt.
+- Uniform in den verfuegbaren Platz einpassen, abzueglich 6px Rand.
+- **Horizontal linksbuendig** (linke Kante am Rand, buendig mit dem getippten
+  Text darunter), **vertikal zentriert**. (Kurzer Umweg in der Session: erst
+  zentriert, dann auf Zuruf rechtsbuendig, dann als Korrektur linksbuendig.)
+- Einzelpunkte (i-Tuepfelchen, kurzer Tipp) bleiben jetzt sichtbar — vorher
+  fielen sie in der Vorschau ganz weg.
+- `InkLivePainter`, das Modell (`ink_data.dart`) und die DB unberuehrt. Weil
+  `entry_card.dart` (Journal) und `tag_view_screen.dart` (Tag-Ansicht) denselben
+  Painter nutzen, greift der Fix an beiden Stellen mit einer Aenderung.
+
+### Werkzeug
+- **Bracket-Checker nach Container-Reset neu angelegt** (wie in S39): sauberer
+  Modus-Stack (Basis `code`; String pusht String-Modus; `${...}` pusht wieder
+  `code` bis zum passenden `}`), plus verschachtelbare Blockkommentare. Vor dem
+  Einsatz gegen verschachtelte Interpolation, raw/triple-Strings und einen
+  Negativfall gegengeprueft. Datei liegt wieder unter
+  `/home/claude/check_brackets.py`.
+
+### MatePad-Abnahme
+- Testschrift fuellt die Vorschau jetzt sauber aus statt in der Ecke zu
+  versinken; kurze wie breite Eintraege gleichermassen. Nach der Buendigkeits-
+  Korrektur Steffens Fazit: **"Sehr gut, das passt jetzt."**
+
+### Offen / als Naechstes (unveraendert gegenueber S39, plus Notiz)
+- **Fable-Review** — weiterhin der grosse naechste Schritt: Kohaerenz gegen
+  `disponere_design_v2_0.md`, Robustheit, Flutter-Konventionen. Laeuft im Chat
+  uebers Abo.
+- **Anforderungsdokument-Nachzug** (`docs:`) — Batch waechst um S40 (Vorschau-
+  Skalierung auf die Stroke-Bounding-Box).
+- (aus S24) `stop_reason: max_tokens` bei sehr langer Handschrift.
+- Klein: verwaister `native_text_test_screen.dart`.
+- **Neu notiert:** `InkData.width/height` wird von der Vorschau nun nicht mehr
+  gelesen (der Renderer nutzte sie ohnehin nie). Die Felder bleiben serialisiert
+  und schaden nicht — Aufraeumen optional, kein Handlungsdruck.
+
+### Anforderungsdokument
+- Kein Nachzug in dieser Session; der Rueckstand wandert gesammelt in den
+  naechsten `docs:`-Commit ins Anforderungsdokument.
+
+### Commits (heute)
+- `181eae2` — feat: journal ink preview scales to stroke bounding box, left-aligned
+- `docs:` — Fortschritt Session 40 (dieser Commit; zitiert `181eae2`)
+- Vorgaenger (docs): `afcaf78` (Session 39, zitiert `01bae64`)
+
+
+## Session 41 — 01. August 2026
+
+### Charakter der Session
+- **Reine Docs-Session** (`docs:`-Commit, kein Code). Anforderungsdokument-
+  Nachzug **v4.0 → v5.0** (Stand: nach Session 40). Gewaehlt aus der offenen
+  Liste, weil der gesammelte Batch seit Session 27 gross geworden war und die
+  beiden letzten 🟡-Core-Punkte inzwischen gefallen sind — der richtige Moment,
+  das Dokument auf den echten Stand zu heben.
+- Ritual sauber durchlaufen: Fundament aus Drive, Fortschritt v1_8 gelesen,
+  frischer `git clone --depth 1` + `git log` (Stand `393b211` bestaetigt),
+  Scope vor dem Schreiben bestaetigt.
+
+### Nachgezogen — Anforderungsdokument v5.0, Commit `6ec17b6`
+Das v4.0-Dokument stand nach Session 27 und war selbst ein grosser Sammel-
+Nachzug. Seither (Sessions 28–40) hat sich der Kern-Status verschoben:
+
+- **Theme (hell)** von „entschieden, Umsetzung offen" → ✅, ueber **alle** Screens
+  ausgerollt (Journal S29, restliche fuenf S39). Technologie-Tabelle, Theme-
+  Abschnitt, Feature-Tabelle und Offene Punkte entsprechend.
+- **Anthropic API-Zugang** von 🟡 Core ⏳ („Konto blockiert, Einspruch laeuft")
+  → ✅ („API laeuft, abgenommen S38"). Der Blocker ist aufgehoben, Guthaben
+  bestaetigt.
+- **Claude-Anbindung abgenommen (S38):** Tinten-Auswertung, Wochenauswertung und
+  Suche jeweils mit „abgenommen (Session 38)" markiert; die „Abnahme steht aus"-
+  Vorbehalte aus v4.0 entfallen. Leitsatz vorn im Dokument: **Disponere ist
+  funktional vollstaendig fuer v1.0.**
+- **Journal-Layout auf Design v2.0** in Kernkonzept 2 nachgezogen: Heute-Panel
+  (Overlay) fuer heutige Termine/Aufgaben, Heute-Spalte als freie Schreibflaeche,
+  vergangene Tage nach `#Tag` gruppiert, Tagesinfo als `Wrap`-Band (Kernkonzept 5).
+  Die alte Sektionsreihenfolge TAGESINFO → TERMINE → AUFGABEN → Eintraege lebt
+  nur noch in der Tag-Ansicht — so im Dokument klargestellt.
+- **Neuer Funktionsabschnitt Tag-Ansicht (S31)** plus Verweis in Kernkonzept 1
+  („Tag-Seite = gefilterte Sicht", realisiert als Screen). Neue Feature-Zeile.
+- **Offene Punkte gepflegt:** Theme-Umsetzung und Anthropic-Konto (beide erledigt)
+  entfernt; Erkennungsqualitaet weicher formuliert (S38: auf Anhieb makellos,
+  kein Nachjustieren noetig); `stop_reason: max_tokens` neu als kleiner offener
+  Punkt aufgenommen. Bestehen bleiben: Zeitzonen-Preis der Tages-Keys,
+  Perlenkette-Datenmodell, Tags der Wochenauswertung, Plaud-Ordner.
+
+### Zwei Ermessensentscheidungen (vorab bestaetigt)
+- **Tag-Ansicht als 🟡 Core ✅** eingestuft, nicht als Enhancement — die
+  „Tag-Seite als Sicht" ist Kern der App-Philosophie (Perlenkette-Fundament).
+- **Journal-Layout v2.0 bekommt KEINE eigene Feature-Zeile** — das Pixel-Layout
+  lebt im Design-Dokument (`disponere_design_v2_0.md`); im Anforderungsdokument
+  nur konzeptionell in Kernkonzept 2 + Aenderungs-Einleitung. (Kurz war eine
+  Layout-Zeile eingefuegt, dann bewusst wieder entfernt, um bei der Zusage zu
+  bleiben.)
+
+### Konsistenzpruefung
+- Nach den Ersetzungen gegen stale Marker gegengeprueft („Abnahme steht aus",
+  „Umsetzung offen", „blockiert", „Einspruch", verbleibende ⏳). Ergebnis: die
+  einzigen Treffer stehen im Aenderungsblock und beschreiben dort bewusst den
+  *Uebergang* (⏳ → ✅); alle verbliebenen ⏳ sind legitim geplant (Perlenkette
+  v2.0, Dokument-Import, Backup, Mindmap). Kleine stale Bezeichnung „TERMINE-
+  Sektion" in der Feature-Tabelle auf „Heute-Panel / Tagesblock" korrigiert.
+
+### Offen / als Naechstes (unveraendert gegenueber S40)
+- **Fable-Review** — weiterhin der grosse naechste Schritt: Kohaerenz gegen
+  `disponere_design_v2_0.md`, Robustheit, Flutter-Konventionen. Laeuft im Chat
+  uebers Abo.
+- **Erster voller KW-Durchlauf** der Wochenauswertung ueber eine echte Woche
+  (aus S38, Alltagsnutzen statt Testpunkt).
+- **Erstmals mit Disponere arbeiten** — die App ist funktional vollstaendig.
+- (aus S24) `stop_reason: max_tokens` bei sehr langer Handschrift; jetzt auch im
+  Anforderungsdokument als offener Punkt gefuehrt.
+- Klein: verwaister `native_text_test_screen.dart`; `InkData.width/height` von
+  der Vorschau nicht mehr gelesen (Feld-Aufraeumen optional).
+
+### Anforderungsdokument
+- **Nachzug erledigt.** Der seit Session 29 gesammelte Batch (Journal-Layout
+  komplett, Bug 3/4, Claude-Abnahme, Theme-Rollout, S40-Vorschau) ist
+  eingearbeitet. Neu gesammelt fuer den naechsten `docs:`-Commit: *nichts.*
+
+### Commits (heute)
+- `6ec17b6` — docs: Anforderungsdokument v5.0 - Nachzug nach Session 40
+- `docs:` — Fortschritt Session 41 (dieser Commit; zitiert `6ec17b6`)
+- Vorgaenger (docs): `393b211` (Session 40, zitiert feat `181eae2`)
+
+
+## Session 42 — 01. August 2026 (Teil II)
+
+### Charakter der Session
+- **Nachtrag- und Entscheidungs-Session, kein Code.** Direkt im Anschluss an den
+  Anforderungsdokument-Nachzug (Session 41). Ausloeser: aus Disponere selbst
+  gemeldete Anforderungen ueber einen neuen Meta-Tag. Ergebnis: zwei
+  Architektur-Gabelungen entschieden, Anforderungsdokument v5.0 → v6.0,
+  Session-Plan neu.
+
+### Neu: Ideen-Erfassung ueber zwei Meta-Tags in Disponere selbst
+- **`#Disponere-Versio`** — Ideen/Anforderungen, die zuegig, moeglichst in der
+  aktuellen Version integriert werden sollen.
+- **`#Disponere-Visio`** — Feature-Ideen fuer kuenftige Versionen.
+- Die Inhalte beider Tags werden regelmaessig ins Claude-Projekt gespiegelt und
+  von dort ins Anforderungsdokument ueberfuehrt (Versio → v1.0, Visio →
+  v2-Ausblick). Disponere dokumentiert damit seine eigene Weiterentwicklung —
+  dieselbe Perlenkette wie der Rest der App.
+
+### Die drei Anforderungen (Bild `Diponere_teilen_20260801_061631`, `#Disponere-Versio`, absolute Prioritaet)
+1. **Bilder in Disponere ablegen.**
+2. **Disponere als Empfangsziel beim Teilen** — beim Teilen aus einer anderen App
+   taucht Disponere im System-Dialog auf, das Geteilte landet im Journal des
+   aktuellen Tages. (Im Bild „im Sound von Disponere" — als „im Journal" gelesen,
+   von Steffen so bestaetigt.)
+3. **Aus Disponere heraus teilen.**
+
+### Aufwandseinschaetzung (geliefert)
+- Grundbefund: **alles reines AOSP-Android, GMS-frei** — laeuft auf dem
+  HMS-MatePad ohne Google-Dienst; einziger echter Unsicherheitsfaktor sind
+  HarmonyOS-Eigenheiten im Teilen-Dialog / in der Foto-Auswahl, daher
+  MatePad-Test zwingend.
+- Feature 1 (Bilder): eine volle Session, enthaelt **Schema-Migration v6 → v7**,
+  `image_picker`, App-privater Speicher, Thumbnail + Vollbild. Fundament fuer die
+  Bild-Wege in 2 und 3.
+- Feature 2 (Empfangsziel): ~eine Session (Text/URL; Bilder danach klein).
+  `ACTION_SEND`-`intent-filter`, Intent-Empfang, Landeblatt.
+- Feature 3 (aus Disponere teilen): halbe bis eine Session. `share_plus`;
+  Tinteneintrag → PNG ueber den vorhandenen `ink_renderer.dart` (schon fuer die
+  Claude-Auswertung gebaut, direkt wiederverwendbar).
+- Gesamt: rund **3–4 fokussierte Sessions**.
+
+### Zwei Architektur-Gabelungen — entschieden (stehen fest)
+- **Empfangsweg: natives MethodChannel in `MainActivity`** (`getIntent()` /
+  `onNewIntent()`), **nicht** das Plugin `receive_sharing_intent`. Begruendung:
+  robuster auf HMS und in derselben Werkzeuglinie wie FreeScript-PlatformView und
+  AppAuth (Disponere macht Natives ohnehin selbst).
+- **Reihenfolge: Feature-weise 1 → 2 → 3.** Feature 1 (Bilder) zuerst, weil es
+  Fundament fuer die Bild-Wege in 2 und 3 ist.
+- Beide Gabelungen wurden **vor** dem Schreiben der Dokumente ausgeraeumt — keine
+  offene Entscheidung wandert in den Abschluss.
+
+### Arbeitsweise (festgehalten, auf Steffens Hinweis)
+- **Weggabelungen moeglichst vor Session-Start bzw. vor dem Abschluss klaeren,
+  nicht mit offenen Entscheidungen ins Coding gehen. Bei Fragen fragen, nicht
+  einfach losschreiben.** Offene Gabelungen bei Abschluessen bringen Steffen beim
+  naechsten Start aus dem Konzept. (In dieser Session zunaechst die Reihenfolge
+  offen gelassen — nach dem Hinweis sofort nachgeholt und entschieden, bevor die
+  Dokumente final geschrieben wurden.)
+
+### Erledigt — Dokumente
+- **`disponere_anforderungen_v6_0.md`** (aus v5.0): neuer Aenderungsblock v5→v6;
+  neue Sektion „Ideen-Erfassung (Versio/Visio)"; Funktions-Block „Teilen &
+  Bilder" mit den drei Anforderungen, den Entscheidungen und der groben
+  Aufwandsschaetzung; drei Feature-Zeilen (Bild-Anhang 🟡 Core, zwei Teilen-Wege
+  🟢, alle „⏳ Versio, hohe Prio"); offener Punkt zur Bild-Ablage (Zielordner,
+  Thumbnail-Strategie, Anhang-Datenmodell, Schema v7). Plugin `receive_sharing_intent`
+  an beiden Nennungen ausdruecklich als „nicht" markiert.
+- **`disponere_naechste_session_plan.md`** komplett neu: loest den abgearbeiteten
+  Theme-/Tag-Ansicht-Fahrplan ab; Sessions A/B/C fuer Feature 1/2/3 mit
+  voraussichtlich angefassten Dateien, Aufwand und Budget-Hinweis.
+
+### Offen / als Naechstes
+- **Naechste Coding-Session: Feature 1 (Bilder ablegen)** — mit vollem Budget nach
+  Reset (Schema-Migration + `journal_repository.dart` als ganze Datei). Grundlage:
+  `disponere_anforderungen_v6_0.md` + `disponere_naechste_session_plan.md`.
+- (weiterhin) **Fable-Review** — Kohaerenz gegen `disponere_design_v2_0.md`,
+  Robustheit, Flutter-Konventionen; laeuft im Chat uebers Abo.
+- (weiterhin) Erster voller KW-Durchlauf der Wochenauswertung; Kleinkram
+  (`native_text_test_screen.dart`, `InkData.width/height`).
+
+### Anforderungsdokument
+- **Auf Stand (v6.0).** Teilen & Bilder samt Entscheidungen eingearbeitet. Neu
+  gesammelt fuer den naechsten `docs:`-Commit: *nichts* — der naechste Eintrag
+  entsteht mit der Umsetzung von Feature 1.
+
+### Commits (heute, Teil II)
+- `d63154c` — docs: Anforderungsdokument v6.0 - Teilen und Bilder (Versio); Session-Plan neu
+- `docs:` — Fortschritt Session 42 (dieser Commit; zitiert `d63154c`)
+- Vorgaenger (docs): `85e3823` (Session 41, zitiert `6ec17b6`)
+
+---
+
+## Session 43 — 09. August 2026 (Teilen & Bilder, Session A: Bilder ablegen)
+
+### Erledigt — Feature 1 (Bilder als Eintrags-Inhalt)
+- **Schema-Migration v6 -> v7**: neue Tabelle `attachments` (id, entry_id,
+  file_path, thumb_path, mime_type, created_at, ord; FK entry_id ON DELETE
+  CASCADE, Index idx_attachments_entry). `_onCreate` **und** `_onUpgrade`
+  (`if (oldVersion < 7)`) legen sie an - Neuinstallation und Migration teilen
+  dasselbe Schema. Auf dem MatePad an Bestandsdaten bestaetigt: alte Eintraege,
+  Tinte, Tags, Suche unveraendert.
+- **Datenmodell 1:n**: neues `Attachment`-Modell (`lib/models/attachment.dart`);
+  `JournalEntry` traegt jetzt `List<Attachment> attachments` + `hasImage`.
+  Bewusst Liste, obwohl die UI vorerst ein Bild pro Eintrag zulaesst - spaeter
+  mehrere Bilder ohne zweite Migration.
+- **App-privater Bildspeicher**: neuer `AttachmentStore`
+  (`lib/services/attachment_store.dart`) kopiert das gewaehlte Bild nach
+  `<AppDocuments>/attachments/` (kein Galerie-Eintrag, keine Storage-Berechtigung),
+  raeumt verdraengte/verwaiste Dateien best-effort wieder weg.
+- **Auswahl** via `image_picker` (Galerie **und** Kamera), Auswahl-Chooser im
+  Sheet; Import erst beim Speichern (Abbruch hinterlaesst keine Datei).
+- **Anzeige**: Miniatur in der `EntryCard` (aus dem Vollbild per `cacheWidth`
+  gerendert, keine separate Thumbnail-Datei), Antippen oeffnet den neuen
+  `ImageViewerScreen` (`lib/screens/media/`, Zoom, schwarze Buehne). Weil Anhaenge
+  in `_hydrateEntries` mitgeladen werden, erscheinen sie automatisch im heutigen
+  Journal **und** in vergangenen Tagen.
+- **Sheet**: Bild-Sektion (hinzufuegen / Vorschau mit "x" entfernen / ersetzen),
+  Nur-Bild-Eintraege (ohne Text) erlaubt. `delete(id)` liefert jetzt die
+  verwaisten Dateipfade zurueck; `_deleteEntry` loescht die Dateien nach.
+- **MatePad-Test bestanden**: Galerie + Kamera je ein Eintrag mit Miniatur,
+  Vollbild-Viewer, Migration ohne Datenverlust. (Miniatur im **vergangenen** Tag
+  wird morgen automatisch sichtbar - gleicher `EntryCard`-Pfad.)
+
+### Reversible Ermessensentscheidungen (markiert)
+- Miniatur aus dem Vollbild per `cacheWidth`; `thumb_path` reserviert (NULL),
+  spaetere echte Thumbnails ohne Migration nachruestbar.
+- Pick-Downscale `maxWidth 2560, quality 88`. Kein Manifest-/Permission-Eintrag
+  noetig (Foto-Picker; `image_picker` bringt eigenen FileProvider mit).
+
+### Bekannter Follow-up (bewusst ausgelassen)
+- **Tag-Ansicht** (`tag_view_screen.dart`) rendert Eintraege mit eigenem Widget
+  und zeigt die Miniatur noch **nicht** - kleiner Nachzug, ausserhalb des
+  Session-Scopes. Heute-Journal und vergangene Tage (beide `EntryCard`) zeigen
+  sie bereits.
+
+### Angefasste Dateien
+- Neu: `lib/models/attachment.dart`, `lib/services/attachment_store.dart`,
+  `lib/screens/media/image_viewer_screen.dart`.
+- Geaendert: `lib/models/journal_entry.dart`, `lib/data/journal_repository.dart`,
+  `lib/screens/journal/journal_screen.dart`,
+  `lib/screens/journal/widgets/entry_card.dart`, `pubspec.yaml`
+  (`image_picker: ^1.1.2`).
+
+### Offen / als Naechstes
+- **Session B - Feature 2 (Disponere als Empfangsziel)**: natives MethodChannel
+  in `MainActivity` (`ACTION_SEND`), geteilte Inhalte landen im heutigen Journal.
+  Reihenfolge 1 -> 2 -> 3 steht.
+- **Aufgaben am Faelligkeitstag** (Anforderungen v6.1 geschrieben) - Umsetzung
+  wie vereinbart **nach** dem Block Teilen & Bilder.
+- (weiterhin) **Fable-Review** - Kohaerenz gegen `disponere_design_v2_0.md`,
+  als reine Chat-Session nach dem aktuellen Block.
+- (weiterhin) Kleinkram: `native_text_test_screen.dart`, ungeklaerter
+  `stop_reason: max_tokens`-Randfall; Tag-Ansicht-Miniatur (s.o.).
+
+### Anforderungsdokument
+- **v6.1 jetzt im Repo** (`docs/disponere_anforderungen_v6_1.md`) - Repo und
+  Projekt wieder deckungsgleich. Inhalt unveraendert (Aufgaben-Anzeige im
+  Journal, Umsetzung spaeter).
+
+### Commits (heute)
+- `93266c3` - feat: images as entry content (attachments table, schema v7)
+- `d29fd82` - docs: requirements v6.1 (open tasks shown on due date)
+- `docs:` - Fortschritt Session 43 (dieser Commit; zitiert `93266c3`)
+- Vorgaenger (docs): Session 42 (zitiert `d63154c`)
+
+
+## Session 44 — 10. August 2026 (Teilen & Bilder, Session B: Empfangsziel)
+
+### Erledigt — Feature 2 (Disponere als Empfangsziel)
+- **Nativer Empfangsweg** (kein `receive_sharing_intent`): MethodChannel
+  `disponere/share` in `MainActivity`. Zwei Eintrittspunkte:
+  - **Kaltstart** (App war zu): geteilter Text liegt in `getIntent()`, wird
+    nativ gepuffert und von Flutter ueber `getInitialSharedText` **genau einmal**
+    abgeholt (Puffer wird beim Abholen genullt).
+  - **Laufzeit** (App laeuft, `onNewIntent` dank `launchMode=singleTop`): native
+    Seite ruft `onSharedText` zurueck.
+- **`extractSharedText`**: greift bei `ACTION_SEND` / `text/*` den Text aus
+  `EXTRA_TEXT`, stellt `EXTRA_SUBJECT` (z.B. Seitentitel beim URL-Teilen) voran.
+- **`AndroidManifest.xml`**: zweiter `intent-filter` (`ACTION_SEND` /
+  `text/plain`) an der MainActivity, neben LAUNCHER.
+- **Flutter**: neuer `ShareReceiver` (`lib/services/share_receiver.dart`);
+  `journal_screen` verdrahtet ihn in `initState` (Kaltstart-Abfrage nach dem
+  ersten Frame, Laufzeit-Handler) und loest ihn in `dispose`.
+- **Landeblatt = bestehendes „Neuer Eintrag"-Sheet**: `_openEntrySheet` bekam
+  `initialContent`; geteilter Text oeffnet das vertraute Sheet vorbefuellt, Tags
+  ergaenzt der Nutzer, Speichern laeuft den gewoehnlichen Weg
+  (`_saveEntryFromSheet` -> `_addEntry`) -> Eintrag im **heutigen** Journal.
+- **MatePad-Test bestanden**: URL aus dem Browser (Kaltstart) -> Landeblatt mit
+  Titel + URL; Text aus Notiz-App (Laufzeit) -> Landeblatt vorbefuellt; beide mit
+  `#Privat` gespeichert und heute sichtbar. Verbrauch-einmal bestaetigt (App-
+  Wechsel oeffnet das Blatt nicht erneut), normaler Icon-Start oeffnet es nicht.
+
+### Reversible Ermessensentscheidungen (markiert)
+- Manifest-Filter bewusst `text/plain` (Plan); der Kotlin-Extractor toleriert
+  defensiv jedes `text/*`, greift aber nur, was der Filter anbietet.
+- `EXTRA_SUBJECT` wird dem Text vorangestellt (mit `\n`), wenn beide da sind.
+
+### Angefasste Dateien
+- Neu: `lib/services/share_receiver.dart`.
+- Geaendert: `android/app/src/main/kotlin/com/steffen/disponere/MainActivity.kt`,
+  `android/app/src/main/AndroidManifest.xml`,
+  `lib/screens/journal/journal_screen.dart`.
+
+### Offen / als Naechstes
+- **Session C — Feature 3 (aus Disponere heraus teilen)**: Teilen-Einstieg am
+  Eintrag (Icon/Long-Press), `share_plus`; Tinteneintrag -> PNG ueber
+  `ink_renderer.dart`; Bild -> Datei. Reihenfolge 1 -> 2 -> 3 abgeschlossen bis 2.
+- **Bilder als Empfang** (`image/*`) — kleiner Nachzug zu Feature 2, baut auf
+  Feature 1 auf; danach.
+- **Aufgaben am Faelligkeitstag** (Anforderungen v6.1) — Umsetzung nach dem
+  Block Teilen & Bilder.
+- (weiterhin) **Fable-Review** — Kohaerenz gegen `disponere_design_v2_0.md`, als
+  reine Chat-Session nach dem Block.
+- (weiterhin) Kleinkram: `native_text_test_screen.dart`, `stop_reason:
+  max_tokens`-Randfall; Tag-Ansicht-Miniatur (aus Session A).
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** Feature 2 war im Block „Teilen & Bilder" (v6.0) schon
+  spezifiziert. Neu gesammelt fuer den naechsten `docs:`-Commit: *nichts*.
+
+### Commits (heute)
+- `3833046` - feat: share target - shared text lands in today's journal
+- `docs:` - Fortschritt Session 44 (dieser Commit; zitiert `3833046`)
+- Vorgaenger (docs): Session 43 (zitiert `93266c3`)
+
+---
+
+## Session 45 — 10. August 2026 (Teilen & Bilder, Session C: aus Disponere heraus teilen)
+
+### Erledigt — Feature 3 (aus Disponere heraus teilen)
+- **Teilen-Einstieg = Langdruck**: langes Druecken auf einen Eintrag oeffnet
+  jetzt ein Aktions-Blatt (`_showEntryActions`) mit **Teilen** und
+  **Loeschen**. Frueher ging der Langdruck direkt in die Lösch-Rueckfrage;
+  beide Aktionen teilen sich nun eine Geste (ein Menue, kein zusaetzliches Icon
+  auf der Karte, Weg A). Der Lösch-Pfad dahinter (`_confirmDeleteEntry`) ist
+  unveraendert.
+- **`ShareService`** (`lib/services/share_service.dart`, neu, statisch wie
+  `InkRenderer`) teilt je nach Eintragsart das Richtige nach aussen — via
+  `share_plus`, Androids nativer `ACTION_SEND`-Dialog:
+  - **Text** -> der Text selbst.
+  - **Tinte** -> frisch gerendertes PNG ueber `ink_renderer.dart` (schwarz auf
+    weiss, Temp-Datei mit festem Namen je Eintrag); liegt erkannter Text
+    (`inkText`) vor, geht er als Begleittext mit.
+  - **Bild** -> die Anhang-Datei(en); vorhandener Eintragstext kommt als
+    Begleittext mit. Nur tatsaechlich existierende Dateien werden angehaengt
+    (verwaiste Pfade uebersprungen).
+- **Fehler als Hinweis, nicht als Absturz**: `NothingToShareException` (leerer
+  Eintrag ohne Text/Bild/Tinte) und `InkRenderException` (Tinte nicht
+  renderbar) landen als SnackBar (`_shareEntry`). Ein abgebrochener
+  Teilen-Dialog wirft nichts (share_plus liefert nur einen „verworfen“-Status).
+- **Beide Kartenwege umgestellt**: Heute-Journal (`onLongPress`) und vergangene
+  Tage (`onLongPressEntry`) rufen beide `_showEntryActions`.
+- **MatePad-Test bestanden**: Text-Eintrag -> nur Text im Chooser;
+  Bild-Eintrag -> Datei (+ Text als Begleittext); Tinten-Eintrag -> PNG (+
+  erkannter Text); Loeschen-Rueckfrage unveraendert; abgebrochener Chooser ohne
+  Fehler. Nativer Chooser und der FileProvider von `share_plus` laufen auf
+  HarmonyOS sauber — die eine HMS-Unbekannte damit bestaetigt.
+
+### Reversible Ermessensentscheidungen (markiert)
+- Aktions-Blatt statt Teilen-Icon auf der Karte (Weg A): eine Geste fuer beide
+  Aktionen, keine visuelle Zusatzlast. Ein Icon liesse sich spaeter nachziehen.
+- Tinten-PNG im Temp-Verzeichnis, fester Name je Eintrag: eine erneute Teilung
+  ueberschreibt statt anzuhaeufen; das System raeumt Temp ohnehin selbst.
+- `share_plus` statt nativem MethodChannel: Senden ist ein einmaliger
+  `ACTION_SEND`-Aufruf ohne Lebenszyklus (anders als der Empfang, Feature 2) —
+  eigener FileProvider, kein Manifest-Eintrag, kein GMS.
+- `share_plus: ^10.1.4` mit der klassischen `Share.shareXFiles`/`Share.share`-
+  API (in 11.x entfernt; die 10er-Reihe haelt sie sicher verfuegbar).
+
+### Angefasste Dateien
+- Neu: `lib/services/share_service.dart`.
+- Geaendert: `lib/screens/journal/journal_screen.dart` (Import,
+  `_showEntryActions`, `_shareEntry`, beide Langdruck-Verdrahtungen),
+  `pubspec.yaml` (`share_plus: ^10.1.4`).
+
+### Offen / als Naechstes
+- **Block „Teilen & Bilder“ abgeschlossen** (1 -> 2 -> 3 fertig): Bilder als
+  Inhalt, Empfang, Senden stehen.
+- **Als Naechstes: Aufgaben am Faelligkeitstag** (Anforderungen v6.1) —
+  Umsetzung wie vereinbart nach dem Block; die naechste echte Coding-Session.
+- **Bilder als Empfang** (`image/*`, kleiner Nachzug zu Feature 2) — baut auf
+  Feature 1 auf; offen.
+- (weiterhin) Kleinkram: `native_text_test_screen.dart`, ungeklaerter
+  `stop_reason: max_tokens`-Randfall; Tag-Ansicht-Miniatur (aus Session A).
+- **Zum Schluss: Fable-Review** — vollstaendige Kohaerenzpruefung des Codes
+  gegen `disponere_design_v2_0.md`, als reine Chat-Session. Bewusst **am Ende**
+  (nach der restlichen geplanten Arbeit), damit sie einen moeglichst finalen
+  Stand prueft.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** Feature 3 war im Block „Teilen & Bilder“ (v6.0)
+  bereits spezifiziert. Neu gesammelt fuer den naechsten `docs:`-Commit:
+  *nichts*.
+
+### Commits (heute)
+- `998dca4` - feat: share entries outward - long-press action sheet, share_plus
+- `docs:` - Fortschritt Session 45 (dieser Commit; zitiert `998dca4`)
+- Vorgaenger (docs): Session 44 (zitiert `3833046`)
+
+---
+
+## Session 46 — 11. August 2026 (Aufgaben am Faelligkeitstag + kompakter Einzeiler)
+
+### Erledigt — Aufgaben am Faelligkeitstag (Anforderungen v6.1, §2)
+- **Heute faellige, offene Aufgaben erscheinen jetzt im Heute-Block** — die
+  einzige zugelassene Ergaenzung der freien Schreibflaeche. Neue Sektion mit
+  dezenter Beschriftung **HEUTE FAELLIG**, platziert **oben**: direkt unter dem
+  Tagesinfo-Band, ueber den eigenen Eintraegen. „Was heute zaehlt“ (Info +
+  faellige Aufgaben) steht damit zusammen oben, die Schreibflaeche flieszt
+  darunter.
+- **Streng gefiltert auf Faelligkeitstag == heute**: ueberfaellige Aufgaben und
+  solche ganz ohne Datum bleiben bewusst drauszen (weiterhin nur im
+  Heute-Panel). Auf dem MatePad bestaetigt: „Sprint-Herr Lexow“, „Marvin -
+  Ueberweisung“, „Zahnarztrechnung“ (alle ueberfaellig) und „Aufgabe ohne
+  Datum“ standen korrekt nur im Panel, nicht im Block.
+- **Erledigt = sofort weg aus dem Block, Panel behaelt die Streichung.** Das
+  Abhaken laeuft ueber den bestehenden `_togglePanelTask`: der Zustand wird
+  lokal umgeschaltet, wodurch der `!done`-Filter des Blocks die Aufgabe
+  **sofort** fallen laesst (Schreibflaeche bleibt sauber). Im Panel bleibt
+  dieselbe Aufgabe durchgestrichen sichtbar, bis dort neu geladen wird
+  (bewusste Panel-UX, unveraendert). Kein neuer Toggle noetig — die
+  Reconciliation ergibt sich aus dem Filter.
+- **Historische Tagesbloecke unangetastet**: eine Aufgabe steht weiterhin an
+  ihrem Faelligkeitstag im jeweiligen vergangenen Tagesblock (v6.0-Regel in
+  `PastDay.buildTimeline`, kein Eingriff). Auf dem MatePad geprueft.
+- **Kein Schema-Eingriff** (wie in v6.1 vermerkt) — reine Anzeige-Logik. Die
+  Datenschicht lieferte bereits alles (`surfacedTasksForDay`, `Task.hasDay`,
+  `Task.dayOnly`, `Task.isOverdue`).
+
+### Erledigt — kompakter Einzeiler (Verfeinerung im selben Zug)
+- Die heute faelligen Aufgaben im Block werden als **echter Einzeiler**
+  dargestellt, um Platz zu sparen:
+
+  `[ ]  08:00 - #Disponere-Versio - Plaud & Claude verbinden. https://…`
+
+- **Kein Umbruch** — zu Langes wird am Screenrand mit „…“ abgeschnitten
+  (`maxLines: 1`, `overflow: ellipsis`). Segmente Uhrzeit · Tags · Titel mit
+  „ - “ verbunden; fehlt eines, entfaellt es samt Trenner. Mehrere Tags stehen
+  als „#A #B“.
+- **Antippen der Zeile oeffnet die Aufgabe** (`_openTaskSheet(existing: task)`)
+  — der Weg, um den abgeschnittenen Rest zu sehen, zu bearbeiten oder zu
+  loeschen. Nach Speichern/Loeschen aktualisiert sich der Block. Damit ist das
+  Bearbeiten bestehender Aufgaben erstmals direkt aus dem Journal erreichbar.
+- **Checkbox links bleibt zum Abhaken** (offenes Kaestchen in `taskOpenBox`;
+  hier stets offen und heute faellig, also nie rot/ueberfaellig).
+- **Panel und vergangene Tage unveraendert** im gewohnten (hoeheren)
+  `TaskCard`-Format — der Einzeiler gilt nur im Heute-Block.
+
+### Reversible Ermessensentscheidungen (markiert)
+- **Platzierung oben** (nach dem Tagesinfo-Band, vor den Eintraegen) — mit
+  Steffen bestaetigt.
+- **Erledigt nur im Block sofort weg, Panel behaelt Streichung** — mit Steffen
+  bestaetigt (statt strengem v6.1-Wortlaut „auch im Panel sofort“); erhaelt die
+  gute Panel-UX.
+- **Scope = nur Heute-Block.** Vergangene Tage bleiben im hoeheren Kartenformat
+  (dort steht der Tag ohnehin als Cluster-Kopf). Kompakter Einzeiler auch fuer
+  vergangene Tage waere ein kleiner Nachzug.
+- **`#Tag` im Akzentblau als Inline-Wort** (kein Chip, nicht antippbar) — Frage
+  „antippbar?“ von Steffen bewusst verworfen.
+- **Design „Heute = freie Schreibflaeche“ bleibt**: Steffens Frage nach
+  `#Tag`-Gruppierung im heutigen Block wurde besprochen und verworfen — heute
+  bleibt chronologisch, Tags als Chip bei den Eintraegen.
+
+### Angefasste Dateien
+- Neu: `lib/screens/journal/widgets/today_due_tasks.dart` (Sektion **HEUTE
+  FAELLIG** + kompakte Einzeiler-Zeilen).
+- Geaendert: `lib/screens/journal/journal_screen.dart` (Import; Filter
+  `todayDueTasks` = offen & Faelligkeitstag == heute; Einfuegen der Sektion in
+  `rows` direkt nach dem Tagesinfo-Band; Verdrahtung `onToggleTask` =
+  `_togglePanelTask`, `onOpenTask` = `_openTaskSheet(existing:)`).
+
+### Offen / als Naechstes
+- **Bilder als Empfang** (`image/*`, kleiner Nachzug zu Feature 2) — offen.
+- Kompakter Einzeiler auch fuer **vergangene Tage** — optionaler Nachzug.
+- (weiterhin) Kleinkram: `native_text_test_screen.dart`, ungeklaerter
+  `stop_reason: max_tokens`-Randfall; Tag-Ansicht-Miniatur.
+- **Zum Schluss: Fable-Review** — vollstaendige Kohaerenzpruefung des Codes
+  gegen `disponere_design_v2_0.md`, als reine Chat-Session. Bewusst **am Ende**.
+
+### Bekannte, harmlose Warnung
+- Der Build zeigt eine KGP-Warnung fuer **`share_plus`** (Plugin wendet noch das
+  alte Kotlin-Gradle-Plugin an). Mit Flutter 3.44 **folgenlos** — `assembleDebug`
+  laeuft durch. Erst kuenftige Flutter-Versionen wuerden das hart ablehnen.
+  Backlog: `share_plus` bei Gelegenheit auf eine Built-in-Kotlin-Version heben,
+  falls verfuegbar.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** „Aufgaben am Faelligkeitstag“ war in v6.1 bereits
+  spezifiziert und ist mit dieser Session umgesetzt. Neu gesammelt fuer den
+  naechsten `docs:`-Commit: *nichts*.
+- Steffens neue Idee (Notiz in Disponere unter `#Disponere-Visio`: „wenn zu
+  einer offenen Aufgabe am aktuellen Tag ein Journaleintrag erfolgt, soll die
+  offene Aufgabe automatisch im Journaleintrag angezeigt werden“) ist bewusst
+  **auszerhalb** dieser Session als Zukunftsidee vermerkt — nicht Teil von v1.0.
+
+### Commits (heute)
+- `e998120` - feat: show tasks due today in today block as compact single line
+- `docs:` - Fortschritt Session 46 (dieser Commit; zitiert `e998120`)
+
+---
+
+## Session 47 — 11. August 2026 (Bilder als Empfang — image/* Share-Target)
+
+### Erledigt — Bilder als Empfang (Nachzug zu Teilen & Bilder, Feature 2)
+- **Disponere ist jetzt Share-Ziel fuer Bilder.** Teilt man aus einer anderen
+  App ein Bild an Disponere (`ACTION_SEND` mit `image/*`), oeffnet sich das
+  Eintrags-Sheet mit dem Bild **bereits gestaged** (wie frisch gewaehlt); beim
+  Speichern laeuft alles den gewohnten Weg — `AttachmentStore.importImage`
+  kopiert es in den App-privaten Speicher und haengt es als Attachment an den
+  **heutigen** Eintrag. Auf dem MatePad bestaetigt (Galerie -> Teilen ->
+  Disponere), Kaltstart- und Laufzeitweg beide getestet.
+- **Kernkniff — content:// wird nativ aufgeloest.** Ein geteiltes Bild kommt als
+  `content://`-URI in `EXTRA_STREAM`, nicht als Dateipfad. Die native Seite
+  (`MainActivity.extractSharedImage`) kopiert den URI-Inhalt ueber den
+  `ContentResolver` in eine app-private **Temp-Datei im cacheDir** und reicht den
+  **Pfad** (plus MIME) durch — genau wie image_picker Flutter einen Temp-Pfad
+  liefert. Dadurch laeuft der komplette bestehende Sheet-->-Import-Weg
+  **unveraendert** weiter. Kein Dart-seitiges content://-Lesen noetig (auf HMS
+  ohnehin heikel); dieselbe Werkzeuglinie wie FreeScript/AppAuth.
+- **Caption wird mitgenommen.** Schickt der Teilen-Dialog zum Bild noch Text mit
+  (`EXTRA_TEXT`/`EXTRA_SUBJECT`, z.B. eine Bildunterschrift oder Quell-URL),
+  landet der als Vorbelegung im Inhaltsfeld des Sheets. Fehlt er, bleibt das Feld
+  leer (Normalfall). Mit Steffen bestaetigt.
+- **Consume-once wie beim Text.** Der Kanal `disponere/share` bekam parallele
+  Bild-Methoden mit exakt der Text-Logik: **Kaltstart** ueber
+  `getInitialSharedImage` (nativer Puffer, genau einmal ausgeliefert),
+  **Laufzeit** ueber `onSharedImage` (`onNewIntent` -> `invokeMethod`). Ein
+  Intent ist entweder Text oder Bild — hoechstens einer der beiden Puffer ist je
+  gesetzt.
+
+### Entscheidungen (mit Steffen bestaetigt)
+- **Nur Einzelbild.** Registriert ist ausschliesslich `ACTION_SEND` (image/*),
+  **kein** `ACTION_SEND_MULTIPLE`. Das Eintrags-Sheet fuehrt bewusst genau ein
+  Bild (`pickedImage` ist ein einzelnes `XFile`). Teilt jemand mehrere Bilder,
+  taucht Disponere schlicht nicht als Ziel auf — ehrlich und passend zum Sheet.
+  Auf dem MatePad als Gegenprobe bestaetigt. Mehrbild-Empfang waere ein spaeterer
+  Nachzug zusammen mit einem Mehrbild-Sheet.
+- **Caption mitnehmen** (siehe oben) — statt Bild „nackt“ ohne Text zu empfangen.
+
+### Reversible Ermessensentscheidungen (markiert)
+- **Native Kopie laeuft synchron** (beim Engine-Aufbau bzw. `onNewIntent`). Bei
+  einem grossen, ungedrosselten Foto (mehrere MB) kann das einen kurzen Ruckler
+  geben — beim App-Start (Splash laeuft ohnehin) oder kurz beim Teilen. Bewusst
+  so: robust und einfach, statt Background-Thread mit Pending-Zustand (der die
+  Kaltstart-Abholtiming verkompliziert). Umkehrbar, falls es je stoert.
+- **Temp-Datei im cacheDir, kein manuelles Aufraeumen.** Android raeumt den Cache
+  selbst — dieselbe Haltung wie bei image_picker. Bricht der Nutzer das Sheet ab,
+  bleibt die Temp-Datei bis zum System-Cleanup liegen (unkritisch, app-privat).
+- **Paralleler Kanal statt getypter Sammelmethode**: getrennte Text-/Bild-
+  Methoden (`getInitialSharedText`/`getInitialSharedImage`,
+  `onSharedText`/`onSharedImage`) — am wenigsten ueberraschend, minimal-invasiv,
+  spiegelt die bestehende String-basierte Text-Logik.
+- **`getParcelableExtra` versionssicher**: ab API 33 die typisierte Variante,
+  davor die (mit `@Suppress` markierte) deprecated Form — deckt die
+  HarmonyOS/Android-Basis des MatePad sauber ab.
+
+### Angefasste Dateien
+- Geaendert: `android/app/src/main/AndroidManifest.xml` (zweiter Intent-Filter
+  `ACTION_SEND` + `image/*`; Kommentar zum bewussten Verzicht auf
+  `ACTION_SEND_MULTIPLE`).
+- Geaendert: `MainActivity.kt` (Bild-Puffer `initialSharedImage`; Kanal-Methode
+  `getInitialSharedImage`; `onNewIntent` reicht Bild ueber `onSharedImage`;
+  neue `extractSharedImage` -> `streamUri` (versionssicher) -> `copyToCache`
+  (ContentResolver -> cacheDir-Temp) + Caption aus EXTRA_TEXT/SUBJECT;
+  `extensionForMime`).
+- Geaendert: `lib/services/share_receiver.dart` (neue Klasse `SharedImage`
+  {path, mimeType, caption}; Callback `onImage`; `onSharedImage`-Zweig in
+  `_handle`; `getInitialSharedImage`; robustes `_parseImage`).
+- Geaendert: `lib/screens/journal/journal_screen.dart` (`_openEntrySheet` um
+  `XFile? initialImage` erweitert, `pickedImage` damit vorbelegt; `onImage`
+  verdrahtet; Kaltstart-Bild im postFrame abgeholt; neue `_handleSharedImage`
+  -> Sheet mit gestagtem Bild + Caption).
+
+### Kein Eingriff
+- **Kein Schema-Eingriff, keine neuen Packages.** Baut vollstaendig auf den
+  Attachments aus Feature 1 (Session 43) und dem Empfangskanal aus Feature 2
+  (Session 44) auf.
+
+### Offen / als Naechstes
+- Kompakter Einzeiler auch fuer **vergangene Tage** — optionaler Nachzug.
+- (weiterhin) Kleinkram: `native_text_test_screen.dart`, ungeklaerter
+  `stop_reason: max_tokens`-Randfall; Tag-Ansicht-Miniatur.
+- **Zum Schluss: Fable-Review** — vollstaendige Kohaerenzpruefung des Codes
+  gegen `disponere_design_v2_0.md`, als reine Chat-Session. Bewusst **am Ende**.
+  Damit ist v1.0 inhaltlich durch bis auf Kleinkram und diese Review.
+
+### Bekannte, harmlose Warnung
+- Unveraendert: KGP-Warnung fuer **`share_plus`** (altes Kotlin-Gradle-Plugin).
+  Mit Flutter 3.44 folgenlos; `assembleDebug` laeuft durch. Backlog wie gehabt.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** „Bilder als Empfang“ war der offene image/*-Nachzug zu
+  Feature 2 und ist mit dieser Session umgesetzt. Neu gesammelt fuer den
+  naechsten `docs:`-Commit: *nichts*.
+
+### Commits (heute)
+- `a122731` - feat: receive shared images (ACTION_SEND image/*) into todays journal
+- `docs:` - Fortschritt Session 47 (dieser Commit; zitiert `a122731`)
+
+---
+
+## Session 48 — 11. August 2026 (Kleinkram: Tag-Ansicht-Miniaturen, max_tokens-Hinweis, toter Test-Screen)
+
+### Erledigt
+- **Tag-Ansicht zeigt jetzt Bild-Miniaturen** (Nachzug aus Session 43 abgehakt).
+  Die `_EntryTile` in `tag_view_screen.dart` rendert Bild-Attachments als
+  Miniatur — direkt aus `Attachment.filePath` (kein separates Thumbnail,
+  `thumbPath` bleibt ungenutzt), begrenzt auf `maxHeight 160`, `cacheWidth 720`,
+  mit `errorBuilder` „Bild nicht gefunden“. Gespiegelt aus dem bestehenden
+  Journal-Sheet-Muster; ausgelagert in ein kleines Widget `_EntryImage`. Auf dem
+  MatePad bestaetigt (Eintrag mit Bild + Tag -> Tag antippen -> Miniatur unter
+  dem Text).
+- **Reiner Bild-Eintrag ohne Text sauber.** Der Inhaltszweig der Tile wurde von
+  `else Text(...)` auf `else if (entry.content.isNotEmpty) Text(...)`
+  umgestellt — ein Bild-Eintrag mit leerem Inhalt zeigt nur die Miniatur statt
+  einer leeren Textzeile. Text-Eintraege unveraendert.
+- **`stop_reason: max_tokens` wird behandelt** (langoffener Punkt aus Session 24
+  erledigt). In `claude_service._send` prueft der Response-Handler nach dem
+  Einsammeln der Textbloecke `decoded['stop_reason']`; bei `max_tokens` haengt
+  ein sichtbarer Hinweis (`_truncationNote`) an den bereits erkannten Text an —
+  statt ihn stillschweigend gekuerzt zurueckzugeben oder ganz zu verwerfen. Beim
+  Verbindungstest (`allowEmpty`) unterdrueckt, dort zaehlt nur der Statuscode.
+- **Toter Test-Screen entfernt.** `lib/screens/test/native_text_test_screen.dart`
+  (`NativeTextTestScreen`, alter FreeScript-Test) war nirgends mehr referenziert
+  und wurde geloescht. Der Ordner `lib/screens/test/` ist damit leer.
+
+### Reversible Ermessensentscheidungen (markiert)
+- **`cacheWidth 720`** fuer die Tag-Ansicht-Miniatur (im Journal-Sheet sind es
+  1080) — die Tile ist schmaler; 720 ist scharf genug und spart Speicher.
+  Umkehrbar.
+- **Abschneide-Hinweis neutral formuliert**
+  (`[Hinweis: Die Antwort hat das Laengenlimit erreicht und ist hier
+  abgeschnitten.]`) — passt sowohl fuer die Ink-Transkription (4096) als auch die
+  Wochenauswertung (8192), ohne aufrufspezifische Anleitung. Umkehrbar.
+
+### Angefasste Dateien
+- Geaendert: `lib/screens/tags/tag_view_screen.dart` (Import `dart:io`;
+  Inhaltszweig auf `else if (content.isNotEmpty)`; `if (entry.hasImage)`-Block
+  mit `_EntryImage`; neues Widget `_EntryImage`).
+- Geaendert: `lib/services/claude_service.dart` (Konstante `_truncationNote`;
+  `final text` -> `var text`; `stop_reason == 'max_tokens'`-Zweig vor `return`).
+- Geloescht: `lib/screens/test/native_text_test_screen.dart`.
+
+### Kein Eingriff
+- Kein Schema-Eingriff, keine neuen Packages. Baut auf den Attachments aus
+  Session 43 und der bestehenden Claude-Anbindung auf.
+
+### Offen / als Naechstes
+- Kompakter Einzeiler fuer offene Aufgaben auch fuer **vergangene Tage** —
+  optionaler Nachzug. **Traegt eine offene Sinnfrage**: ueberfaellige, noch offene
+  Aufgaben rueckwirkend am Faelligkeitstag anzeigen? (Session 46 zeigt faellige
+  Aufgaben bewusst nur im Heute-Block.) Vor dem Coden zu klaeren. Nicht Teil
+  dieser Session.
+- **Zum Schluss: Fable-Review** — vollstaendige Kohaerenzpruefung des Codes gegen
+  `disponere_design_v2_0.md`, als reine Chat-Session. Bewusst am Ende. Damit ist
+  v1.0 inhaltlich durch bis auf den optionalen Einzeiler und diese Review.
+
+### Bekannte, harmlose Warnung
+- Unveraendert: KGP-Warnung fuer `share_plus` (altes Kotlin-Gradle-Plugin). Mit
+  Flutter 3.44 folgenlos; `assembleDebug` laeuft durch. Backlog wie gehabt.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** Diese Session raeumte offenen Kleinkram ab
+  (Tag-Ansicht-Miniatur aus S43, max_tokens aus S24, toter Test-Screen) — nichts
+  davon aendert die Anforderungen. Neu gesammelt fuer den naechsten
+  `docs:`-Commit: *nichts*.
+
+### Commits (heute)
+- `c979e91` - feat: tag-view image thumbnails, flag truncated responses, remove dead test screen
+- `docs:` - Fortschritt Session 48 (dieser Commit; zitiert `c979e91`)
+
+---
+
+## Session 49 — 12. August 2026 (Sinnfrage geklaert + Fable-Review; reine Chat-/Doku-Session)
+
+### Charakter
+- **Kein Code angefasst.** Architektur-Entscheidung + Kohaerenzpruefung, zwei
+  reine `docs:`-Staende. Session-Ritual absolviert (Fundament, Fortschritt v2.6,
+  Repo-Klon HEAD `b9ca9c2` gegen Doc geprueft).
+
+### Erledigt — Sinnfrage Vergangenheits-Nachzug (letzte offene Design-Gabelung)
+- **Entscheidung getroffen: in der Vergangenheit aendert sich nichts.** Eine
+  ueberfaellige, noch offene Aufgabe bleibt an ihrem Faelligkeitstag im
+  Vergangenheits-Block neutral (kein Rot, kein „Ueberfaellig" — das ist bewusst
+  ein Heute-Begriff). Die designierte Aktionsflaeche fuer offene/ueberfaellige
+  Aufgaben ist und bleibt das **Heute-Panel**. Bewusstes Arbeiten mit dem Panel.
+- **Kein kompakter Einzeiler fuer vergangene Tage.** Der Einzeiler war eine
+  Platzspar-Massnahme fuer die freie Schreibflaeche (heute); in der Vergangenheit
+  *sind* die hoeheren `TaskCard`s die Tagesgeschichte (Haekchen, Durchstreichung,
+  Tag-Chips), der `#Tag` steht ohnehin als Cluster-Kopf. Ein Einzeiler wuerde
+  dort Information verlieren, nicht sparen.
+- **Ist-Zustand bestaetigt** (erdet die Entscheidung): eine offene ueberfaellige
+  Aufgabe erscheint heute an *zwei* Stellen — neutral an ihrem Faelligkeitstag
+  (`PastDay.buildTimeline`, `TaskCard` mit `today: pastDay.day`, daher nie rot)
+  **und** rot im Heute-Panel (`surfacedTasksForDay`). Das ist gewollt.
+- **Falls die Praxis es widerlegt:** wandert der Punkt in
+  `disponere_anforderungen` (Disponere-Versio), nicht ins Design. Bis dahin
+  gilt: erledigt, keine offene Gabelung mehr.
+
+### Erledigt — Fable-Review (der bewusste Projekt-Abschluss)
+- **Vollstaendige Kohaerenzpruefung Code gegen `disponere_design_v2_0.md`**,
+  Abschnitt fuer Abschnitt (§1–§11) plus querschnittliche Disziplin-Checks
+  (Farb-Disziplin, Datumsarithmetik, toter Code, Handschrift/FreeScript-Trennung).
+- **Gesamturteil: v1.0 ist kohaerent mit seinem Design.** Farbsystem Hex-genau
+  (alle 18 Tabellenwerte), kein toter Code, keine verwaisten Dateien,
+  FreeScript-Pfad intakt und nicht mit Tastatur-Handschrift vermengt.
+- **Report abgelegt und committet:** `disponere_fable_review_2026-08-12_v1_0.md`
+  (Commit `959d4b9`).
+
+### Funde (Feinschliff, kein v1.0-Blocker — Details im Report)
+- **F1 (niedrig, Code):** `google_calendar_service` rechnet Tages-Keys per
+  `Duration` (Z. 221, 262) gegen die Konstruktor-Regel (`week_context`,
+  `journal_repository`). Hier praktisch harmlos, aber Disziplinbruch. Fix:
+  gemeinsamer `dayBefore(DateTime) -> DateTime(y, m, d-1)`-Helfer.
+- **F2 (niedrig, Doku):** Design §4a („Aufgaben stehen nicht in der Spalte")
+  widerspricht dem Shipping-Verhalten seit v6.1 §2 (HEUTE-FAELLIG-Block). Code
+  korrekt; §4a nachziehen.
+- **F3 (trivial, Doku):** `app_colors.dart`-Kommentar verweist auf
+  `design_v1_0`; Werte stimmen, Verweis alt.
+- **F4 (niedrig, Design-Intent):** Tag-Ansicht-Zaehler zeigt Typ-Aufschluesselung
+  ohne den „zuletzt <…>"-Recency-Hinweis des §8-Beispiels. Ergaenzen oder
+  Beispiel anpassen.
+- **F5 (trivial, Kosmetik):** Pinsel-Icon an Tinten-Eintraegen — die eine „Deko",
+  die §3 fuer unnoetig hielt. Ermessen.
+- **F6 (trivial, Aufraeumen):** `thumbPath` reserviert, nie befuellt; Ein-Zeilen-
+  Doc „reserviert/ungenutzt" oder in einem Schema-Aufraeumer entfernen.
+- **Bewusste Ausnahme (kein Fund):** Foto-Oberflaechen (Vollbild-Viewer,
+  Scrim-Button) nutzen Dunkel-Chrome — konventionell fuer Fotos, aber die einzige
+  Abweichung vom Hell-Prinzip §1. Als bewusste Ausnahme festhalten.
+
+### Kein Eingriff / Angefasste Dateien
+- **Kein Code, kein Schema, keine Packages.** Nur Dokumente: der
+  Fable-Review-Report und dieses Fortschrittsdokument.
+
+### Offen / als Naechstes
+- **Kleine Fix-Session** fuer **F1** (Datumsmathematik-Helfer) — der einzige
+  echte Code-Punkt.
+- **Ein `docs:`-Durchgang** fuer **F2 + F3** (Design §4a und Farb-Kommentar
+  nachziehen) und die bewusste Dunkel-Chrome-Ausnahme.
+- **F4/F5/F6** nach Ermessen beim naechsten Anfassen der jeweiligen Datei.
+- Danach ist Disponere v1.0 sauber durch. **Die Fable-Review als Projekt-Endpunkt
+  ist erledigt** — kein weiterer Review-Schritt mehr eingeplant.
+
+### Bekannte, harmlose Warnung
+- Unveraendert: KGP-Warnung fuer `share_plus` (altes Kotlin-Gradle-Plugin). Mit
+  Flutter 3.44 folgenlos. Backlog wie gehabt.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** Die Sinnfrage-Entscheidung ist eine Design-
+  Entscheidung (hier dokumentiert); sie wandert nur dann in die Anforderungen,
+  wenn die Praxis das neutrale Vergangenheits-Verhalten widerlegt. Neu gesammelt
+  fuer den naechsten `docs:`-Commit: *nichts*.
+
+### Commits (heute)
+- `959d4b9` - docs: Fable-Review report v1.0 (coherence check against design v2.0)
+- `docs:` - Fortschritt Session 49 (dieser Commit; zitiert `959d4b9`)
+
+---
+
+## Session 50 — 12. August 2026 (Fable-5-Zweit-Review; reine Chat-/Doku-Session)
+
+### Charakter
+- **Kein Code angefasst.** Unabhaengiger Zweit-Blick durch **Claude Fable 5** auf das
+  gesamte Projekt — eigenes Urteil gebildet, **bevor** die Opus-Review (Session 49)
+  gelesen wurde; Gegenprobe erst danach. Session-Ritual absolviert (Fundament,
+  Fortschritt v2.7, frischer Repo-Klon, HEAD `f8533a0` gegen Doc verifiziert).
+
+### Erledigt — Fable-5-Zweit-Review durchgefuehrt
+- **Report:** `disponere_review_fable5_2026-08-12_v1_0.md` (Commit `15744d1`).
+- **Urteil in einem Satz:** v1.0 ist kohaerent mit seinem Design und handwerklich in
+  gutem Zustand — die Opus-Review wird in Gesamturteil und allen sechs Funden
+  bestaetigt, F1 wird verschaerft (echter, seltener DST-Off-by-one statt bloßem
+  Disziplinbruch), und ein neuer mittlerer Fund kommt hinzu (Tag-Umbenennen erfasst
+  Kalender-Quellen nicht).
+
+### Kernergebnisse der Gegenprobe
+- **F1 bestaetigt und verschaerft:** `subtract(Duration(days: 1))` in
+  `google_calendar_service.dart` (Z. 221/262) kippt den Tages-Key real — am Montag
+  nach dem Fruehjahrs-DST-Sonntag liefert `_dayBefore("2026-03-30")` den Key
+  `2026-03-28` statt `2026-03-29` (Dart rechnet auf der absoluten Zeit; nachgerechnet
+  fuer Europe/Berlin). Betroffen: mehrtaegige Ganztages-Termine, die am
+  DST-Fruehjahrs-Sonntag enden — sie verlieren ihren letzten Tag. Eintages-Faelle
+  rettet die `endDay < startDay`-Klammer; der Herbst-Fall ist korrekt. Der von Opus
+  vorgeschlagene Konstruktor-Helfer ist exakt der richtige Fix — er behebt damit
+  einen echten Bug, nicht nur einen Stilbruch.
+- **F2–F6 bestaetigt** (Doku-Nachzuege bzw. Ermessen, unveraendert).
+
+### Neue Funde (Fable 5, ueber die Opus-Review hinaus)
+- **M1 (mittel, Code):** `_renameTag` schreibt Eintraege und Aufgaben um, aber
+  **nicht** `calendar_source_tags`/`event_tags`. Ein Tag, der an Eintraegen UND einem
+  Kalender haengt (z. B. `#Waerme`), zerfaellt beim Umbenennen in zwei Schreibweisen;
+  reine Kalender-Tags: stiller No-op mit irrefuehrender UI-Bestaetigung in der
+  Tag-Verwaltung. Fix: Rename auf Kalender-Quellen ausweiten
+  (`upsertCalendarSource` + `reapplyCalendarSourceTags`), Kalender-Zaehler ergaenzen.
+- **N2 (niedrig, Build):** `huawei_ml_text` ist eine tote Dependency (nirgends
+  importiert), kostet aber den pub-cache-Patch nach jedem `flutter pub get` und den
+  `uniquePackageNames`-Hack — raus, bis der Dokument-Import real wird.
+- **N3 (niedrig, Doku):** Status-Drift in Anforderungen v6.1 (Teilen & Bilder ⏳
+  obwohl gebaut S43–47; „Schema v6" statt v7; Paketliste unvollstaendig) und im
+  Design-v2.0-Kopf („Noch nicht in Flutter umgesetzt").
+- **N4 (niedrig):** Tag-Ansicht haengt mehrtaegige Termine/Zeitspannen-Infos nur an
+  den Starttag (Journal: jeder beruehrte Tag) — bewusst entscheiden und dokumentieren.
+- **N5 (Randfall):** Kaltstart-Share-Sheet kann vor Abschluss von `_init()` oeffnen
+  (leeres Autocomplete/Kanonisierung) — Abholen hinter `_init()` haengen.
+- **Trivia:** max_tokens-Hinweis landet dauerhaft in `ink_text` (durchsuchbar,
+  teilbar); `_renameTag` persistiert ohne `await`; `PROCESS_TEXT`-Query im Manifest
+  ist Template-Rest.
+
+### Konsolidierte offene To-do-Liste (nach beiden Reviews)
+1. **Fix-Session (klein):** F1/N1 — `dayBefore`-Helfer ueber den DateTime-Konstruktor,
+   beide Stellen in `google_calendar_service.dart`.
+2. **Fix-Session (mittel):** M1 — Tag-Umbenennen auf Kalender-Quellen ausweiten,
+   Kalender-Zaehler in der Tag-Verwaltung; dabei das fehlende `await` mitnehmen.
+3. **`docs:`-Durchgang:** N3 + F2 + F3 — Anforderungen v6.2 (Teilen & Bilder ✅,
+   Schema v7, Pakete), Design v2.0 Status-Kopf + §4a-Satz + bewusste
+   Dunkel-Chrome-Ausnahme, `app_colors`-Kommentar auf v2.0.
+4. **Nach Ermessen:** N2 (`huawei_ml_text` raus), N4 (Starttag-Entscheidung
+   dokumentieren), N5 (Kaltstart-Race), Trivia, F4/F5/F6.
+
+Punkte 1 und 2 passen zusammen in eine fokussierte Session; danach ist v1.0 auch aus
+Sicht des Zweit-Blicks sauber durch.
+
+### Anforderungsdokument
+- **Unveraendert (v6.1).** Der Nachzug (N3) ist als Punkt 3 der To-do-Liste erfasst.
+
+### Commits (heute)
+- `15744d1` - docs: Fable 5 independent review report
+- `docs:` - Fortschritt Session 50 (dieser Commit; zitiert `15744d1`)
+
+---
+
+## Session 51 — 14. August 2026 (Datierter Eintrag — Anzeige-Day, Schema v8; Cowork-Session)
+
+### Erledigt — Datierter Eintrag (aus der Praxis, v6.2 -> v6.3)
+- **Ein Eintrag laesst sich jetzt fuer einen kuenftigen Tag vormerken.** Neues,
+  optionales `displayDay` am Eintrag; ueberall, wo ein Eintrag einem Kalendertag
+  zugeordnet wird — Journal (heute/vergangen), Tag-Ansicht, Wochenauswertung —,
+  zaehlt nun `journalDay` (= `displayDay` falls gesetzt, sonst der Zeitstempel-Tag).
+  So liegt ein Eintrag ueberall an genau einem Tag. Kein Abhaken, keine Checkbox —
+  er ist keine Aufgabe.
+- **Anzeige-Semantik: nur am gewaehlten Tag** — die in v6.2 offen gelassene
+  Gabelung, hier mit Steffen geschlossen. Ein auf die Zukunft datierter Eintrag
+  faellt aus Heute- und Vergangenheits-Liste und wartet still, bis sein Tag kommt;
+  am Erstelltag ist er nicht sichtbar. Loest den Rezept-Fall: heute mit Bild
+  anlegen, erst am Kochtag sehen.
+- **Schema-Migration v7 -> v8:** neue Spalte `entries.display_day`; kein Umbau an
+  `Task` oder `attachments`. Migration auf dem MatePad bestaetigt — bestehende
+  Eintraege, Bilder, Tinte und Tags nach dem Update unveraendert.
+- **Sheet:** unter dem Tag-Feld „Fuer einen Tag vormerken" (Material-Datumsdialog,
+  kein Abhaken). Datum laesst sich setzen, aendern und wieder entfernen — `copyWith`
+  kann `displayDay` gezielt loeschen (nicht nur ueberschreiben).
+- **Karte:** ein leises Kalender-Icon kennzeichnet einen vorgemerkten Eintrag —
+  dieselbe Zurueckhaltung wie das Tinten-Icon. Die angezeigte Uhrzeit bleibt die
+  Notiz-Uhrzeit (wann geschrieben, nicht wann er auftaucht).
+- **Deutsch durchgaengig:** `flutter_localizations` mit `Locale('de')` ergaenzt,
+  damit der Material-Datumsdialog (und alle Standard-Widgets) deutsch erscheinen.
+- **Randfall geklammert:** beim Bearbeiten eines bereits datierten Eintrags, dessen
+  Tag weit zurueckliegt, wurden `firstDate`/`lastDate` des Dialogs sicher geklammert
+  (sonst Assertion-Absturz, wenn `initialDate` ausserhalb liegt).
+- **Toter Code raus:** `_nextDay` entfiel mit der Umstellung der Wochenfenster-
+  Abfrage (einziger Aufrufer) und wurde entfernt.
+- **Auf dem MatePad bestaetigt:** Rezept-Fall (heute unsichtbar, am Zieltag im
+  Heute-Block, danach im Vergangenheitsblock des Zieltags), Datum aendern/entfernen,
+  Tag-Ansicht unter dem Anzeige-Tag, Datumsdialog deutsch, Kalender-Icon sichtbar.
+
+### Entscheidungen (mit Steffen bestaetigt)
+- **Nur am gewaehlten Tag** (Anzeige-Semantik) — die zentrale, vor dem Coden
+  geklaerte Gabelung.
+- **Tag-Ansicht und Wochenauswertung ordnen datierte Eintraege ebenfalls dem
+  Anzeige-Tag zu** (COALESCE auf `display_day`), damit ein Eintrag ueberall an genau
+  einem Tag liegt — konsistent mit dem Journal.
+- **Sortierung am Anzeige-Tag** nach der Notiz-Uhrzeit (aelter -> weiter unten im
+  Heute-Block).
+
+### Reversible Ermessensentscheidungen (markiert)
+- **`flutter_localizations` + `Locale('de')` app-weit** — noetig fuer den deutschen
+  Datumsdialog; macht nebenbei alle Standard-Widgets deutsch. Umkehrbar.
+- **Karten-Kennzeichnung nur ein Icon, kein Text.**
+
+### Angefasste Dateien
+- Geaendert: `lib/models/journal_entry.dart` (`displayDay`, `isDated`, `journalDay`,
+  `copyWith` mit gezieltem Loeschen des Datums).
+- Geaendert: `lib/data/journal_repository.dart` (Schema-Bump v8, Spalte
+  `display_day` lesen/schreiben, Wochenfenster-Abfrage auf Anzeige-Tag; `_nextDay`
+  entfernt).
+- Geaendert: `lib/screens/journal/journal_screen.dart` (Zuordnung heute/vergangen
+  nach `journalDay`; Datums-Waehler im Sheet; `_saveEntryFromSheet`/`_addEntry`/
+  `_updateEntry` tragen den Anzeige-Tag; `_dateWithWeekday`; Dialog-Grenzen
+  geklammert).
+- Geaendert: `lib/screens/journal/widgets/past_day.dart` (Timeline nach `journalDay`
+  einsortieren).
+- Geaendert: `lib/screens/journal/widgets/entry_card.dart` (Kalender-Icon).
+- Geaendert: `lib/screens/tags/tag_view_screen.dart` (Gruppierung nach `journalDay`).
+- Geaendert: `lib/services/week_context.dart` (Wochen-Buckets nach `journalDay`).
+- Geaendert: `lib/main.dart` + `pubspec.yaml` (`flutter_localizations`, `Locale('de')`).
+
+### Offen / als Naechstes (unveraendert aus den beiden Reviews)
+- **Fix-Session (klein + mittel):** F1/N1 (DST-Off-by-one im
+  `google_calendar_service.dart`, `Duration` -> `DateTime(y,m,d)`-Helfer, Z. 221/262)
+  + M1 (Tag-Umbenennen erfasst `calendar_source_tags`/`event_tags` nicht; dabei das
+  fehlende `await` mitnehmen). Passen zusammen in eine fokussierte Session.
+- **`docs:`-Durchgang:** N3/F2/F3 (Status-Drift, Design §4a, `app_colors`-Kommentar)
+  und die bewusste Dunkel-Chrome-Ausnahme.
+- **Nach Ermessen:** N2 (`huawei_ml_text` raus), N4 (Starttag-Zuordnung dokumentieren),
+  N5 (Kaltstart-Race), Trivia, F4/F5/F6.
+
+### Anforderungsdokument
+- **v6.3** — datierter Eintrag umgesetzt, Anzeige-Semantik „nur am gewaehlten Tag"
+  als geklaert geschlossen, Schema-v8-Notiz. (v6.2 hatte die Anforderung aufgenommen
+  und die Gabelung bewusst offen gelassen.)
+
+### Hinweis zum Session-Charakter (Cowork)
+- Diese Session lief in **Cowork**; Code kam als Patch statt als komplette Dateien,
+  und der Doku-Abschluss (Fortschritt-Block einsetzen) ging beim manuellen
+  Copy-Paste verloren — `f33378e` committete eine leere `v2_9` (Kopie von `v2_8`).
+  Dieser Block ist die **Rekonstruktion** aus Protokoll, v6.3 und der Dateiliste des
+  feat-Commits; er ersetzt den leeren Inhalt der `v2_9`.
+
+### Commits (heute)
+- `7dadfea` - feat: dated entry - optional display day surfaces on chosen day (schema v8)
+- `97951bd` - docs: Anforderungen v6.3 - datierter Eintrag umgesetzt, Anzeige-Semantik nur am gewaehlten Tag
+- `3a8fddd` - docs: Fortschritt Session 50 (Nachtrag; zitiert 15744d1)
+- `docs:` - Fortschritt Session 51 - Block eingesetzt, korrigiert leere v2_9 (zitiert 7dadfea)
+
+---
+
+## Session 52 — 17. August 2026 (Architektur-Session: Bruecke Eintrag <-> Aufgabe; kein Code)
+
+### Charakter
+- **Reine Architektur-Session** im Chat-Modus. Kein feat-Commit; das Ergebnis ist die
+  **Anforderungen v6.4**. Architektur- und Coding-Session bleiben getrennt — die
+  Umsetzung folgt separat.
+
+### Ausloeser (aus der Praxis, Versio, absolute Prioritaet)
+- Ein Gedanke wird als Journaleintrag notiert und soll zur **Aufgabe** werden — oder
+  eine Aufgabe soll als vorbereiteter Inhalt an einem kuenftigen Tag **aufsurfen**.
+  Bisher kein Weg, das eine aus dem anderen zu erzeugen; beides wird von Hand doppelt
+  angelegt. Die App verbindet Eintrag/Aufgabe/Termin ohnehin ueber Tags (Kernkonzept 1)
+  — es fehlt nur der eine Handgriff.
+
+### Geerdet (Session-Ritual)
+- Fundament aus Drive gelesen. HEAD **`5ce927e`** ueber frischen `--depth 1`-Clone
+  verifiziert (stimmt mit Session-51-Abschluss ueberein, Kette sauber).
+- Datenmodell gelesen: `journal_entry.dart`, `task.dart`, `journal_repository.dart`.
+  **Befund:** Tags liegen bei Eintrag und Aufgabe als `List<String>` direkt am Objekt;
+  `entry_tags` / `task_tags` sind nur abfragbare Projektionen. Tag-Vererbung ist damit
+  ein simples Kopieren der Liste.
+
+### Entscheidungen (mit Steffen bestaetigt)
+- **Verbindung = geteilter Tag (Option A).** Das neue Objekt erbt die Tags der Quelle;
+  die Verbindung ist der Tag (Perlenkette wie gebaut), danach leben beide eigenstaendig.
+  Bewusst *nicht* die harte DB-Kopplung (Fremdschluessel, spiegelnde Aenderungen):
+  Aufgabe (abhakbar) und Eintrag (nicht) haben verschiedene Lebenszyklen. Quelle bleibt
+  bei beiden Richtungen unveraendert.
+- **Aufgabe -> Eintrag: datiert.** Das eingegebene Datum wird zum `displayDay` — der neue
+  Eintrag ist ein datierter Eintrag (Session 51), surft nur am gewaehlten Tag auf und
+  wartet bis dahin still. Hat die Aufgabe schon einen `dueDay`, oeffnet der Dialog darauf.
+  `done` / `dueTime` fallen weg.
+- **Eintrag -> Aufgabe.** Titel aus `content` (Tinten-Eintrag: aus `inkText`); Datum ->
+  `dueDay` (nur Tag, keine Uhrzeit); Bilder bleiben am Eintrag (Aufgabe kennt keine
+  Anhaenge; der geteilte Tag haelt sie ueber die Tag-Ansicht erreichbar).
+- **Das winzige Sheet (beide Richtungen).** Knopf oeffnet kein leeres Formular, sondern
+  ein knappes Sheet mit vorbefuelltem, kuerzbarem Titel/Inhalt + Datumswaehler. „Ein
+  Knopf, dann das Datum" — aber man sieht und kuerzt, was entsteht.
+- **Kein Schema-Umbau.** Beide Richtungen nutzen vorhandene Felder: `Task.dueDay` und —
+  seit Schema v8 — `entries.display_day`; geerbte Tags gehen in die bestehenden
+  `entry_tags` / `task_tags`. Kein `v8 -> v9` noetig.
+
+### Anforderungsdokument
+- **v6.3 -> v6.4.** Neuer Aenderungsblock „gegenueber Version 6.3", §6-Verweis,
+  Feature-Zeile („Bruecke Eintrag <-> Aufgabe", 🟡 Core, Architektur entschieden,
+  Umsetzung folgt). Kumulativ, v6.3-Inhalt byte-genau erhalten.
+
+### Offen / als Naechstes
+- **Coding-Session Bruecke** (eigene Session, getrennt). Umsetzung geradlinig: kein
+  Schema-Umbau, beide Richtungen auf vorhandenen Feldern, das winzige Sheet je Richtung.
+- **v1.0-Ziel rutscht bewusst nach hinten** — Bruecke sauber statt halbgar vor dem Urlaub.
+- **Weiterhin offen aus den Reviews (unveraendert):** F1/N1 (DST-Off-by-one in
+  `google_calendar_service.dart`) + M1 (Tag-Umbenennen erfasst
+  `calendar_source_tags`/`event_tags` nicht; fehlendes `await`) — zusammen in eine
+  fokussierte Fix-Session. `docs:`-Durchgang N3/F2/F3. Nach Ermessen N2/N4/N5/Trivia.
+
+### Commits (heute)
+- `a431706` - docs: Anforderungen v6.4 - Bruecke Eintrag/Aufgabe, Architektur entschieden
+- `docs:` - Fortschritt Session 52 (dieser Commit; zitiert `a431706`)
+
+---
+
+## Session 53 — 18. August 2026 (Coding-Session: Bruecke Eintrag <-> Aufgabe)
+
+### Charakter
+- **Coding-Session im Chat-Modus.** Umsetzung der in Session 52 entschiedenen Architektur
+  (Anforderungen v6.4). Komplette Dateien, feat- dann docs-Commit.
+
+### Geerdet (Session-Ritual)
+- Fundament aus Drive gelesen. HEAD **`ef30be3`** ueber frischen `--depth 1`-Clone verifiziert
+  (Fortschritt Session 52, zitiert `a431706`; Kette sauber).
+- Ist-Zustand gelesen: `journal_entry.dart`, `task.dart`, `task_sheet.dart`, `entry_card.dart`,
+  `task_card.dart`, `journal_screen.dart`, `today_panel.dart`, `today_due_tasks.dart`,
+  `task_overview_screen.dart`. **Befund:** `_addEntry` traegt bereits `displayDay`; `upsertTask`
+  + `_reloadTasks` vorhanden; Tags liegen als `List<String>` am Objekt. Keine Modell- oder
+  Schema-Aenderung noetig — reine Verdrahtung plus ein neues Sheet.
+
+### Erledigt (Umsetzung)
+- **Neu `lib/widgets/bridge_sheet.dart`** — das winzige Sheet fuer beide Richtungen
+  (`showEntryToTaskSheet`, `showTaskToEntrySheet`) nach dem Muster von `task_sheet.dart`:
+  vorbefuellter, kuerzbarer Titel/Inhalt; geerbte Tags als schreibgeschuetzte Chips
+  (`_ReadOnlyTagChip`, ohne Navigation); Datumszeile (`_SheetRow`); deutsches Datumsformat.
+- **Eintrag -> Aufgabe.** "Zu Aufgabe machen" im bestehenden Long-Press-Aktionsblatt
+  (`_showEntryActions`, neben Teilen/Loeschen). Titel aus `content`, bei Tinte aus `inkText`.
+  Datum **optional/entfernbar** (Aufgabe ohne Faelligkeit erlaubt). Persistenz: `upsertTask`
+  + `_reloadTasks`. Snackbar "Als Aufgabe angelegt".
+- **Aufgabe -> Eintrag.** Long-Press **direkt** auf der Aufgabenkarte oeffnet das Sheet
+  (kein Zwischenmenue) — im Heute-Panel (`TaskCard`) und in der Uebersicht
+  (`_OverviewTaskCard`, drei offene Listen). Inhalt aus `title`. Datum **erforderlich** ->
+  `displayDay` -> datierter Eintrag (Session 51). Persistenz: `_addEntry(..., displayDay:)`
+  im Journal bzw. `repo.upsert(entry)` in der Uebersicht. Snackbar "Als Eintrag vorgemerkt".
+- **Karten/Panel erweitert:** `TaskCard` und `_OverviewTaskCard` um optionalen `onLongPress`;
+  `TodayPanel` reicht `onLongPressTask` durch.
+- **Verbindung = geteilter Tag:** Tag-Vererbung durch Kopieren der Liste; beide Quellen
+  bleiben unveraendert. Datumsarithmetik nur in Konstruktorform (`Task.dayOnly`,
+  `DateTime(y,m,d)`) — DST-sicher. Datumsdialog deutsch (`flutter_localizations`, Session 51);
+  Dialog-Grenzen geklammert (weit zurueckliegende Aufgabe).
+
+### Auf dem MatePad bestaetigt
+- Beide Richtungen funktionieren (Steffen: "hat funktioniert"). Antippen unveraendert
+  (Abhaken bzw. Bearbeiten); Long-Press ist die neue Zusatzgeste.
+
+### Reversible Ermessensentscheidungen (markiert)
+- **Aufgabenseite: Long-Press oeffnet das Sheet direkt** (schnellster Weg, Steffens Vorgabe
+  "schnell, in place, ohne Wechsel"). Eintragseite bleibt ein Menue, weil dort drei Aktionen
+  liegen — die Geste ist symmetrisch, das Ergebnis unterscheidet sich nach Aktionszahl.
+- **Long-Press nur wo sinnvoll:** nicht auf erledigten Aufgaben (Uebersicht), nicht in den
+  Heute-Block-Einzeilern (`TodayDueTasks`), nicht in vergangenen Tagen (`past_day.dart`).
+- **Geerbte Tags im Sheet schreibgeschuetzt** — Aendern gehoert ins jeweilige Bearbeiten-Sheet.
+
+### Angefasste Dateien
+- Neu: `lib/widgets/bridge_sheet.dart`.
+- Geaendert: `lib/screens/journal/journal_screen.dart` (Import; "Zu Aufgabe machen" im
+  Aktionsblatt; `_entryToTask` / `_taskToEntry`; `onLongPressTask` ans Panel).
+- Geaendert: `lib/screens/tasks/task_overview_screen.dart` (Import; `_taskToEntry`;
+  `onLongPress` an drei offenen Listen + Kartenkonstruktor).
+- Geaendert: `lib/screens/journal/widgets/task_card.dart` (optionaler `onLongPress`).
+- Geaendert: `lib/screens/journal/widgets/today_panel.dart` (`onLongPressTask` durchgereicht).
+
+### Werkzeug
+- Klammer-Pruefer neu aufgebaut (Mode-Stack: Zeilen-/verschachtelte Blockkommentare,
+  raw/triple Strings, `${...}`-Interpolation) und mit Positiv-/Negativfaellen validiert;
+  alle fuenf gelieferten Dateien bestehen.
+
+### Anforderungsdokument
+- **v6.4 -> v6.5.** Bruecke von "Architektur entschieden, Umsetzung folgt" auf **umgesetzt
+  (Session 53)** gesetzt: Header/Stand, neuer Aenderungsblock "gegenueber Version 6.4",
+  Paragraph-6-Bullet und Statuszeile. Kumulativ, v6.4-Inhalt erhalten.
+
+### Offen / als Naechstes
+- **Fix-Session (klein + mittel):** F1/N1 (DST-Off-by-one im `google_calendar_service.dart`,
+  `Duration` -> `DateTime(y,m,d)`, Z. 221/262) + M1 (Tag-Umbenennen erfasst
+  `calendar_source_tags`/`event_tags` nicht; fehlendes `await`). **M1-Gabelung vor dem Coden
+  klaeren:** stilles Remappen vs. blockierender Prompt.
+- **`docs:`-Durchgang:** N3/F2/F3 (Status-Drift, Design Paragraph 4a, `app_colors`-Kommentar).
+- **Nach Ermessen:** N2 (`huawei_ml_text` raus), N4, N5, Trivia, F4/F5/F6.
+- **Fable-5-Zweitmeinung:** self-contained Briefing vorbereitet; bewusst zuletzt vor v1.0.
+
+### Commits (heute)
+- `a8838dc` - feat: bridge entry <-> task via shared tag (Session 53)
+- `docs:` - Fortschritt Session 53 + Anforderungen v6.5 (dieser Commit; zitiert `a8838dc`)
+
+---
+
+## Session 54 - 19. August 2026 (Fix-Session: M1 + F1/N1)
+
+### Charakter
+- **Coding-Session im Chat-Modus.** Fokussierte Fix-Session auf die zwei
+  schaerfsten Review-Befunde. Komplette Dateien, feat- dann docs-Commit.
+
+### Geerdet (Session-Ritual)
+- Fundament aus Drive gelesen. HEAD **`83a7421`** ueber frischen `--depth 1`-Clone
+  verifiziert (Fortschritt Session 53, zitiert `a8838dc`; Kette sauber).
+- Ist-Zustand gelesen: `_renameTag` (journal_screen), `_rename` (tag_management_screen),
+  Kalenderteil des Repos (`calendar_source_tags`/`event_tags`-Schema, `reapplyCalendarSourceTags`),
+  `google_calendar_service.dart` (Z. 221/262). **Befund:** `_renameTag` schreibt nur Eintraege
+  + Aufgaben um (unawaited); `event_tags` sind aus den Quell-Tags materialisiert - die Quelle
+  ist die Autoritaet.
+
+### Entscheidung (mit Steffen bestaetigt)
+- **M1-Gabelung -> A) Stilles Remappen.** Der Tag ist eine Perle: Umbenennen erfasst zusaetzlich
+  `calendar_source_tags` und materialisiert `event_tags` nach - **ohne Dialog**, symmetrisch zu
+  Eintraegen/Aufgaben. Bewusst nicht der blockierende Prompt (B): der wuerde die Asymmetrie
+  einfuehren, dass Eintraege/Aufgaben still nachziehen, Kalenderquellen aber einen Extra-Klick
+  verlangen.
+
+### Erledigt (Umsetzung)
+- **F1/N1 (DST):** Zwei `Duration`-Datumsrechnungen in `google_calendar_service.dart` auf die
+  Konstruktorform `DateTime(y, m, d - 1)` umgestellt - Mitternachts-Korrektur (~Z. 221) und
+  `_dayBefore` (~Z. 262). Die zwei Fenster-Offsets `timeMin`/`timeMax` (um `now`) **bewusst
+  gelassen**: Instant-Offsets fuer das API-Abfragefenster, keine Tagesgrenze, kein DST-Risiko.
+- **M1 Repo (`journal_repository.dart`):** Statische **`remapTagList`** (die *eine* Remap-Regel
+  fuer alle Inhaltstypen: case-insensitiv, Merge-Dedup, Reihenfolge des ersten Auftretens) +
+  **`renameCalendarTag(from, to)`** (nutzt die getesteten Pfade `loadCalendarSources` ->
+  `upsertCalendarSource` -> `reapplyCalendarSourceTags`).
+- **M1 journal_screen:** `_renameTag` -> `Future<void>`, nutzt die geteilte Regel; **awaitet**
+  `upsertAll`/`upsertTask` (behebt das fehlende `await`) und `renameCalendarTag`, danach
+  `_reloadCalendarSources()` (in-memory-Quellen + Register frisch aus der DB). `mounted`-Guard.
+- **M1 tag_management_screen:** `onRename`-Typ -> `Future<void> Function(String, String)`;
+  Aufruf awaitet, `mounted`-Guard vor dem setState der Anzeige-Kopie.
+
+### Auf dem MatePad bestaetigt
+- Umbenenn-Kette (Tag an Eintrag + Aufgabe + Kalenderquelle) zieht die Termine mit; `#alt`
+  verschwindet ueberall. Steffen: "ist getestet".
+
+### Reversible Ermessensentscheidungen (markiert)
+- **`remapTagList` als geteilte Regel extrahiert** statt der zwei divergierenden Kopien der
+  Merge-Dedup-Logik - eine Quelle der Wahrheit fuer Tag-Identitaet (genau die Klasse Bug, um
+  die M1 kreist). Die bestehende, getestete `_renameTag`-Logik wurde dabei 1:1 uebernommen.
+- **`renameCalendarTag` ueber die getesteten Pfade** statt einer handgeschriebenen
+  Sammel-Transaktion: Umbenennen ist selten, Verlaesslichkeit ueber bekannte Wege schlaegt
+  Cleverness. Trade-off notiert: nicht atomar ueber die zwei Awaits je Quelle - bei Absturz
+  dazwischen konvergiert ein erneuter Lauf.
+
+### Angefasste Dateien
+- `lib/services/google_calendar_service.dart` (F1/N1).
+- `lib/data/journal_repository.dart` (M1: `remapTagList` + `renameCalendarTag`).
+- `lib/screens/journal/journal_screen.dart` (M1: `_renameTag` async + Kette).
+- `lib/screens/tags/tag_management_screen.dart` (M1: `onRename` awaitbar).
+
+### Werkzeug
+- Klammer-Pruefer neu aufgebaut (Mode-Stack: Zeilen-/verschachtelte Blockkommentare,
+  raw/triple Strings, `${...}`-Interpolation inkl. Rueckkehr in den String) und gegen 15
+  Positiv-/Negativfaelle validiert; alle vier Dateien bestehen.
+
+### Anforderungsdokument
+- **v6.5 -> v6.6.** Neuer Aenderungsblock "gegenueber Version 6.5" (M1 + F1/N1 behoben);
+  die Feature-Zeile "Tag-Verwaltung / Umbenennen" praezisiert (jetzt ausdruecklich Eintraege,
+  **Aufgaben und Kalenderquellen** samt materialisierter Termine). Kumulativ, v6.5-Inhalt erhalten.
+
+### Offen / als Naechstes
+- **`docs:`-Durchgang:** N3/F2/F3 (Status-Drift, Design Paragraph 4a, `app_colors`-Kommentar).
+- **Nach Ermessen:** N2 (`huawei_ml_text` raus), N4, N5, Trivia, F4/F5/F6.
+- **Fable-5-Zweitmeinung:** self-contained Briefing, bewusst zuletzt vor v1.0.
+- **Urlaub abgeschlossen** (Anfang August, zwei Wochen); v1.0-Ziel war bewusst entspannt. Disponere laeuft im taeglichen Realbetrieb.
+
+### Commits (heute)
+- `3e2b343` - fix: tag rename covers calendar sources+events, await persistence; DST-safe day math (Session 54)
+- `docs:` - Fortschritt Session 54 + Anforderungen v6.6 (dieser Commit; zitiert `3e2b343`)
+
+---
+
+*Wird nach jeder Session aktualisiert.*
