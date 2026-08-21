@@ -121,4 +121,17 @@ nur als Muster.
 
 ---
 
+## Einsortiert (Kurzprotokoll)
+
+*Knappe Zeile pro triagiertem Eingang — damit nachvollziehbar bleibt, wohin er ging.
+Die ausführliche Fassung lebt im Anforderungsdokument.*
+
+- **E-01 · Bild in der Eintragskarte klein / als Icon → VERSIO** (21.08.2026). Entschieden:
+  **kleines Vorschau-Quadrat** (Motiv erkennbar, kein generisches Icon), Vollbild beim
+  Antippen, gilt in Journal- und Tag-Ansicht gleich. Reine Anzeige-Änderung an der gebauten
+  Bild-Ablage, kein Schema-Eingriff. → `disponere_anforderungen_v6_7.md` (Änderungsblock
+  „gegenüber v6.6", Feature 1 „Teilen & Bilder", Feature-Zeile). Bild lokal auf Vega abgelegt.
+
+---
+
 *Eingang = Arbeitsfläche · Anforderungsdokument = settled record.*
