@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../../data/journal_repository.dart';
@@ -8,6 +6,7 @@ import '../../models/daily_info.dart';
 import '../../models/journal_entry.dart';
 import '../../models/task.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/entry_image_thumb.dart';
 import '../../widgets/ink_painter.dart';
 
 /// Tag-Ansicht — „alles zu einem Tag über alle Tage" (Fahrplan-Schritt 2).
@@ -614,12 +613,13 @@ class _EntryTile extends StatelessWidget {
                 height: 1.5,
               ),
             ),
-          // Bild-Anhang (Session A): Miniatur direkt aus der Bilddatei. Ein
-          // reiner Bild-Eintrag (leerer Inhalt, keine Tinte) zeigt nur die
-          // Miniatur — der leere Text oben fällt dann weg.
+          // Bild-Anhang: kompaktes Vorschau-Quadrat (E-01, v6.7) — dieselbe
+          // geteilte Miniatur wie im Journal, Antippen öffnet das Vollbild. Ein
+          // reiner Bild-Eintrag (leerer Inhalt, keine Tinte) zeigt nur das
+          // Quadrat — der leere Text oben fällt dann weg.
           if (entry.hasImage) ...[
             const SizedBox(height: 8),
-            _EntryImage(path: entry.attachments.first.filePath),
+            EntryImageThumb(path: entry.attachments.first.filePath),
           ],
           _OtherTags(
             tags: entry.tags,
@@ -627,42 +627,6 @@ class _EntryTile extends StatelessWidget {
             onTagTap: onTagTap,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Bild-Miniatur einer Eintrags-Kachel. Rendert direkt aus der Bilddatei
-/// ([Attachment.filePath]) — ein separates Thumbnail gibt es (noch) nicht,
-/// `thumbPath` ist ungenutzt. In der Höhe begrenzt und mit `cacheWidth`
-/// sparsam dekodiert; dieselbe Vorschau wie im Journal, hier rein zum Ansehen.
-class _EntryImage extends StatelessWidget {
-  final String path;
-  const _EntryImage({required this.path});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxHeight: 160),
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Image.file(
-        File(path),
-        fit: BoxFit.cover,
-        cacheWidth: 720,
-        errorBuilder: (context, error, stackTrace) => Container(
-          height: 100,
-          alignment: Alignment.center,
-          color: AppColors.fieldFill,
-          child: const Text(
-            'Bild nicht gefunden',
-            style: TextStyle(color: AppColors.placeholder),
-          ),
-        ),
       ),
     );
   }

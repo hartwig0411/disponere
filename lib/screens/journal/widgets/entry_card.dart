@@ -1,10 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import '../../../theme/app_colors.dart';
 import '../../../models/journal_entry.dart';
 import '../../../widgets/ink_painter.dart';
-import '../../media/image_viewer_screen.dart';
+import '../../../widgets/entry_image_thumb.dart';
 import 'tag_chip.dart';
 
 /// Ein Journal-Eintrag: getippt in neutralem Dunkel, handschriftlich als echte
@@ -87,13 +85,13 @@ class EntryCard extends StatelessWidget {
                       height: 1.5,
                     ),
                   ),
-                // Bild-Anhang (Session A): Miniatur in der Karte, Antippen
-                // öffnet die Vollbild-Ansicht. Zurzeit höchstens ein Bild pro
-                // Eintrag — deshalb `attachments.first`.
+                // Bild-Anhang: kompaktes Vorschau-Quadrat in der Karte (E-01,
+                // v6.7), Antippen öffnet die Vollbild-Ansicht. Zurzeit höchstens
+                // ein Bild pro Eintrag — deshalb `attachments.first`.
                 if (entry.hasImage) ...[
                   SizedBox(
                       height: entry.isInk || entry.content.isNotEmpty ? 12 : 4),
-                  _EntryThumbnail(path: entry.attachments.first.filePath),
+                  EntryImageThumb(path: entry.attachments.first.filePath),
                 ],
                 if (entry.tags.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -105,53 +103,6 @@ class EntryCard extends StatelessWidget {
                   ),
                 ],
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Miniatur eines Bild-Anhangs in der Eintragskarte. Der eigene Tap-Handler
-/// fängt die Berührung ab, bevor sie die Karte (Eintrag bearbeiten) erreicht,
-/// und öffnet stattdessen die Vollbild-Ansicht.
-///
-/// `cacheWidth` dekodiert das Bild verkleinert — die Karte braucht keine volle
-/// Auflösung, das schont den Speicher bei vielen Bildern in der Liste.
-class _EntryThumbnail extends StatelessWidget {
-  final String path;
-  const _EntryThumbnail({required this.path});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ImageViewerScreen(filePath: path),
-          ),
-        );
-      },
-      child: Container(
-        constraints: const BoxConstraints(maxHeight: 220),
-        width: double.infinity,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Image.file(
-          File(path),
-          fit: BoxFit.cover,
-          cacheWidth: 1080,
-          errorBuilder: (context, error, stackTrace) => Container(
-            height: 120,
-            alignment: Alignment.center,
-            color: AppColors.fieldFill,
-            child: const Text(
-              'Bild nicht gefunden',
-              style: TextStyle(color: AppColors.placeholder, fontSize: 13),
             ),
           ),
         ),
