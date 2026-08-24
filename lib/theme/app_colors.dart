@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Zentrale Farb- und Theme-Quelle (helles Theme, Design v1.0).
+/// Zentrale Farb- und Theme-Quelle (helles Theme, Design v2.0).
 ///
 /// Einzige Stelle, an der die Farbwerte der App stehen. Die Tabelle folgt
-/// `docs/disponere_design_v1_0.md` §2. Ein Dunkelmodus ist fuer v1.0 nicht
+/// `docs/disponere_design_v2_0.md` §2. Ein Dunkelmodus ist fuer v1.0 nicht
 /// geplant — deshalb reichen feste Konstanten plus ein Light-`ThemeData`,
 /// keine Doppel-Theme-Mechanik.
 class AppColors {

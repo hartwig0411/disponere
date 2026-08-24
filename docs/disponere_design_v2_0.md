@@ -3,7 +3,7 @@
 *Referenzdokument. Hält die visuellen Grundentscheidungen fest. Wird selten geaendert — nur wenn sich das Erscheinungsbild grundlegend aendert.*
 
 **Version 2.0 — 28. Juli 2026**
-**Status:** Entwurf bestaetigt. Journal-Layout (Seiten-Panel + `#Tag`-Gruppierung) in dieser Design-Session entschieden. Noch nicht in Flutter umgesetzt (reine Design-Session, kein Code).
+**Status:** Umgesetzt. Journal-Layout (Seiten-Panel + `#Tag`-Gruppierung) in dieser Design-Session entschieden und seither in Flutter ausgerollt (helles Theme: Journal Session 29, uebrige Screens Session 39; Heute-Panel und `#Tag`-Gruppierung in den Folge-Sessions). Stand nachgezogen am 24. August 2026 (Doku-Durchgang F2/F3).
 
 *Aenderungen gegenueber v1.0: §4 neu gefasst (Trennung heute / vergangene Tage, `#Tag`-Gruppierung), neues §5 „Seiten-Panel — Heute-Agenda", Tagesinfo nebeneinander, neues §11 „Spaetere Versionen". Alte §5–§10 um je eine Nummer verschoben.*
 
@@ -16,6 +16,8 @@ Schlicht und reduziert. Vorbild ist Logseq: grosser, ruhiger Datumskopf als Anke
 Das Theme ist **hell**. Damit ist zugleich die Tinten-Frage entschieden: **dunkle Tinte auf hellem Grund**, wie auf Papier. Handschrift liest sich so, wie eine Handschrift sich lesen soll — kein Kampf gegen die Gewohnheit.
 
 Ein **dunkles Theme ist fuer v1.0 nicht geplant.**
+
+**Eine bewusste Ausnahme:** Foto-Oberflaechen nutzen Dunkel-Chrome — der Vollbild-Bildbetrachter (`image_viewer_screen`) und der abdunkelnde Scrim-Hintergrund im Eintrags-Sheet (`journal_screen`). Fuer Fotos ist das konventionell (das Bild soll wirken, nicht die Umgebung); es ist die einzige Abweichung vom Hell-Prinzip und hier ausdruecklich festgehalten, damit sie nicht spaeter als Versehen gelesen wird.
 
 ---
 
@@ -71,7 +73,7 @@ Reihenfolge heute von oben nach unten:
 2. **Tagesinfo-Band** — direkt unter dem Datum, ruhige, leicht getoente Flaeche. Mehrere Tagesinfos stehen **nebeneinander** (`Wrap`, nicht gestapelt); ab der vierten bricht es von selbst in eine zweite Zeile um.
 3. **Deine Eintraege** — getippte Notizen und Tinte, **chronologisch** (keine `#Tag`-Cluster; der Schreibfluss soll ungeteilt bleiben).
 
-**Termine und Aufgaben von heute stehen nicht in der Spalte**, sondern im **Seiten-Panel** (§5). Sie sind einen Tipp weit weg, aber nicht mehr im Weg. Das Tagesinfo-Band bleibt in der Spalte oben — nur Termine und Aufgaben wandern.
+**Termine und heutige Aufgaben stehen grundsaetzlich nicht in der Spalte**, sondern im **Seiten-Panel** (§5) — mit **einer bewusst zugelassenen Ausnahme:** offene, **heute faellige** Aufgaben erscheinen zusaetzlich im heutigen Journal-Block (sie stehen dann in beidem, Block und Panel). Termine und offene **ueberfaellige** Aufgaben bleiben ausschliesslich im Panel; eine abgehakte Aufgabe verschwindet aus beidem. Das Tagesinfo-Band bleibt in der Spalte oben. *(Verfeinerung aus Anforderungen v6.1 §2, im Doku-Stand nachgezogen am 24.08.2026 — der Code verhaelt sich bereits so.)*
 
 ### 4b. Vergangene Tage — die fertige Tagesgeschichte
 
