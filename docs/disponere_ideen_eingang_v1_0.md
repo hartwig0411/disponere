@@ -131,6 +131,14 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   Antippen, gilt in Journal- und Tag-Ansicht gleich. Reine Anzeige-Änderung an der gebauten
   Bild-Ablage, kein Schema-Eingriff. → `disponere_anforderungen_v6_7.md` (Änderungsblock
   „gegenüber v6.6", Feature 1 „Teilen & Bilder", Feature-Zeile). Bild lokal auf Vega abgelegt.
+- **E-02 · Tags aus der Wochenauswertung ausschließen (Feld „Nicht Auswerten") → VERSIO**
+  (26.08.2026). Entschieden: Standard = alle Tags; Feld „Nicht Auswerten" nimmt Ausnahmen auf.
+  Filter auf **Tag-Ebene** — ein Eintrag bleibt drin, solange er noch mindestens einen
+  nicht-ausgeschlossenen Tag hat (tag-lose Einträge nie betroffen), fällt nur bei *allen* Tags
+  ausgeschlossen ganz heraus. Ausschlussliste = **globale, persistente Einstellung**, bei jeder
+  neuen Woche im Feld vorbefüllt und beim Ändern zurückgeschrieben. Kein Schema-Zwang; Ablage
+  der Liste reversibel. → `disponere_anforderungen_v6_10.md` (Änderungsblock „gegenüber v6.9",
+  Kernkonzept 8, Feature-Zeile). Größe: halbe Session, noch nicht gebaut.
 
 ---
 
