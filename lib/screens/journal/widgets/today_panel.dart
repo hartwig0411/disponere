@@ -24,6 +24,10 @@ class TodayPanel extends StatelessWidget {
   /// (Session 53). Optional — ohne Callback bleibt das lange Druecken wirkungslos.
   final void Function(Task)? onLongPressTask;
 
+  /// Langes Druecken auf einen Termin im Panel: Bruecke „Zu Eintrag machen"
+  /// (Session 60). Optional — ohne Callback bleibt der Termin reine Anzeige.
+  final void Function(CalendarEvent, String)? onLongPressEvent;
+
   const TodayPanel({
     required this.events,
     required this.tasks,
@@ -33,6 +37,7 @@ class TodayPanel extends StatelessWidget {
     required this.onToggleTask,
     required this.onAddTask,
     this.onLongPressTask,
+    this.onLongPressEvent,
   });
 
   @override
@@ -115,7 +120,15 @@ class TodayPanel extends StatelessWidget {
                         if (hasEvents) ...[
                           _sectionLabel(Icons.event_outlined, 'TERMINE'),
                           const SizedBox(height: 12),
-                          ...events.map((e) => EventCard(event: e, day: day)),
+                          ...events.map(
+                            (e) => EventCard(
+                              event: e,
+                              day: day,
+                              onLongPress: onLongPressEvent == null
+                                  ? null
+                                  : () => onLongPressEvent!(e, day),
+                            ),
+                          ),
                           if (hasTasks) const SizedBox(height: 20),
                         ],
                         if (hasTasks) ...[

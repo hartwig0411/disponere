@@ -229,6 +229,7 @@ class GoogleCalendarService {
 
     final summary = (item['summary'] as String?)?.trim();
     final location = (item['location'] as String?)?.trim();
+    final description = (item['description'] as String?)?.trim();
 
     return CalendarEvent(
       calendarId: calendarId,
@@ -236,6 +237,8 @@ class GoogleCalendarService {
       iCalUid: item['iCalUID'] as String?,
       summary: (summary == null || summary.isEmpty) ? '(ohne Titel)' : summary,
       location: (location == null || location.isEmpty) ? null : location,
+      description:
+          (description == null || description.isEmpty) ? null : description,
       allDay: allDay,
       startDay: startDay,
       startTime: startTime,

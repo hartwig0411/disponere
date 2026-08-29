@@ -31,6 +31,11 @@ class CalendarEvent {
 
   final String summary;
   final String? location;
+
+  /// Beschreibung/Notiz des Termins (Google `description`). Optional; wird
+  /// beim „Zu Eintrag machen" in den Eintragstext uebernommen (Session 60).
+  final String? description;
+
   final bool allDay;
 
   /// Erster berührter Kalendertag, `yyyy-MM-dd`.
@@ -58,6 +63,7 @@ class CalendarEvent {
     required this.endDay,
     this.iCalUid,
     this.location,
+    this.description,
     this.allDay = false,
     this.startTime,
     this.endTime,
@@ -95,6 +101,7 @@ class CalendarEvent {
       endDay: endDay,
       iCalUid: iCalUid,
       location: location,
+      description: description,
       allDay: allDay,
       startTime: startTime,
       endTime: endTime,

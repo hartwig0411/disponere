@@ -263,6 +263,10 @@ class PastDayView extends StatelessWidget {
   final void Function(Task) onToggleTask;
   final void Function(DailyInfo) onTapInfo;
 
+  /// Langes Drücken auf einen Termin: Brücke „Zu Eintrag machen" (Session 60).
+  /// Optional — ohne Callback bleibt der Termin reine Anzeige.
+  final void Function(CalendarEvent, String)? onLongPressEvent;
+
   const PastDayView({
     super.key,
     required this.pastDay,
@@ -270,6 +274,7 @@ class PastDayView extends StatelessWidget {
     required this.onLongPressEntry,
     required this.onToggleTask,
     required this.onTapInfo,
+    this.onLongPressEvent,
   });
 
   @override
@@ -323,7 +328,13 @@ class PastDayView extends StatelessWidget {
         onToggle: () => onToggleTask(task),
       );
     }
-    return EventCard(event: item.event!, day: dayKey);
+    return EventCard(
+      event: item.event!,
+      day: dayKey,
+      onLongPress: onLongPressEvent == null
+          ? null
+          : () => onLongPressEvent!(item.event!, dayKey),
+    );
   }
 
   Widget _clusterWidget(BuildContext context, TagCluster cluster, String dayKey) {

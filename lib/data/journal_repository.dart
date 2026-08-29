@@ -59,9 +59,9 @@ class JournalRepository {
   /// + `calendar_source_tags`, v5 ergänzt `calendar_events` + `event_tags`;
   /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at`;
   /// v7 (Session A) ergänzt die `attachments`-Tabelle (Bild-Anhänge);
-  /// v8 (datierter Eintrag) ergänzt `entries.display_day` — jeweils via
-  /// [_onUpgrade].
-  static const _dbVersion = 8;
+  /// v8 (datierter Eintrag) ergänzt `entries.display_day`; v9 (Session 60)
+  /// ergänzt `calendar_events.description` — jeweils via [_onUpgrade].
+  static const _dbVersion = 9;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -152,6 +152,9 @@ class JournalRepository {
     }
     if (oldVersion < 8) {
       await _addDisplayDayColumn(db);
+    }
+    if (oldVersion < 9) {
+      await _addEventDescriptionColumn(db);
     }
   }
 
@@ -251,6 +254,7 @@ class JournalRepository {
         ical_uid    TEXT,
         summary     TEXT    NOT NULL,
         location    TEXT,
+        description TEXT,
         all_day     INTEGER NOT NULL DEFAULT 0,
         start_day   TEXT    NOT NULL,
         start_time  TEXT,
@@ -277,6 +281,16 @@ class JournalRepository {
     ''');
     await db.execute(
       'CREATE INDEX idx_event_tags_tag_key ON event_tags(tag_key)',
+    );
+  }
+
+  /// Ergänzt die Spalte für die Termin-Beschreibung (Schema v9, Session 60).
+  /// Bestehende Zeilen bekommen `NULL`; der nächste Kalender-Sync füllt sie.
+  /// `_onCreate` legt die Spalte direkt in `CREATE TABLE calendar_events` mit
+  /// an, damit Neuinstallation und Migration dasselbe Schema teilen.
+  Future<void> _addEventDescriptionColumn(Database db) async {
+    await db.execute(
+      'ALTER TABLE calendar_events ADD COLUMN description TEXT',
     );
   }
 
@@ -1059,6 +1073,7 @@ class JournalRepository {
         iCalUid: row['ical_uid'] as String?,
         summary: row['summary'] as String,
         location: row['location'] as String?,
+        description: row['description'] as String?,
         allDay: (row['all_day'] as int) != 0,
         startDay: row['start_day'] as String,
         startTime: row['start_time'] as String?,
@@ -1097,6 +1112,7 @@ class JournalRepository {
             'ical_uid': event.iCalUid,
             'summary': event.summary,
             'location': event.location,
+            'description': event.description,
             'all_day': event.allDay ? 1 : 0,
             'start_day': event.startDay,
             'start_time': event.startTime,

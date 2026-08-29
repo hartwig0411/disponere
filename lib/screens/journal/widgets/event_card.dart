@@ -8,7 +8,13 @@ class EventCard extends StatelessWidget {
   final CalendarEvent event;
   final String day;
 
-  const EventCard({required this.event, required this.day});
+  /// Langes Drücken auf die Terminkarte: öffnet das Aktionsmenü „Zu Eintrag
+  /// machen" (Session 60, drittes Brücken-Bein). Optional — ohne Callback
+  /// bleibt der Termin reine Anzeige wie zuvor.
+  final VoidCallback? onLongPress;
+
+  const EventCard(
+      {required this.event, required this.day, this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
@@ -18,9 +24,12 @@ class EventCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onLongPress: onLongPress,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           const Padding(
             padding: EdgeInsets.only(top: 2, right: 10),
             child: Icon(Icons.event, size: 18, color: AppColors.accent),
@@ -75,6 +84,7 @@ class EventCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

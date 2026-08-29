@@ -1100,6 +1100,56 @@ class _JournalScreenState extends State<JournalScreen>
     );
   }
 
+  /// Aktionsmenü einer Terminkarte (Session 60, drittes Brücken-Bein). Der
+  /// Termin ist read-only und bekommt hier erstmals eine Geste: langes Drücken
+  /// öffnet ein knappes Menü mit der einzigen Aktion „Zu Eintrag machen".
+  void _showEventActions(CalendarEvent event, String day) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.note_add_outlined,
+                    color: AppColors.accent),
+                title: const Text('Zu Eintrag machen',
+                    style: TextStyle(color: AppColors.text)),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _eventToEntry(event, day);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Termin → Eintrag: öffnet das Brücken-Sheet mit vorbefülltem, kürzbarem
+  /// Titel + Beschreibung. Der Eintrag erbt die Tags des Termins und wird fix
+  /// auf den Termintag datiert (kein Picker). Der Termin bleibt unverändert.
+  Future<void> _eventToEntry(CalendarEvent event, String day) async {
+    await showEventToEntrySheet(
+      context: context,
+      event: event,
+      day: DateTime.parse(day),
+      onCreate: (content, tags, displayDay) async {
+        _addEntry(content, tags, displayDay: displayDay);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Als Eintrag übernommen')),
+        );
+      },
+    );
+  }
+
   void _updateInkEntry(String id, InkData ink, List<String> tags) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
@@ -1683,6 +1733,7 @@ class _JournalScreenState extends State<JournalScreen>
           onLongPressEntry: (entry) => _showEntryActions(entry),
           onToggleTask: _togglePanelTask,
           onTapInfo: (info) => _openDailyInfoSheet(existing: info),
+          onLongPressEvent: (event, day) => _showEventActions(event, day),
         ),
     ];
     return Scaffold(
@@ -1781,6 +1832,7 @@ class _JournalScreenState extends State<JournalScreen>
         onToggleTask: _togglePanelTask,
         onAddTask: () => _openTaskSheet(),
         onLongPressTask: _taskToEntry,
+        onLongPressEvent: (event, day) => _showEventActions(event, day),
       ),
       bottomNavigationBar: BottomBar(
         onJournal: () {},

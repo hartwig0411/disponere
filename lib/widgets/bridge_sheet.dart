@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../models/journal_entry.dart';
 import '../models/task.dart';
+import '../models/calendar_event.dart';
 
 /// Brücke Eintrag ↔ Aufgabe (Session 53, Anforderungen v6.4).
 ///
@@ -115,6 +116,52 @@ Future<void> showTaskToEntrySheet({
   );
 }
 
+/// **Termin → Eintrag** (Session 60, drittes Brücken-Bein). Aus einem
+/// schreibgeschützten Kalendertermin wird eine eigene Notiz. Inhalt =
+/// **Titel**, und falls vorhanden nach einer Leerzeile die **Beschreibung**
+/// ([CalendarEvent.description]); Ort und Uhrzeit bleiben bewusst draußen. Die
+/// geerbten [CalendarEvent.tags] verbinden Termin und Eintrag über den
+/// geteilten Tag (Perlenkette). Der Eintrag wird **fix auf den Termintag**
+/// datiert — [day] ist der Tag, an dem die Karte steht; **kein Datumswähler**
+/// (der „nächster Tag"-Fall ist der andere Weg → Aufgabe). Der Termin selbst
+/// bleibt unangetastet; die Doppelung am selben Tag ist gewollt.
+///
+/// [onCreate] erhält Inhalt, geerbte Tags und den Anzeige-Tag (date-only); der
+/// Aufrufer legt den Eintrag an (`_addEntry`).
+Future<void> showEventToEntrySheet({
+  required BuildContext context,
+  required CalendarEvent event,
+  required DateTime day,
+  required Future<void> Function(
+          String content, List<String> tags, DateTime displayDay)
+      onCreate,
+}) {
+  final title = event.summary.trim();
+  final description = event.description?.trim() ?? '';
+  final seed = description.isEmpty ? title : '$title\n\n$description';
+  final contentController = TextEditingController(text: seed);
+  final tags = event.tags; // geerbt, bereits kanonisch
+  final displayDay = Task.dayOnly(day); // fix auf den Termintag
+
+  return _showBridgeSheet(
+    context: context,
+    headerIcon: Icons.note_add_outlined,
+    headerLabel: 'ZU EINTRAG MACHEN',
+    fieldHint: 'Inhalt des Eintrags …',
+    controller: contentController,
+    tags: tags,
+    initialDay: displayDay,
+    dateRequired: true, // datierter Eintrag braucht seinen Tag
+    dateEditable: false, // fix auf den Termintag, kein Picker
+    onSubmit: (submitDay) {
+      final content = contentController.text.trim();
+      if (content.isEmpty || submitDay == null) return false;
+      onCreate(content, tags, submitDay);
+      return true;
+    },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Gemeinsames Sheet
 // ---------------------------------------------------------------------------
@@ -131,6 +178,7 @@ Future<void> _showBridgeSheet({
   required List<String> tags,
   required DateTime? initialDay,
   required bool dateRequired,
+  bool dateEditable = true,
   required bool Function(DateTime? day) onSubmit,
 }) {
   DateTime? day = initialDay;
@@ -218,7 +266,12 @@ Future<void> _showBridgeSheet({
                 ],
                 const SizedBox(height: 16),
                 // Datumszeile
-                if (day == null)
+                if (!dateEditable)
+                  _ReadOnlyDateRow(
+                    label: 'Am Tag',
+                    value: _formatFullDate(day!),
+                  )
+                else if (day == null)
                   // Nur erreichbar, wenn nicht erforderlich (dann entfernbar).
                   TextButton.icon(
                     onPressed: () async {
@@ -370,6 +423,41 @@ class _SheetRow extends StatelessWidget {
                 size: 15, color: AppColors.iconInactive),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Read-only-Datumszeile: dieselbe Optik wie [_SheetRow], aber ohne Tippen und
+/// ohne Entfernen — für Fälle, in denen der Tag fix ist (Termin → Eintrag,
+/// Session 60: „display_day = Termintag, kein Datumswähler").
+class _ReadOnlyDateRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _ReadOnlyDateRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.fieldFill,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.iconInactive, fontSize: 13),
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: const TextStyle(color: AppColors.text, fontSize: 15),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.event, size: 15, color: AppColors.iconInactive),
+        ],
       ),
     );
   }
