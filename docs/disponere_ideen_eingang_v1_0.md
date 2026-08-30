@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 13. August 2026*
+*Stand: 29. August 2026*
 
 ---
 
@@ -111,7 +111,15 @@ nur als Muster.
 
 ## Offene Eingänge
 
-*— noch keiner —*
+### E-03 · Tags im Brücken-Sheet editierbar
+- **Eingegangen:** 29.08.2026
+- **Quelle:** Text aus Disponere (im Chat gemeldet)
+- **Kanal (deine Einordnung, falls klar):** Versio
+- **Original (dein Text):** „Für später nehmen wir bitte auf, dass wir auch den #Tag verändern können."
+- **In einem Satz (meine Umformulierung):** Im Brücken-Sheet (Termin → Eintrag, sinngemäß auch die anderen zwei Beine) die geerbten Tags nicht nur read-only zeigen, sondern vor dem Anlegen editierbar machen — hinzufügen, entfernen, ändern.
+- **Status:** NEU
+- **Größe (grob):** halbe Session (Tag-Editier-UI ins gemeinsame `bridge_sheet`, geerbte Tags als Startwert)
+- **Notiz für die Triage:** Zu klären ist, ob das Ändern rein eintragsseitig gilt oder auf die Quelle zurückwirkt — beim read-only-Termin scheidet Rückschreiben aus.
 
 ---
 
@@ -137,7 +145,7 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   nicht-ausgeschlossenen Tag hat (tag-lose Einträge nie betroffen), fällt nur bei *allen* Tags
   ausgeschlossen ganz heraus. Ausschlussliste = **globale, persistente Einstellung**, bei jeder
   neuen Woche im Feld vorbefüllt und beim Ändern zurückgeschrieben. Kein Schema-Zwang; Ablage
-  der Liste reversibel. → `disponere_anforderungen_v6_10.md` (Änderungsblock „gegenüber v6.9",
+  der Liste reversibel. → `disponere_anforderungen_v6_9.md` (Änderungsblock „gegenüber v6.8",
   Kernkonzept 8, Feature-Zeile). Größe: halbe Session, noch nicht gebaut.
 
 ---
