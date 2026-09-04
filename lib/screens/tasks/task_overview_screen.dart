@@ -86,6 +86,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
     await showTaskToEntrySheet(
       context: context,
       task: task,
+      knownTags: widget.tagRegistry.allTags,
       onCreate: (content, tags, displayDay) async {
         final entry = JournalEntry(
           id: DateTime.now().millisecondsSinceEpoch.toString(),

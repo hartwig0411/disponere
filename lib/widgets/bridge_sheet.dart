@@ -4,6 +4,8 @@ import '../theme/app_colors.dart';
 import '../models/journal_entry.dart';
 import '../models/task.dart';
 import '../models/calendar_event.dart';
+import '../utils/tag_parser.dart';
+import 'tag_autocomplete_field.dart';
 
 /// Brücke Eintrag ↔ Aufgabe (Session 53, Anforderungen v6.4).
 ///
@@ -39,6 +41,7 @@ const Color _kAccent = AppColors.accent;
 Future<void> showEntryToTaskSheet({
   required BuildContext context,
   required JournalEntry entry,
+  required List<String> knownTags,
   required Future<void> Function(Task task) onCreate,
 }) {
   final seedTitle = entry.content.trim().isNotEmpty
@@ -58,16 +61,17 @@ Future<void> showEntryToTaskSheet({
     fieldHint: 'Was ist zu tun?',
     controller: titleController,
     tags: tags,
+    knownTags: knownTags,
     initialDay: dueDay,
     dateRequired: false, // Aufgabe ohne Fälligkeit ist zulässig
-    onSubmit: (day) {
+    onSubmit: (day, editedTags) {
       final title = titleController.text.trim();
       if (title.isEmpty) return false;
       final task = Task(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         dueDay: day, // kann null sein (entfernte Fälligkeit)
-        tags: tags,
+        tags: editedTags,
       );
       onCreate(task);
       return true;
@@ -89,6 +93,7 @@ Future<void> showEntryToTaskSheet({
 Future<void> showTaskToEntrySheet({
   required BuildContext context,
   required Task task,
+  required List<String> knownTags,
   required Future<void> Function(
           String content, List<String> tags, DateTime displayDay)
       onCreate,
@@ -105,15 +110,43 @@ Future<void> showTaskToEntrySheet({
     fieldHint: 'Inhalt des Eintrags …',
     controller: contentController,
     tags: tags,
+    knownTags: knownTags,
     initialDay: displayDay,
     dateRequired: true, // datierter Eintrag braucht seinen Tag
-    onSubmit: (day) {
+    onSubmit: (day, editedTags) {
       final content = contentController.text.trim();
       if (content.isEmpty || day == null) return false;
-      onCreate(content, tags, day);
+      onCreate(content, editedTags, day);
       return true;
     },
   );
+}
+
+/// Verdichtet eine Termin-Beschreibung fuers Eintrags-Sheet. Weitergeleitete
+/// Einladungen (Teams & Co.) kommen oft mit doppelten oder dreifachen
+/// Leerzeilen; unveraendert uebernommen blaeht das den Eintrag auf. Hier werden
+/// Zeilen rechts beschnitten, Folgen leerer Zeilen auf **eine** reduziert und
+/// Rand-Leerzeilen entfernt. Absatzgrenzen (genau eine Leerzeile) bleiben
+/// erhalten.
+String _compactDescription(String s) {
+  final out = <String>[];
+  var blankRun = 0;
+  for (final raw in s.split('\n')) {
+    final line = raw.trimRight();
+    if (line.isEmpty) {
+      if (++blankRun >= 2) continue; // dritte+ Leerzeile faellt weg
+    } else {
+      blankRun = 0;
+    }
+    out.add(line);
+  }
+  while (out.isNotEmpty && out.first.isEmpty) {
+    out.removeAt(0);
+  }
+  while (out.isNotEmpty && out.last.isEmpty) {
+    out.removeLast();
+  }
+  return out.join('\n');
 }
 
 /// **Termin → Eintrag** (Session 60, drittes Brücken-Bein). Aus einem
@@ -132,13 +165,15 @@ Future<void> showEventToEntrySheet({
   required BuildContext context,
   required CalendarEvent event,
   required DateTime day,
+  required List<String> knownTags,
   required Future<void> Function(
           String content, List<String> tags, DateTime displayDay)
       onCreate,
 }) {
   final title = event.summary.trim();
   final description = event.description?.trim() ?? '';
-  final seed = description.isEmpty ? title : '$title\n\n$description';
+  final compact = _compactDescription(description);
+  final seed = compact.isEmpty ? title : '$title\n\n$compact';
   final contentController = TextEditingController(text: seed);
   final tags = event.tags; // geerbt, bereits kanonisch
   final displayDay = Task.dayOnly(day); // fix auf den Termintag
@@ -150,13 +185,14 @@ Future<void> showEventToEntrySheet({
     fieldHint: 'Inhalt des Eintrags …',
     controller: contentController,
     tags: tags,
+    knownTags: knownTags,
     initialDay: displayDay,
     dateRequired: true, // datierter Eintrag braucht seinen Tag
     dateEditable: false, // fix auf den Termintag, kein Picker
-    onSubmit: (submitDay) {
+    onSubmit: (submitDay, editedTags) {
       final content = contentController.text.trim();
       if (content.isEmpty || submitDay == null) return false;
-      onCreate(content, tags, submitDay);
+      onCreate(content, editedTags, submitDay);
       return true;
     },
   );
@@ -176,12 +212,14 @@ Future<void> _showBridgeSheet({
   required String fieldHint,
   required TextEditingController controller,
   required List<String> tags,
+  required List<String> knownTags,
   required DateTime? initialDay,
   required bool dateRequired,
   bool dateEditable = true,
-  required bool Function(DateTime? day) onSubmit,
+  required bool Function(DateTime? day, List<String> tags) onSubmit,
 }) {
   DateTime? day = initialDay;
+  final tagController = TextEditingController(text: formatTags(tags));
 
   return showModalBottomSheet(
     context: context,
@@ -253,17 +291,15 @@ Future<void> _showBridgeSheet({
                     ),
                   ),
                 ),
-                // Geerbte Tags: schreibgeschützt, zeigen die entstehende
-                // Perlenkette. Leere Liste → nichts anzeigen.
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children:
-                        tags.map((t) => _ReadOnlyTagChip(label: t)).toList(),
-                  ),
-                ],
+                // Tags editierbar (E-03): vorbefüllt mit den geerbten Tags der
+                // Quelle, aber vor dem Anlegen änderbar — hinzufügen, entfernen
+                // oder anders schreiben. Immer sichtbar, damit man auch dann
+                // taggen kann, wenn die Quelle keine Tags hatte.
+                const SizedBox(height: 12),
+                TagAutocompleteField(
+                  controller: tagController,
+                  knownTags: knownTags,
+                ),
                 const SizedBox(height: 16),
                 // Datumszeile
                 if (!dateEditable)
@@ -322,7 +358,8 @@ Future<void> _showBridgeSheet({
                       ),
                     ),
                     onPressed: () {
-                      final saved = onSubmit(day);
+                      final saved =
+                          onSubmit(day, parseTags(tagController.text));
                       if (saved) Navigator.pop(sheetContext);
                     },
                     child: const Text(
@@ -353,34 +390,6 @@ String _formatFullDate(DateTime date) {
     'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
   ];
   return '${date.day}. ${months[date.month - 1]} ${date.year}';
-}
-
-/// Schreibgeschützter Tag-Chip: gleiche Optik wie [TagChip] (tagChipBg +
-/// Akzent), aber **ohne** Navigation — in einem Modal-Sheet würde ein Tippen
-/// überraschend einen Screen darüber schieben. Hier zeigt der Chip nur die
-/// geerbte Verbindung.
-class _ReadOnlyTagChip extends StatelessWidget {
-  final String label;
-  const _ReadOnlyTagChip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.tagChipBg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      child: Text(
-        '#$label',
-        style: const TextStyle(
-          color: AppColors.accent,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
 }
 
 /// Antippbare Wert-Zeile im Sheet (das Datum) — dieselbe Optik wie im

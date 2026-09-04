@@ -427,9 +427,10 @@ class _JournalScreenState extends State<JournalScreen>
                 top: 24,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     isEditing ? 'Eintrag bearbeiten' : 'Neuer Eintrag',
@@ -446,7 +447,8 @@ class _JournalScreenState extends State<JournalScreen>
                         child: TextField(
                           controller: contentController,
                           autofocus: true,
-                          maxLines: 4,
+                          minLines: 8,
+                          maxLines: 16,
                           style: const TextStyle(
                               color: AppColors.text, fontSize: 16),
                           decoration: InputDecoration(
@@ -684,7 +686,8 @@ class _JournalScreenState extends State<JournalScreen>
                       ),
                     ],
                   ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -1071,8 +1074,11 @@ class _JournalScreenState extends State<JournalScreen>
     await showEntryToTaskSheet(
       context: context,
       entry: entry,
+      knownTags: _tagRegistry.allTags,
       onCreate: (task) async {
-        await _repo.upsertTask(task);
+        final canon =
+            task.copyWith(tags: _tagRegistry.canonicalizeAll(task.tags));
+        await _repo.upsertTask(canon);
         await _reloadTasks();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1090,6 +1096,7 @@ class _JournalScreenState extends State<JournalScreen>
     await showTaskToEntrySheet(
       context: context,
       task: task,
+      knownTags: _tagRegistry.allTags,
       onCreate: (content, tags, displayDay) async {
         _addEntry(content, tags, displayDay: displayDay);
         if (!mounted) return;
@@ -1140,6 +1147,7 @@ class _JournalScreenState extends State<JournalScreen>
       context: context,
       event: event,
       day: DateTime.parse(day),
+      knownTags: _tagRegistry.allTags,
       onCreate: (content, tags, displayDay) async {
         _addEntry(content, tags, displayDay: displayDay);
         if (!mounted) return;
