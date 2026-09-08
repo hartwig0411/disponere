@@ -35,6 +35,11 @@ class AppColors {
   /// Handschriftlicher Eintrag (Tinte) — ein Hauch Blau-Schwarz.
   static const Color ink = Color(0xFF2A2B48);
 
+  /// Importierter (geteilter) Text — zurückhaltendes Grau, klar leiser als der
+  /// eigene [text], damit fremdes Rohmaterial hinter Steffens Stimme (der in
+  /// [ink]-Blauschwarz gesetzten Notiz) zurücktritt, aber lesbar bleibt.
+  static const Color importBody = Color(0xFF6E6E66);
+
   /// Platzhalter im Leerzustand.
   static const Color placeholder = Color(0xFFB4B4AA);
 

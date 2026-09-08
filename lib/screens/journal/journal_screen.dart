@@ -137,7 +137,10 @@ class _JournalScreenState extends State<JournalScreen>
   /// normaler Eintrag im heutigen Journal.
   void _handleSharedText(String text) {
     if (!mounted) return;
-    _openEntrySheet(initialContent: text);
+    // Geteilter Text landet im getrennten Import-Feld, nicht im Notizfeld:
+    // Steffen schreibt seine Lösung darüber, das Rohmaterial bleibt daneben
+    // erkennbar (Schema v10).
+    _openEntrySheet(initialImportBody: text);
   }
 
   /// Ein zur Laufzeit oder beim Kaltstart via ACTION_SEND geteiltes Bild:
@@ -335,14 +338,25 @@ class _JournalScreenState extends State<JournalScreen>
   /// Öffnet das Text-Eingabe-Sheet.
   /// [existing] == null -> Neuer (Text-)Eintrag.
   /// [existing] != null -> Bestehenden Text-Eintrag bearbeiten.
-  /// [initialContent] befuellt bei einem **neuen** Eintrag das Textfeld vor —
-  /// so dient dasselbe Sheet als Landeblatt fuer geteilte Inhalte (Feature 2).
-  /// Bei [existing] != null bleibt es wirkungslos (der Bestand gewinnt).
+  /// [initialContent] befuellt bei einem **neuen** Eintrag das Notiz-/Loesungs-
+  /// Feld vor. [initialImportBody] befuellt das getrennte Feld fuer geteilten
+  /// Fremdtext (ACTION_SEND) — die eigene Notiz bleibt dann leer und
+  /// fokussiert, sodass Steffen sie ueber dem Rohmaterial schreibt (Schema v10).
+  /// Bei [existing] != null gewinnt der Bestand.
   void _openEntrySheet(
-      {JournalEntry? existing, String? initialContent, XFile? initialImage}) {
+      {JournalEntry? existing,
+      String? initialContent,
+      String? initialImportBody,
+      XFile? initialImage}) {
     final isEditing = existing != null;
     final contentController =
         TextEditingController(text: existing?.content ?? initialContent ?? '');
+    final importController = TextEditingController(
+        text: existing?.importBody ?? initialImportBody ?? '');
+    // Das Import-Feld erscheint nur, wenn tatsächlich Fremdtext vorliegt (aus
+    // einem Share oder an einem bestehenden Eintrag) — für einen gewöhnlichen
+    // handgetippten Eintrag bleibt das Sheet unverändert schlicht.
+    final hasImportField = importController.text.trim().isNotEmpty;
     final tagController = TextEditingController(
         text: existing != null ? formatTags(existing.tags) : '');
 
@@ -452,7 +466,9 @@ class _JournalScreenState extends State<JournalScreen>
                           style: const TextStyle(
                               color: AppColors.text, fontSize: 16),
                           decoration: InputDecoration(
-                            hintText: 'Was ist gerade wichtig?',
+                            hintText: hasImportField
+                                ? 'Deine Notiz / Lösung zum geteilten Text ...'
+                                : 'Was ist gerade wichtig?',
                             hintStyle:
                                 const TextStyle(color: AppColors.placeholder),
                             filled: true,
@@ -498,6 +514,40 @@ class _JournalScreenState extends State<JournalScreen>
                       ],
                     ],
                   ),
+                  // Geteilter Fremdtext (Schema v10): erscheint nur, wenn per
+                  // Teilen etwas hereinkam. Steffens Notiz/Lösung steht oben im
+                  // Feld darüber; hier liegt das importierte Rohmaterial —
+                  // editierbar (zum Kürzen), aber optisch zurückgenommen.
+                  if (hasImportField) ...[
+                    const SizedBox(height: 12),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'GETEILTER TEXT',
+                        style: TextStyle(
+                          color: AppColors.iconInactive,
+                          fontSize: 11,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: importController,
+                      minLines: 3,
+                      maxLines: 10,
+                      style: const TextStyle(
+                          color: AppColors.importBody, fontSize: 14),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: AppColors.fieldFill,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   // Bild-Anhang (Session A): Vorschau mit Entfernen-Knopf oder,
                   // wenn kein Bild dranhängt, ein Knopf zum Hinzufügen.
@@ -669,6 +719,7 @@ class _JournalScreenState extends State<JournalScreen>
                             context: context,
                             existing: existing,
                             content: contentController.text.trim(),
+                            importBody: importController.text.trim(),
                             tagText: tagController.text,
                             pickedImage: pickedImage,
                             removeExisting: removeExisting,
@@ -753,6 +804,7 @@ class _JournalScreenState extends State<JournalScreen>
     required BuildContext context,
     required JournalEntry? existing,
     required String content,
+    required String importBody,
     required String tagText,
     required XFile? pickedImage,
     required bool removeExisting,
@@ -764,8 +816,8 @@ class _JournalScreenState extends State<JournalScreen>
         pickedImage == null;
     final willHaveImage = pickedImage != null || keepingExisting;
 
-    // Nichts zu speichern: weder Text noch Bild.
-    if (content.isEmpty && !willHaveImage) return;
+    // Nichts zu speichern: weder eigener Text noch geteilter Text noch Bild.
+    if (content.isEmpty && importBody.isEmpty && !willHaveImage) return;
 
     final navigator = Navigator.of(context);
     final entryId =
@@ -801,12 +853,24 @@ class _JournalScreenState extends State<JournalScreen>
       }
     }
 
+    // Leerer geteilter Text -> null: ein Eintrag ohne Import trägt keine leere
+    // Zeichenkette mit sich. Beim Bearbeiten heißt `null` in copyWith zudem
+    // „bestehenden Import behalten" — versehentliches Leeren des Feldes löscht
+    // das Rohmaterial also nicht (dieselbe Vorsicht wie bei der Tinten-
+    // Auswertung; ein bewusstes Entfernen geschieht über das Löschen des
+    // Eintrags).
+    final normalizedImport = importBody.isEmpty ? null : importBody;
     if (existing != null) {
       _updateEntry(entryId, content, tags,
-          attachments: attachments, displayDay: displayDay);
+          attachments: attachments,
+          displayDay: displayDay,
+          importBody: normalizedImport);
     } else {
       _addEntry(content, tags,
-          id: entryId, attachments: attachments, displayDay: displayDay);
+          id: entryId,
+          attachments: attachments,
+          displayDay: displayDay,
+          importBody: normalizedImport);
     }
 
     if (orphaned.isNotEmpty) {
@@ -880,6 +944,7 @@ class _JournalScreenState extends State<JournalScreen>
     String? id,
     List<Attachment> attachments = const [],
     DateTime? displayDay,
+    String? importBody,
   }) {
     final canonicalTags = _tagRegistry.canonicalizeAll(tags);
     final entry = JournalEntry(
@@ -889,6 +954,7 @@ class _JournalScreenState extends State<JournalScreen>
       tags: canonicalTags,
       attachments: attachments,
       displayDay: displayDay,
+      importBody: importBody,
     );
     setState(() {
       _entries.insert(0, entry);
@@ -917,6 +983,7 @@ class _JournalScreenState extends State<JournalScreen>
     List<String> tags, {
     List<Attachment>? attachments,
     DateTime? displayDay,
+    String? importBody,
   }) {
     final index = _entries.indexWhere((e) => e.id == id);
     if (index == -1) return;
@@ -935,6 +1002,7 @@ class _JournalScreenState extends State<JournalScreen>
       attachments: attachments,
       displayDay: displayDay,
       clearDisplayDay: displayDay == null,
+      importBody: importBody,
     );
     setState(() {
       _entries[index] = updated;
@@ -1148,8 +1216,9 @@ class _JournalScreenState extends State<JournalScreen>
       event: event,
       day: DateTime.parse(day),
       knownTags: _tagRegistry.allTags,
-      onCreate: (content, tags, displayDay) async {
-        _addEntry(content, tags, displayDay: displayDay);
+      onCreate: (content, tags, displayDay, importBody) async {
+        _addEntry(content, tags,
+            displayDay: displayDay, importBody: importBody);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Als Eintrag übernommen')),

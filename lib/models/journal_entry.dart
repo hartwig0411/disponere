@@ -37,6 +37,16 @@ class JournalEntry {
   /// Uhrzeit bleibt in [timestamp] (wann er notiert wurde).
   final DateTime? displayDay;
 
+  /// Von einem externen Ort (Teilen/ACTION_SEND) hereingereichter Text — das
+  /// „Rohmaterial", zu dem [content] die eigene Notiz/Lösung ist. `null` → ein
+  /// gewöhnlicher Eintrag ohne importierten Teil.
+  ///
+  /// Bewusst **neben** [content] und nicht darin: [content] ist, was Steffen
+  /// selbst geschrieben hat — [importBody] ist, was von außen kam. Dieselbe
+  /// Grenze wie bei [inkText]; sie zu verwischen wäre in einem Journal die
+  /// falsche Sparsamkeit.
+  final String? importBody;
+
   JournalEntry({
     required this.id,
     required this.timestamp,
@@ -47,6 +57,7 @@ class JournalEntry {
     this.inkTextAt,
     this.attachments = const [],
     this.displayDay,
+    this.importBody,
   });
 
   /// True, wenn der Eintrag im Tinten-Modus vorliegt (Striche statt Text).
@@ -71,6 +82,9 @@ class JournalEntry {
 
   /// True, wenn zu diesem Eintrag ein erkannter Text vorliegt.
   bool get hasInkText => inkText != null && inkText!.isNotEmpty;
+
+  /// True, wenn dem Eintrag importierter (geteilter) Text beiliegt.
+  bool get hasImportBody => importBody != null && importBody!.isNotEmpty;
 
   /// Erzeugt eine Kopie mit geänderten Feldern — Grundlage fürs Bearbeiten.
   /// id und timestamp bleiben standardmäßig erhalten: ein bearbeiteter
@@ -97,6 +111,7 @@ class JournalEntry {
     List<Attachment>? attachments,
     DateTime? displayDay,
     bool clearDisplayDay = false,
+    String? importBody,
   }) {
     return JournalEntry(
       id: id ?? this.id,
@@ -108,6 +123,7 @@ class JournalEntry {
       inkTextAt: inkTextAt ?? this.inkTextAt,
       attachments: attachments ?? this.attachments,
       displayDay: clearDisplayDay ? null : (displayDay ?? this.displayDay),
+      importBody: importBody ?? this.importBody,
     );
   }
 }

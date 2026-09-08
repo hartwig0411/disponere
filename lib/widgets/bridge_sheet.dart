@@ -166,15 +166,20 @@ Future<void> showEventToEntrySheet({
   required CalendarEvent event,
   required DateTime day,
   required List<String> knownTags,
-  required Future<void> Function(
-          String content, List<String> tags, DateTime displayDay)
+  required Future<void> Function(String content, List<String> tags,
+          DateTime displayDay, String? importBody)
       onCreate,
 }) {
   final title = event.summary.trim();
   final description = event.description?.trim() ?? '';
   final compact = _compactDescription(description);
   final seed = compact.isEmpty ? title : '$title\n\n$compact';
-  final contentController = TextEditingController(text: seed);
+  // Der Termintext ist Fremdmaterial -> Import-Feld (grau). Das Notizfeld oben
+  // bleibt leer: Steffen schreibt seine ToDos/Gedanken darueber, genau wie beim
+  // Teilen. Gespeichert wird, sobald eines der beiden Inhalt hat (der
+  // Termintext ist praktisch immer vorhanden).
+  final noteController = TextEditingController();
+  final importController = TextEditingController(text: seed);
   final tags = event.tags; // geerbt, bereits kanonisch
   final displayDay = Task.dayOnly(day); // fix auf den Termintag
 
@@ -182,17 +187,20 @@ Future<void> showEventToEntrySheet({
     context: context,
     headerIcon: Icons.note_add_outlined,
     headerLabel: 'ZU EINTRAG MACHEN',
-    fieldHint: 'Inhalt des Eintrags …',
-    controller: contentController,
+    fieldHint: 'Deine Notiz / ToDos zum Termin …',
+    controller: noteController,
     tags: tags,
     knownTags: knownTags,
     initialDay: displayDay,
     dateRequired: true, // datierter Eintrag braucht seinen Tag
     dateEditable: false, // fix auf den Termintag, kein Picker
+    importController: importController,
+    importLabel: 'TERMIN',
     onSubmit: (submitDay, editedTags) {
-      final content = contentController.text.trim();
-      if (content.isEmpty || submitDay == null) return false;
-      onCreate(content, editedTags, submitDay);
+      final note = noteController.text.trim();
+      final imp = importController.text.trim();
+      if ((note.isEmpty && imp.isEmpty) || submitDay == null) return false;
+      onCreate(note, editedTags, submitDay, imp.isEmpty ? null : imp);
       return true;
     },
   );
@@ -216,6 +224,8 @@ Future<void> _showBridgeSheet({
   required DateTime? initialDay,
   required bool dateRequired,
   bool dateEditable = true,
+  TextEditingController? importController,
+  String? importLabel,
   required bool Function(DateTime? day, List<String> tags) onSubmit,
 }) {
   DateTime? day = initialDay;
@@ -291,6 +301,39 @@ Future<void> _showBridgeSheet({
                     ),
                   ),
                 ),
+                // Geteilter Fremdtext (z.B. Termin -> Eintrag): das importierte
+                // Rohmaterial, grau und zurueckgenommen; die eigene Notiz steht
+                // oben. Nur vorhanden, wenn ein importController uebergeben wurde.
+                if (importController != null) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      importLabel ?? 'GETEILTER TEXT',
+                      style: const TextStyle(
+                        color: AppColors.iconInactive,
+                        fontSize: 11,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: importController,
+                    minLines: 3,
+                    maxLines: 10,
+                    style: const TextStyle(
+                        color: AppColors.importBody, fontSize: 14),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.fieldFill,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ],
                 // Tags editierbar (E-03): vorbefüllt mit den geerbten Tags der
                 // Quelle, aber vor dem Anlegen änderbar — hinzufügen, entfernen
                 // oder anders schreiben. Immer sichtbar, damit man auch dann

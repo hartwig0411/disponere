@@ -76,21 +76,58 @@ class EntryCard extends StatelessWidget {
                       child: const SizedBox.expand(),
                     ),
                   )
-                else if (entry.content.isNotEmpty)
-                  Text(
-                    entry.content,
-                    style: const TextStyle(
-                      color: AppColors.text,
-                      fontSize: 16,
-                      height: 1.5,
+                else if (entry.content.isNotEmpty || entry.hasImportBody) ...[
+                  // Steffens eigene Notiz/Lösung — seine „Stimme": Blau-Schwarz
+                  // (AppColors.ink). Liegt ein geteilter Fremdtext bei, wird sie
+                  // zusätzlich leicht eingerückt und mit einer feinen Linie
+                  // abgesetzt, damit sie vor dem Rohmaterial steht.
+                  if (entry.content.isNotEmpty)
+                    Container(
+                      padding: entry.hasImportBody
+                          ? const EdgeInsets.only(left: 10)
+                          : EdgeInsets.zero,
+                      decoration: entry.hasImportBody
+                          ? const BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                    color: AppColors.guide, width: 2),
+                              ),
+                            )
+                          : null,
+                      child: Text(
+                        entry.content,
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontSize: 16,
+                          height: 1.5,
+                        ),
+                      ),
                     ),
-                  ),
+                  // Geteilter Fremdtext — zurückhaltendes Grau, kleiner. Tritt
+                  // hinter die Stimme zurück, bleibt aber beim Scrollen voll
+                  // lesbar (nichts wird gekürzt oder eingeklappt).
+                  if (entry.hasImportBody) ...[
+                    SizedBox(height: entry.content.isNotEmpty ? 10 : 0),
+                    Text(
+                      entry.importBody!,
+                      style: const TextStyle(
+                        color: AppColors.importBody,
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ],
                 // Bild-Anhang: kompaktes Vorschau-Quadrat in der Karte (E-01,
                 // v6.7), Antippen öffnet die Vollbild-Ansicht. Zurzeit höchstens
                 // ein Bild pro Eintrag — deshalb `attachments.first`.
                 if (entry.hasImage) ...[
                   SizedBox(
-                      height: entry.isInk || entry.content.isNotEmpty ? 12 : 4),
+                      height: entry.isInk ||
+                              entry.content.isNotEmpty ||
+                              entry.hasImportBody
+                          ? 12
+                          : 4),
                   EntryImageThumb(path: entry.attachments.first.filePath),
                 ],
                 if (entry.tags.isNotEmpty) ...[

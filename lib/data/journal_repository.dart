@@ -60,8 +60,9 @@ class JournalRepository {
   /// v6 (Session 24) ergänzt `entries.ink_text` + `entries.ink_text_at`;
   /// v7 (Session A) ergänzt die `attachments`-Tabelle (Bild-Anhänge);
   /// v8 (datierter Eintrag) ergänzt `entries.display_day`; v9 (Session 60)
-  /// ergänzt `calendar_events.description` — jeweils via [_onUpgrade].
-  static const _dbVersion = 9;
+  /// ergänzt `calendar_events.description`; v10 ergänzt `entries.import_body`
+  /// (geteilter Text) — jeweils via [_onUpgrade].
+  static const _dbVersion = 10;
 
   /// Alt-Schlüssel der bisherigen shared_preferences-Persistenz.
   static const _prefsEntriesKey = 'entries';
@@ -99,7 +100,8 @@ class JournalRepository {
         ink         TEXT,
         ink_text    TEXT,
         ink_text_at TEXT,
-        display_day TEXT
+        display_day TEXT,
+        import_body TEXT
       )
     ''');
     await db.execute(
@@ -155,6 +157,9 @@ class JournalRepository {
     }
     if (oldVersion < 9) {
       await _addEventDescriptionColumn(db);
+    }
+    if (oldVersion < 10) {
+      await _addImportBodyColumn(db);
     }
   }
 
@@ -307,6 +312,18 @@ class JournalRepository {
     await db.execute('ALTER TABLE entries ADD COLUMN ink_text_at TEXT');
   }
 
+  /// Ergänzt die Spalte für den optionalen importierten (geteilten) Text
+  /// (Schema v10). `_onCreate` legt sie direkt in der `CREATE TABLE entries`
+  /// mit an — dieselbe Doppelung wie bei den übrigen Stufen, damit
+  /// Neuinstallation und Migration dasselbe Schema erzeugen.
+  ///
+  /// `ADD COLUMN` ist in SQLite billig; bestehende Zeilen bekommen NULL — also
+  /// „kein importierter Teil", was für alle Alt-Einträge genau stimmt: ihr
+  /// `content` war schon immer Steffens eigener Text.
+  Future<void> _addImportBodyColumn(Database db) async {
+    await db.execute('ALTER TABLE entries ADD COLUMN import_body TEXT');
+  }
+
   /// Ergänzt die Spalte für den optionalen Anzeige-Tag (Schema v8, „datierter
   /// Eintrag"). `_onCreate` legt sie direkt in der `CREATE TABLE entries` mit
   /// an — dieselbe Doppelung wie bei den übrigen Stufen, damit Neuinstallation
@@ -436,6 +453,7 @@ class JournalRepository {
         attachments: attachmentsByEntry[id] ?? const <Attachment>[],
         displayDay:
             displayDayRaw != null ? DateTime.parse(displayDayRaw) : null,
+        importBody: row['import_body'] as String?,
       );
     }).toList();
   }
@@ -496,9 +514,9 @@ class JournalRepository {
 
   Future<void> _upsertInTxn(Transaction txn, JournalEntry entry) async {
     // `replace` schreibt die **ganze** Zeile neu — deshalb müssen `ink_text`,
-    // `ink_text_at` und `display_day` hier mitfahren. Fehlten sie, würde jedes
-    // Speichern eines bearbeiteten Eintrags die Auswertung bzw. den Anzeige-Tag
-    // stillschweigend löschen.
+    // `ink_text_at`, `display_day` und `import_body` hier mitfahren. Fehlten
+    // sie, würde jedes Speichern eines bearbeiteten Eintrags die Auswertung,
+    // den Anzeige-Tag bzw. den geteilten Text stillschweigend löschen.
     await txn.insert(
       'entries',
       {
@@ -510,6 +528,7 @@ class JournalRepository {
         'ink_text_at': entry.inkTextAt?.toIso8601String(),
         'display_day':
             entry.displayDay != null ? _dateKey(entry.displayDay!) : null,
+        'import_body': entry.importBody,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -632,7 +651,7 @@ class JournalRepository {
     final db = await _database();
     // `timestamp` ist ISO-8601 — lexikographisch sortiert = chronologisch.
     final rows = await db.rawQuery(
-      'SELECT id, timestamp, content, ink_text, '
+      'SELECT id, timestamp, content, ink_text, import_body, '
       '(ink IS NOT NULL) AS is_ink '
       'FROM entries ORDER BY timestamp DESC',
     );
@@ -641,13 +660,20 @@ class JournalRepository {
     for (final row in rows) {
       final content = (row['content'] as String?) ?? '';
       final inkText = row['ink_text'] as String?;
+      final importBody = row['import_body'] as String?;
 
       // Reihenfolge mit Absicht: Was der Nutzer selbst geschrieben hat, wird
-      // vor der Maschinenerkennung geprüft. Ein Eintrag ist ohnehin entweder
-      // Text oder Tinte — „beides trifft" ist ein theoretischer Fall.
+      // vor dem geteilten Fremdtext und der Maschinenerkennung geprüft. Ein
+      // Eintrag ist ohnehin entweder Text (ggf. mit Import) oder Tinte —
+      // „alles trifft" ist ein theoretischer Fall.
       var index = content.toLowerCase().indexOf(q);
       var source = SearchHitSource.content;
       var text = content;
+      if (index == -1 && importBody != null) {
+        index = importBody.toLowerCase().indexOf(q);
+        source = SearchHitSource.importBody;
+        text = importBody;
+      }
       if (index == -1 && inkText != null) {
         index = inkText.toLowerCase().indexOf(q);
         source = SearchHitSource.inkText;

@@ -604,15 +604,45 @@ class _EntryTile extends StatelessWidget {
                 child: const SizedBox.expand(),
               ),
             )
-          else if (entry.content.isNotEmpty)
-            Text(
-              entry.content,
-              style: const TextStyle(
-                color: AppColors.text,
-                fontSize: 16,
-                height: 1.5,
+          else if (entry.content.isNotEmpty || entry.hasImportBody) ...[
+            // Steffens eigene Notiz/Lösung — seine „Stimme" in Blau-Schwarz.
+            // Mit beiliegendem Fremdtext leicht eingerückt und mit feiner Linie
+            // abgesetzt, damit sie vor dem Rohmaterial steht.
+            if (entry.content.isNotEmpty)
+              Container(
+                padding: entry.hasImportBody
+                    ? const EdgeInsets.only(left: 10)
+                    : EdgeInsets.zero,
+                decoration: entry.hasImportBody
+                    ? const BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: AppColors.guide, width: 2),
+                        ),
+                      )
+                    : null,
+                child: Text(
+                  entry.content,
+                  style: const TextStyle(
+                    color: AppColors.ink,
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
               ),
-            ),
+            // Geteilter Fremdtext — zurückhaltendes Grau, kleiner; tritt
+            // zurück, bleibt aber voll lesbar.
+            if (entry.hasImportBody) ...[
+              SizedBox(height: entry.content.isNotEmpty ? 10 : 0),
+              Text(
+                entry.importBody!,
+                style: const TextStyle(
+                  color: AppColors.importBody,
+                  fontSize: 14,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ],
           // Bild-Anhang: kompaktes Vorschau-Quadrat (E-01, v6.7) — dieselbe
           // geteilte Miniatur wie im Journal, Antippen öffnet das Vollbild. Ein
           // reiner Bild-Eintrag (leerer Inhalt, keine Tinte) zeigt nur das

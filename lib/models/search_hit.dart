@@ -11,6 +11,11 @@ enum SearchHitSource {
 
   /// Getroffen in `entries.ink_text` — von Claude erkannter Text (Schema v6).
   inkText,
+
+  /// Getroffen in `entries.import_body` — von außen geteilter Text (Schema
+  /// v10). Kein eigener Text und keine Maschinenerkennung, sondern fremdes
+  /// Rohmaterial, das Steffen ins Journal geholt hat.
+  importBody,
 }
 
 /// Ein Suchtreffer: ein Eintrag, in dem der Suchbegriff vorkommt.
