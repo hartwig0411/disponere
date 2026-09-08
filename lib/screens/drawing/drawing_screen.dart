@@ -63,6 +63,33 @@ class DrawingScreen extends StatefulWidget {
 class _DrawingScreenState extends State<DrawingScreen> {
   final List<List<Offset>> _strokes = [];
   final GlobalKey _canvasKey = GlobalKey();
+
+  /// Die Rolle scrollt vertikal; der Controller treibt das Autoscroll beim
+  /// Schreiben ins untere Band.
+  final ScrollController _scrollController = ScrollController();
+
+  /// Aktuelle Groesse des sichtbaren Zeichenfensters (Viewport), aus dem
+  /// LayoutBuilder. Bezugsgroesse fuers Wachsen, Folgen und Breiten-Fit.
+  Size _viewport = Size.zero;
+
+  /// Volle Laenge der Rolle (Inhaltshoehe). Waechst nach unten mit und ist die
+  /// gespeicherte Hoehe des Eintrags. 0 = vor dem ersten Layout.
+  double _rollHeight = 0;
+
+  /// Tiefster bisher geschriebene Punkt (Inhalts-Y). Bestimmt zusammen mit dem
+  /// Puffer die Wunschhoehe der Rolle.
+  double _lowestY = 0;
+
+  /// Puffer leerer Rolle unter der tiefsten Tinte (Anteil einer Viewport-Hoehe)
+  /// — Platz zum Weiterschreiben und Garant, dass das Autoscroll-Ziel stets
+  /// innerhalb der Scrollstrecke liegt.
+  static const double _bottomPadFactor = 0.5;
+
+  /// Beim Schreiben gehaltene Hoehe der Schreibzeile ueber der Unterkante
+  /// (Anteil einer Viewport-Hoehe): die Rolle folgt, sobald der Stift tiefer
+  /// als dieses Band kommt.
+  static const double _followBandFactor = 0.28;
+
   late final TextEditingController _tagController;
   final ClaudeService _claude = ClaudeService();
 
@@ -98,7 +125,7 @@ class _DrawingScreenState extends State<DrawingScreen> {
       // wenn das Gerät zwischen Erstellen und Bearbeiten gedreht wurde.
       // Gleiche Größe → No-op (kein Eingriff in den Normalfall).
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fitLoadedInkToCanvas(Size(ink.width, ink.height));
+        _fitLoadedInkToWidth(Size(ink.width, ink.height));
       });
     }
   }
@@ -106,34 +133,52 @@ class _DrawingScreenState extends State<DrawingScreen> {
   @override
   void dispose() {
     _tagController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  /// Rechnet die geladenen Striche von der gespeicherten Größe [from] auf die
-  /// aktuelle Canvas-Größe um (uniform skaliert, zentriert — keine Verzerrung
-  /// der Handschrift).
-  void _fitLoadedInkToCanvas(Size from) {
-    if (from.width <= 0 || from.height <= 0) return;
-    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-    final to = box?.size;
-    if (to == null || to.isEmpty) return;
-    if ((to.width - from.width).abs() < 1 &&
-        (to.height - from.height).abs() < 1) {
-      return; // gleiche Größe → nichts zu tun
-    }
-    final scale = (to.width / from.width) < (to.height / from.height)
-        ? to.width / from.width
-        : to.height / from.height;
-    final dx = (to.width - from.width * scale) / 2;
-    final dy = (to.height - from.height * scale) / 2;
+  /// Passt geladene Striche an die aktuelle **Breite** an (uniform skaliert,
+  /// linksbuendig, oben beginnend) und setzt die Rollenlaenge entsprechend.
+  ///
+  /// Weg A: Die Rolle fittet beim Laden nur noch auf die Breite — nicht mehr in
+  /// einen bildschirmgrossen Kasten. Ein langer Eintrag oeffnet damit in voller
+  /// Laenge und wird durch Scrollen weitergeschrieben, statt gestaucht zu
+  /// werden. Gleiche Breite -> Faktor 1, keine Verzerrung.
+  void _fitLoadedInkToWidth(Size from) {
+    if (from.width <= 0) return;
+    final vw = _viewport.width;
+    if (vw <= 0) return;
+    final scale = vw / from.width;
     setState(() {
-      for (final stroke in _strokes) {
-        for (int i = 0; i < stroke.length; i++) {
-          stroke[i] =
-              Offset(stroke[i].dx * scale + dx, stroke[i].dy * scale + dy);
+      if ((scale - 1.0).abs() >= 0.001) {
+        for (final stroke in _strokes) {
+          for (int i = 0; i < stroke.length; i++) {
+            stroke[i] = Offset(stroke[i].dx * scale, stroke[i].dy * scale);
+          }
         }
       }
+      _lowestY = _computeLowestY();
+      if (_rollHeight < _desiredRollHeight) _rollHeight = _desiredRollHeight;
     });
+  }
+
+  /// Tiefster Y-Wert ueber alle Striche (Inhalts-Koordinaten); 0 bei leer.
+  double _computeLowestY() {
+    double low = 0;
+    for (final stroke in _strokes) {
+      for (final p in stroke) {
+        if (p.dy > low) low = p.dy;
+      }
+    }
+    return low;
+  }
+
+  /// Wunschhoehe der Rolle: tiefste Tinte plus Puffer, mindestens eine
+  /// Viewport-Hoehe.
+  double get _desiredRollHeight {
+    final vh = _viewport.height;
+    final needed = _lowestY + vh * _bottomPadFactor;
+    return needed > vh ? needed : vh;
   }
 
   void _onPointerDown(PointerDownEvent event) {
@@ -142,7 +187,11 @@ class _DrawingScreenState extends State<DrawingScreen> {
       _eraseAt(event.localPosition);
       return;
     }
-    setState(() => _strokes.add([event.localPosition]));
+    final p = event.localPosition; // Inhalts-Koordinate (Listener in der Rolle)
+    setState(() {
+      _strokes.add([p]);
+      _growForPoint(p);
+    });
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -152,7 +201,39 @@ class _DrawingScreenState extends State<DrawingScreen> {
       return;
     }
     if (_strokes.isEmpty) return;
-    setState(() => _strokes.last.add(event.localPosition));
+    final p = event.localPosition; // Inhalts-Koordinate
+    setState(() {
+      _strokes.last.add(p);
+      _growForPoint(p);
+    });
+    _followPen(p.dy);
+  }
+
+  /// Merkt sich den tiefsten Punkt und laesst die Rolle bei Bedarf nach unten
+  /// mitwachsen. Aufruf innerhalb von setState.
+  void _growForPoint(Offset p) {
+    if (p.dy > _lowestY) _lowestY = p.dy;
+    final desired = _desiredRollHeight;
+    if (desired > _rollHeight) _rollHeight = desired;
+  }
+
+  /// Autoscroll: kommt die Schreibzeile tiefer als das untere Band, rollt die
+  /// Flaeche mit, sodass die Zeile auf komfortabler Hoehe bleibt („das Papier
+  /// rollt unter dem Stift hoch"). jumpTo statt animateTo — 1:1 folgend, ohne
+  /// Nachlauf; das Ziel liegt dank Puffer stets innerhalb der Scrollstrecke.
+  void _followPen(double penContentY) {
+    if (!_scrollController.hasClients) return;
+    final vh = _viewport.height;
+    if (vh <= 0) return;
+    final band = vh * _followBandFactor;
+    final penViewportY = penContentY - _scrollController.offset;
+    if (penViewportY > vh - band) {
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      final target = (penContentY - (vh - band)).clamp(0.0, maxExtent);
+      if ((target - _scrollController.offset).abs() > 0.5) {
+        _scrollController.jumpTo(target);
+      }
+    }
   }
 
   /// Löscht alle Striche, die nah genug an [p] liegen (ganzer Strich).
@@ -554,16 +635,46 @@ class _DrawingScreenState extends State<DrawingScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Listener(
-              onPointerDown: _onPointerDown,
-              onPointerMove: _onPointerMove,
-              child: RepaintBoundary(
-                key: _canvasKey,
-                child: CustomPaint(
-                  painter: InkLivePainter(_strokes),
-                  child: const SizedBox.expand(),
-                ),
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _viewport = Size(constraints.maxWidth, constraints.maxHeight);
+                // Rollenhoehe nach dem ersten Layout (bzw. nach dem Laden)
+                // nachziehen — nach dem Frame, nie synchron im build.
+                if (_rollHeight < _desiredRollHeight) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    if (_rollHeight < _desiredRollHeight) {
+                      setState(() => _rollHeight = _desiredRollHeight);
+                    }
+                  });
+                }
+                final height = _rollHeight < _viewport.height
+                    ? _viewport.height
+                    : _rollHeight;
+                return ScrollConfiguration(
+                  // Stift zeichnet, Finger scrollt: der Stylus ist als
+                  // Scroll-Geraet ausgeschlossen, damit die Rolle nicht wegrollt,
+                  // waehrend der M-Pencil schreibt (dieselbe Trennung wie die
+                  // bestehende Palm-Rejection).
+                  behavior: const _StylusExcludedScrollBehavior(),
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    child: Listener(
+                      onPointerDown: _onPointerDown,
+                      onPointerMove: _onPointerMove,
+                      child: SizedBox(
+                        key: _canvasKey,
+                        width: _viewport.width,
+                        height: height,
+                        child: CustomPaint(
+                          painter: InkLivePainter(_strokes),
+                          size: Size(_viewport.width, height),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           _buildInkTextPanel(),
@@ -578,4 +689,19 @@ class _DrawingScreenState extends State<DrawingScreen> {
       ),
     );
   }
+}
+
+/// Scroll-Verhalten der Tinten-Rolle: der Stift (`stylus`) ist als
+/// Scroll-Geraet ausgeschlossen — er ist zum Zeichnen reserviert. Finger und
+/// Maus/Trackpad scrollen wie gewohnt. So rollt die Flaeche nicht weg, waehrend
+/// der M-Pencil schreibt; das Autoscroll uebernimmt das Nachfuehren.
+class _StylusExcludedScrollBehavior extends MaterialScrollBehavior {
+  const _StylusExcludedScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
 }
