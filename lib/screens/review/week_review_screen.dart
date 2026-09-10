@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../data/journal_repository.dart';
 import '../../services/claude_service.dart';
+import '../../services/review_settings.dart';
 import '../../services/week_context.dart';
+import '../../utils/tag_parser.dart';
+import '../../utils/tag_registry.dart';
+import '../../widgets/tag_autocomplete_field.dart';
 import '../settings/claude_settings_screen.dart';
 
 import '../../theme/app_colors.dart';
@@ -29,6 +33,7 @@ class WeekReviewScreen extends StatefulWidget {
 class _WeekReviewScreenState extends State<WeekReviewScreen> {
   final JournalRepository _repo = JournalRepository();
   final ClaudeService _claude = ClaudeService();
+  final ReviewSettings _settings = ReviewSettings();
 
   /// Das beim Öffnen vorgeschlagene Fenster. Bleibt stehen — es ist zugleich
   /// die Obergrenze fürs Vorwärtsblättern.
@@ -44,12 +49,82 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
 
   bool _contextExpanded = false;
 
+  /// E-02 „Nicht Auswerten": die global ausgeschlossenen Tags (kanonisch, ohne
+  /// '#') und das Eingabefeld dazu. Die Liste ist eine app-weite Einstellung,
+  /// beim Öffnen vorbefüllt und beim „Übernehmen" zurückgeschrieben.
+  final TextEditingController _excludeController = TextEditingController();
+  final TagRegistry _tagRegistry = TagRegistry();
+  List<String> _knownTags = const [];
+  List<String> _excludedTags = const [];
+
   @override
   void initState() {
     super.initState();
     _suggested = WeekWindow.suggested(DateTime.now());
     _window = _suggested;
-    _loadContext();
+    _excludeController.addListener(_onExcludeChanged);
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _excludeController.removeListener(_onExcludeChanged);
+    _excludeController.dispose();
+    super.dispose();
+  }
+
+  void _onExcludeChanged() => setState(() {});
+
+  /// Lädt die gespeicherte Ausschlussliste und die bekannten Tags, füllt das
+  /// Feld vor und baut dann den ersten Kontext.
+  Future<void> _init() async {
+    final excluded = await _settings.excludedTags();
+    if (!mounted) return;
+    setState(() {
+      _excludedTags = excluded;
+      _excludeController.text = formatTags(excluded);
+    });
+    await _loadKnownTags();
+    await _loadContext();
+  }
+
+  /// Sammelt die bekannten Tags fürs Autocomplete aus Aufgaben, Kalender-
+  /// Zuordnungen und den Einträgen des aktuellen Fensters.
+  Future<void> _loadKnownTags() async {
+    final tasks = await _repo.loadAllTasks();
+    final sources = await _repo.loadCalendarSources();
+    final entries = await _repo.entriesInRange(_window.monday, _window.lastDay);
+    _tagRegistry.rebuildFrom([
+      ...entries.reversed.map((e) => e.tags),
+      ...tasks.map((t) => t.tags),
+      ...sources.map((c) => c.tags),
+    ]);
+    if (!mounted) return;
+    setState(() => _knownTags = _tagRegistry.allTags);
+  }
+
+  /// Übernimmt die im Feld getippten Tags als globale Ausschlussliste: parsen,
+  /// kanonisieren, speichern und den Kontext neu bauen, damit Vorschau und
+  /// Payload den Filter sofort widerspiegeln.
+  Future<void> _applyExcluded() async {
+    final parsed =
+        _tagRegistry.canonicalizeAll(parseTags(_excludeController.text));
+    setState(() {
+      _excludedTags = parsed;
+      _excludeController.text = formatTags(parsed);
+      _knownTags = _tagRegistry.allTags;
+    });
+    await _settings.setExcludedTags(parsed);
+    await _loadContext();
+  }
+
+  /// Weicht das Feld von der gespeicherten Liste ab? (Reihenfolge und Groß-/
+  /// Kleinschreibung egal.) Steuert, ob „Übernehmen" aktiv ist.
+  bool get _excludeDirty {
+    final a =
+        parseTags(_excludeController.text).map((t) => t.toLowerCase()).toSet();
+    final b = _excludedTags.map((t) => t.toLowerCase()).toSet();
+    return a.length != b.length || !a.containsAll(b);
   }
 
   /// Stellt den Kontext des aktuellen Fensters zusammen.
@@ -65,7 +140,11 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
       _result = null;
       _contextExpanded = false;
     });
-    final text = await WeekContext.build(_repo, window);
+    final text = await WeekContext.build(
+      _repo,
+      window,
+      excludedTags: _excludedTags.map((t) => t.toLowerCase()).toSet(),
+    );
     if (!mounted) return;
     // Zwischenzeitlich weitergeblättert? Dann gehört dieser Kontext zu einer
     // Woche, die nicht mehr im Kopf steht.
@@ -265,6 +344,8 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildExcludeSection(),
+          const SizedBox(height: 16),
           _buildContextExpander(contextText),
           const SizedBox(height: 20),
           if (_result == null) _buildRunSection(),
@@ -280,6 +361,48 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
   /// besteht, ist das die einzige Möglichkeit zu prüfen, ob die Woche
   /// vollständig und richtig eingesammelt wurde. Auch beim späteren Feilen am
   /// Prompt ist es das erste, was man sehen will.
+  /// E-02 „Nicht Auswerten": Tags, die aus der Auswertung fallen sollen.
+  /// Vorbefüllt mit der gespeicherten Liste; „Übernehmen" schreibt zurück und
+  /// baut den Kontext neu, sodass die Vorschau den Filter sofort zeigt.
+  Widget _buildExcludeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Nicht auswerten',
+          style: TextStyle(
+            color: AppColors.iconInactive,
+            fontSize: 13,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        const Text(
+          'Diese Tags fließen nicht in die Auswertung. Ein Eintrag, Termin oder '
+          'eine Aufgabe fällt nur heraus, wenn alle seine Tags hier stehen.',
+          style: TextStyle(
+            color: AppColors.weekday,
+            fontSize: 11,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TagAutocompleteField(
+          controller: _excludeController,
+          knownTags: _knownTags,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            style: TextButton.styleFrom(foregroundColor: _kAccent),
+            onPressed: _excludeDirty ? _applyExcluded : null,
+            child: const Text('Übernehmen'),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildContextExpander(String text) {
     return Container(
       decoration: BoxDecoration(

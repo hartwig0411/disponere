@@ -177,21 +177,40 @@ class WeekContext {
   /// zeigen, worauf die Woche verteilt war.
   static Future<String> build(
     JournalRepository repo,
-    WeekWindow window,
-  ) async {
+    WeekWindow window, {
+    Set<String> excludedTags = const {},
+  }) async {
     final entries = await repo.entriesInRange(window.monday, window.lastDay);
     final tasks = await repo.tasksInRange(window.monday, window.lastDay);
     final infos = await repo.dailyInfosInRange(window.monday, window.lastDay);
     final events =
         await repo.calendarEventsInRange(window.monday, window.lastDay);
 
+    // E-02 „Nicht Auswerten": ausgeschlossene Tags, case-insensitiv verglichen.
+    final excluded = excludedTags.map((t) => t.toLowerCase()).toSet();
+
+    // Ein Objekt bleibt in der Auswertung, solange es mindestens einen
+    // nicht-ausgeschlossenen Tag trägt. Tag-lose Objekte sind nie betroffen;
+    // erst wenn *alle* Tags ausgeschlossen sind, fällt es ganz heraus.
+    bool keepByTags(List<String> tags) =>
+        tags.isEmpty || tags.any((t) => !excluded.contains(t.toLowerCase()));
+
+    // Die sichtbaren Tags eines Objekts: die ausgeschlossenen fallen weg — so
+    // erreicht ein „nicht ausgewerteter" Tag Claude weder über ein Zeilen-
+    // Suffix noch über die Tag-Übersicht am Ende.
+    List<String> visibleTags(List<String> tags) =>
+        tags.where((t) => !excluded.contains(t.toLowerCase())).toList();
+
     // Handschrift ohne Auswertung fließt nicht ein — es gibt keinen Text, den
     // man schicken könnte. Wie viele es waren, steht am Ende: sonst entstünde
     // der Eindruck, an diesen Tagen sei nichts gewesen.
     bool printable(JournalEntry e) =>
         e.isInk ? e.hasInkText : e.content.trim().isNotEmpty;
-    final included = entries.where(printable).toList();
-    final skippedInk = entries.where((e) => e.isInk && !e.hasInkText).length;
+    // Erst der Tag-Ausschluss (E-02), dann die Druckbarkeit: ein vollständig
+    // ausgeschlossener Eintrag zählt auch nicht als „übersprungene Handschrift".
+    final kept = entries.where((e) => keepByTags(e.tags)).toList();
+    final included = kept.where(printable).toList();
+    final skippedInk = kept.where((e) => e.isInk && !e.hasInkText).length;
 
     final buffer = StringBuffer();
     buffer.writeln(
@@ -209,9 +228,13 @@ class WeekContext {
     for (final day in window.days) {
       final key = WeekWindow.dateKey(day);
       final dayInfos = infos.where((i) => i.coversDay(day)).toList();
-      final dayEvents = events.where((e) => e.coversDay(key)).toList();
+      final dayEvents = events
+          .where((e) => e.coversDay(key))
+          .where((e) => keepByTags(e.tags))
+          .toList();
       final dayTasks = tasks
           .where((t) => t.dueDay != null && WeekWindow.dateKey(t.dueDay!) == key)
+          .where((t) => keepByTags(t.tags))
           .toList();
       // Nach `journalDay` (Anzeige-Tag bei datierten Eintraegen, sonst
       // Zeitstempel-Tag) — dieselbe Zuordnung wie im Journal und in der
@@ -253,7 +276,7 @@ class WeekContext {
               ? ', ${_oneLine(event.location!)}'
               : '';
           buffer.writeln(
-            '- $time — ${_oneLine(event.summary)}$place${_tagSuffix(event.tags)}',
+            '- $time — ${_oneLine(event.summary)}$place${_tagSuffix(visibleTags(event.tags))}',
           );
         }
       }
@@ -265,7 +288,7 @@ class WeekContext {
           final state = task.done ? 'erledigt' : 'offen';
           final time = task.dueTime != null ? '${task.dueTime} ' : '';
           buffer.writeln(
-            '- [$state] $time${_oneLine(task.title)}${_tagSuffix(task.tags)}',
+            '- [$state] $time${_oneLine(task.title)}${_tagSuffix(visibleTags(task.tags))}',
           );
         }
       }
@@ -276,7 +299,7 @@ class WeekContext {
         for (final entry in dayEntries) {
           final time = WeekWindow.formatTime(entry.timestamp);
           final origin = entry.isInk ? ' (Handschrift, erkannter Text)' : '';
-          buffer.writeln('- $time$origin${_tagSuffix(entry.tags)}');
+          buffer.writeln('- $time$origin${_tagSuffix(visibleTags(entry.tags))}');
           buffer.writeln(
             _indent(entry.isInk ? entry.inkText! : entry.content),
           );
@@ -292,13 +315,13 @@ class WeekContext {
     }
 
     for (final e in included) {
-      bump(e.tags);
+      bump(visibleTags(e.tags));
     }
     for (final t in tasks) {
-      bump(t.tags);
+      bump(visibleTags(t.tags));
     }
     for (final e in events) {
-      bump(e.tags);
+      bump(visibleTags(e.tags));
     }
 
     if (tagCounts.isNotEmpty) {
