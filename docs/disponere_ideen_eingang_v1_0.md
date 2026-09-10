@@ -146,7 +146,7 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   ausgeschlossen ganz heraus. Ausschlussliste = **globale, persistente Einstellung**, bei jeder
   neuen Woche im Feld vorbefüllt und beim Ändern zurückgeschrieben. Kein Schema-Zwang; Ablage
   der Liste reversibel. → `disponere_anforderungen_v6_9.md` (Änderungsblock „gegenüber v6.8",
-  Kernkonzept 8, Feature-Zeile). Größe: halbe Session, noch nicht gebaut.
+  Kernkonzept 8, Feature-Zeile). Größe: halbe Session. **Gebaut in Session 64 (9.9.2026, feat `f9397fb`); Weg B: Filter über Einträge, Aufgaben und Termine, ausgeschlossene Tags auch aus Suffixen und Tag-Übersicht.**
 
 ---
 
