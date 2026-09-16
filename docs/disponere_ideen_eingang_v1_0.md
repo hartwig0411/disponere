@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 29. August 2026*
+*Stand: 15. September 2026*
 
 ---
 
@@ -111,15 +111,18 @@ nur als Muster.
 
 ## Offene Eingänge
 
-### E-03 · Tags im Brücken-Sheet editierbar
-- **Eingegangen:** 29.08.2026
+### E-05 · Autosave / Entwurf sichern in den Compose-Sheets
+- **Eingegangen:** 15.09.2026
 - **Quelle:** Text aus Disponere (im Chat gemeldet)
-- **Kanal (deine Einordnung, falls klar):** Versio
-- **Original (dein Text):** „Für später nehmen wir bitte auf, dass wir auch den #Tag verändern können."
-- **In einem Satz (meine Umformulierung):** Im Brücken-Sheet (Termin → Eintrag, sinngemäß auch die anderen zwei Beine) die geerbten Tags nicht nur read-only zeigen, sondern vor dem Anlegen editierbar machen — hinzufügen, entfernen, ändern.
-- **Status:** NEU
-- **Größe (grob):** halbe Session (Tag-Editier-UI ins gemeinsame `bridge_sheet`, geerbte Tags als Startwert)
-- **Notiz für die Triage:** Zu klären ist, ob das Ändern rein eintragsseitig gilt oder auf die Quelle zurückwirkt — beim read-only-Termin scheidet Rückschreiben aus.
+- **Kanal (deine Einordnung, falls klar):** Versio (Verlässlichkeit, v1.0-relevant)
+- **Original (dein Text):** „Das Thema automatisch speichern. Mir ist es im Tagesgeschäft ein paar Mal passiert, dass Geschriebenes weg war, nachdem ich das Fenster kurz runterlegte oder im Meeting zu einem Thema diskutierte und dann weiterschreiben wollte." — Präzisierung: „passiert bei Neuer Eintrag oder, was für mich gleich ist, wenn ich ein Kalenderevent zu einem Eintrag gemacht habe."
+- **In einem Satz (meine Umformulierung):** Ungespeicherter Tipptext in den Compose-Sheets („Neuer Eintrag" und Event→Eintrag-Brücke) geht verloren, wenn Android die App im Hintergrund beendet — ein Entwurfs-Slot soll den Text laufend sichern und beim Zurückkommen wiederherstellen.
+- **Status:** OFFEN
+- **Größe (grob):** halbe Session
+- **Umfang (geklärt):** nur Tipptext-Flächen — „Neuer Eintrag"-Sheet und Event→Eintrag-Brücke (`bridge_sheet`). Nicht das native FreeScript-Feld, nicht die Tintenrolle.
+- **Mechanik (Vorschlag):** Entwurf laufend entprellt schreiben, garantiert beim Lebenszyklus-`paused` flushen; beim Öffnen vorbelegen; beim echten Speichern/Verwerfen leeren. Ablage in `shared_preferences` (ein Slot, reversibel).
+- **Bei OFFEN — zu klärende Fragen:** (1) Wiederherstellung still oder mit Hinweis „Entwurf wiederhergestellt"? (2) `shared_preferences` (ein Slot) vs. SQLite-Tabelle, falls je mehrere parallele Entwürfe gewünscht. (3) Start-Reihenfolge nach Prefs/DB-Init — Berührungspunkt mit N5 (Kaltstart-Race).
+- **Nach Triage → wohin:** Anforderungen (Verlässlichkeit / Compose-Verhalten).
 
 ---
 
@@ -147,6 +150,13 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   neuen Woche im Feld vorbefüllt und beim Ändern zurückgeschrieben. Kein Schema-Zwang; Ablage
   der Liste reversibel. → `disponere_anforderungen_v6_9.md` (Änderungsblock „gegenüber v6.8",
   Kernkonzept 8, Feature-Zeile). Größe: halbe Session. **Gebaut in Session 64 (9.9.2026, feat `f9397fb`); Weg B: Filter über Einträge, Aufgaben und Termine, ausgeschlossene Tags auch aus Suffixen und Tag-Übersicht.**
+- **E-03 · Tags im Brücken-Sheet editierbar → VERSIO** (29.08.2026). Entschieden: geerbte Tags im
+  gemeinsamen `bridge_sheet` editierbar (hinzufügen/entfernen/ändern) über alle drei Brücken-Beine,
+  mit Kanonisierung; beim read-only-Termin kein Rückschreiben auf die Quelle. →
+  `disponere_anforderungen_v6_13.md`. Größe: halbe Session. **Gebaut in Session 61 (feat `d031935`).**
+- **E-04 · OneCalendar im Teilen-Menü (`text/calendar` / `.ics`)** — direkt in Warteschlange und
+  Anforderungen erfasst, lief nicht über den Eingang. Steht dort als **offener Punkt**; hier nur als
+  Pointer, damit die Nummerierung nachvollziehbar bleibt.
 
 ---
 
