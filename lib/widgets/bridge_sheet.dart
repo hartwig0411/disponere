@@ -4,7 +4,9 @@ import '../theme/app_colors.dart';
 import '../models/journal_entry.dart';
 import '../models/task.dart';
 import '../models/calendar_event.dart';
+import '../services/draft_store.dart';
 import '../utils/tag_parser.dart';
+import 'draft_hint.dart';
 import 'tag_autocomplete_field.dart';
 
 /// Brücke Eintrag ↔ Aufgabe (Session 53, Anforderungen v6.4).
@@ -169,7 +171,15 @@ Future<void> showEventToEntrySheet({
   required Future<void> Function(String content, List<String> tags,
           DateTime displayDay, String? importBody)
       onCreate,
-}) {
+}) async {
+  // Entwurfs-Sicherung (E-05): die eigene Notiz zu **genau diesem** Termin
+  // (Kalender + Termin + Tag) kommt beim nächsten Öffnen zurück; bei einem
+  // anderen Termin bleibt das Feld leer.
+  final sourceId = '${event.calendarId}|${event.eventId}|${event.startDay}';
+  final draft =
+      await DraftStore.load(DraftStore.eventBridgeSlot, sourceId: sourceId);
+  if (!context.mounted) return;
+
   final title = event.summary.trim();
   final description = event.description?.trim() ?? '';
   final compact = _compactDescription(description);
@@ -178,10 +188,19 @@ Future<void> showEventToEntrySheet({
   // bleibt leer: Steffen schreibt seine ToDos/Gedanken darueber, genau wie beim
   // Teilen. Gespeichert wird, sobald eines der beiden Inhalt hat (der
   // Termintext ist praktisch immer vorhanden).
-  final noteController = TextEditingController();
+  final noteController = TextEditingController(text: draft?.text ?? '');
   final importController = TextEditingController(text: seed);
   final tags = event.tags; // geerbt, bereits kanonisch
   final displayDay = Task.dayOnly(day); // fix auf den Termintag
+  final tagController =
+      TextEditingController(text: draft?.tagText ?? formatTags(tags));
+  final draftSession = DraftSession(
+    slot: DraftStore.eventBridgeSlot,
+    sourceId: sourceId,
+    textController: noteController,
+    tagController: tagController,
+    restoredAt: draft?.savedAt,
+  );
 
   return _showBridgeSheet(
     context: context,
@@ -196,6 +215,8 @@ Future<void> showEventToEntrySheet({
     dateEditable: false, // fix auf den Termintag, kein Picker
     importController: importController,
     importLabel: 'TERMIN',
+    tagController: tagController,
+    draftSession: draftSession,
     onSubmit: (submitDay, editedTags) {
       final note = noteController.text.trim();
       final imp = importController.text.trim();
@@ -226,12 +247,16 @@ Future<void> _showBridgeSheet({
   bool dateEditable = true,
   TextEditingController? importController,
   String? importLabel,
+  TextEditingController? tagController,
+  DraftSession? draftSession,
   required bool Function(DateTime? day, List<String> tags) onSubmit,
-}) {
+}) async {
   DateTime? day = initialDay;
-  final tagController = TextEditingController(text: formatTags(tags));
+  // Ein übergebener Tag-Controller (Termin -> Eintrag mit Entwurf, E-05) hat
+  // Vorrang; sonst frisch aus den geerbten Tags.
+  final tagField = tagController ?? TextEditingController(text: formatTags(tags));
 
-  return showModalBottomSheet(
+  await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: AppColors.paper,
@@ -284,6 +309,15 @@ Future<void> _showBridgeSheet({
                   ],
                 ),
                 const SizedBox(height: 16),
+                if (draftSession?.restoredAt != null)
+                  DraftHint(
+                    restoredAt: draftSession!.restoredAt!,
+                    onDiscard: () => setSheetState(() {
+                      draftSession!.discardRestored();
+                      controller.clear();
+                      tagField.text = formatTags(tags);
+                    }),
+                  ),
                 TextField(
                   controller: controller,
                   autofocus: true,
@@ -340,7 +374,7 @@ Future<void> _showBridgeSheet({
                 // taggen kann, wenn die Quelle keine Tags hatte.
                 const SizedBox(height: 12),
                 TagAutocompleteField(
-                  controller: tagController,
+                  controller: tagField,
                   knownTags: knownTags,
                 ),
                 const SizedBox(height: 16),
@@ -401,9 +435,12 @@ Future<void> _showBridgeSheet({
                       ),
                     ),
                     onPressed: () {
-                      final saved =
-                          onSubmit(day, parseTags(tagController.text));
-                      if (saved) Navigator.pop(sheetContext);
+                      final saved = onSubmit(day, parseTags(tagField.text));
+                      if (saved) {
+                        // Gespeichert: Entwurf löschen (E-05).
+                        draftSession?.clear();
+                        Navigator.pop(sheetContext);
+                      }
                     },
                     child: const Text(
                       'Speichern',
@@ -423,6 +460,9 @@ Future<void> _showBridgeSheet({
       );
     },
   );
+  // Sheet zu ohne Speichern: letzten Stand sichern, Entwurf bleibt (E-05).
+  // Nach dem Speichern ist die Sitzung schon beendet — dann tut close() nichts.
+  draftSession?.close();
 }
 
 /// „8. Juli 2026" — ausgeschriebenes Datum für die Datumszeile (wie im

@@ -12,6 +12,7 @@ import '../../models/ink_data.dart';
 import '../../models/calendar_event.dart';
 import '../../models/calendar_source.dart';
 import '../../services/attachment_store.dart';
+import '../../services/draft_store.dart';
 import '../../services/share_receiver.dart';
 import '../../services/share_service.dart';
 import '../../screens/text/native_text_entry_screen.dart';
@@ -21,6 +22,7 @@ import '../../utils/tag_registry.dart';
 import '../../widgets/tag_autocomplete_field.dart';
 import '../../widgets/task_sheet.dart';
 import '../../widgets/bridge_sheet.dart';
+import '../../widgets/draft_hint.dart';
 import '../../screens/search/search_screen.dart';
 import '../../screens/tags/tag_management_screen.dart';
 import '../../screens/tasks/task_overview_screen.dart';
@@ -166,6 +168,11 @@ class _JournalScreenState extends State<JournalScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshToday();
+    } else {
+      // E-05: Geht die App in den Hintergrund, den Entwurf eines offenen
+      // Tipptext-Sheets sofort sichern — Android darf den Prozess danach
+      // jederzeit beenden.
+      DraftStore.flushActive();
     }
   }
 
@@ -343,14 +350,28 @@ class _JournalScreenState extends State<JournalScreen>
   /// Fremdtext (ACTION_SEND) — die eigene Notiz bleibt dann leer und
   /// fokussiert, sodass Steffen sie ueber dem Rohmaterial schreibt (Schema v10).
   /// Bei [existing] != null gewinnt der Bestand.
-  void _openEntrySheet(
+  ///
+  /// Entwurfs-Sicherung (E-05) nur für den schlichten **neuen** Eintrag (ohne
+  /// Bestand, ohne geteilten Inhalt): ein vorhandener Entwurf wird vorbelegt
+  /// und mit Hinweis angezeigt; der Stand wird laufend gesichert und erst
+  /// beim Speichern oder „Verwerfen“ gelöscht.
+  Future<void> _openEntrySheet(
       {JournalEntry? existing,
       String? initialContent,
       String? initialImportBody,
-      XFile? initialImage}) {
+      XFile? initialImage}) async {
     final isEditing = existing != null;
-    final contentController =
-        TextEditingController(text: existing?.content ?? initialContent ?? '');
+    final isPlainNew = existing == null &&
+        initialContent == null &&
+        initialImportBody == null &&
+        initialImage == null;
+    Draft? draft;
+    if (isPlainNew) {
+      draft = await DraftStore.load(DraftStore.entrySlot);
+      if (!mounted) return;
+    }
+    final contentController = TextEditingController(
+        text: existing?.content ?? initialContent ?? draft?.text ?? '');
     final importController = TextEditingController(
         text: existing?.importBody ?? initialImportBody ?? '');
     // Das Import-Feld erscheint nur, wenn tatsächlich Fremdtext vorliegt (aus
@@ -358,7 +379,17 @@ class _JournalScreenState extends State<JournalScreen>
     // handgetippten Eintrag bleibt das Sheet unverändert schlicht.
     final hasImportField = importController.text.trim().isNotEmpty;
     final tagController = TextEditingController(
-        text: existing != null ? formatTags(existing.tags) : '');
+        text: existing != null
+            ? formatTags(existing.tags)
+            : (draft?.tagText ?? ''));
+    final draftSession = isPlainNew
+        ? DraftSession(
+            slot: DraftStore.entrySlot,
+            textController: contentController,
+            tagController: tagController,
+            restoredAt: draft?.savedAt,
+          )
+        : null;
 
     // Bild-Zustand des Sheets (Session A). Außerhalb des Builders, damit er
     // über StatefulBuilder-Neuaufbauten hinweg bestehen bleibt.
@@ -379,7 +410,7 @@ class _JournalScreenState extends State<JournalScreen>
     // Builders, damit er StatefulBuilder-Neuaufbauten übersteht (wie pickedImage).
     DateTime? pickedDisplayDay = existing?.displayDay;
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.paper,
@@ -455,6 +486,15 @@ class _JournalScreenState extends State<JournalScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (draftSession?.restoredAt != null)
+                    DraftHint(
+                      restoredAt: draftSession!.restoredAt!,
+                      onDiscard: () => setSheetState(() {
+                        draftSession!.discardRestored();
+                        contentController.clear();
+                        tagController.clear();
+                      }),
+                    ),
                   Row(
                     children: [
                       Expanded(
@@ -724,6 +764,7 @@ class _JournalScreenState extends State<JournalScreen>
                             pickedImage: pickedImage,
                             removeExisting: removeExisting,
                             displayDay: pickedDisplayDay,
+                            draftSession: draftSession,
                           ),
                           child: const Text(
                             'Speichern',
@@ -745,6 +786,10 @@ class _JournalScreenState extends State<JournalScreen>
         );
       },
     );
+    // Sheet zu ohne Speichern (Wegwischen, Stift-Knopf, Zurück): letzten Stand
+    // sichern, Entwurf bleibt. Nach dem Speichern ist die Sitzung schon
+    // beendet — dann tut close() nichts.
+    draftSession?.close();
   }
 
   /// Öffnet einen kleinen Auswahldialog (Galerie / Kamera) und liefert das
@@ -809,6 +854,7 @@ class _JournalScreenState extends State<JournalScreen>
     required XFile? pickedImage,
     required bool removeExisting,
     required DateTime? displayDay,
+    DraftSession? draftSession,
   }) async {
     final keepingExisting = existing != null &&
         existing.hasImage &&
@@ -872,6 +918,9 @@ class _JournalScreenState extends State<JournalScreen>
           displayDay: displayDay,
           importBody: normalizedImport);
     }
+
+    // Gespeichert: der Entwurf hat seinen Zweck erfüllt (E-05).
+    draftSession?.clear();
 
     if (orphaned.isNotEmpty) {
       await _attachmentStore.deleteFiles(orphaned);
