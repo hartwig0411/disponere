@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 15. September 2026*
+*Stand: 24. September 2026*
 
 ---
 
@@ -157,6 +157,13 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
 - **E-04 · OneCalendar im Teilen-Menü (`text/calendar` / `.ics`)** — direkt in Warteschlange und
   Anforderungen erfasst, lief nicht über den Eingang. Steht dort als **offener Punkt**; hier nur als
   Pointer, damit die Nummerierung nachvollziehbar bleibt.
+- **E-06 · Text überall markier- und kopierbar → VERSIO** (24.09.2026). Gemeldet im Chat mit
+  Screenshot der Tag-Ansicht (#Comos); Behelf bisher: Eintrag → Aufgabe → Eintrag, aufwendig und
+  verfälschend. Entschieden: **Ausschnitt markieren**, **überall** wo gespeicherter Text steht
+  (ohne Strichbilder/Bilder), **Weg 2**: lange drücken wird einheitlich zur Markier-Geste, die
+  bisherigen Long-Press-Menüs wandern hinter ein ⋮-Symbol an der Karte. Kein Schema. →
+  `disponere_anforderungen_v6_17.md` (Änderungsblock „gegenüber v6.16", Abschnitt „Text markieren
+  & kopieren", Feature-Zeile). Größe: halbe bis ganze Session. Als nächste Session vor E-05.
 
 ---
 
