@@ -111,18 +111,7 @@ nur als Muster.
 
 ## Offene Eingänge
 
-### E-05 · Autosave / Entwurf sichern in den Compose-Sheets
-- **Eingegangen:** 15.09.2026
-- **Quelle:** Text aus Disponere (im Chat gemeldet)
-- **Kanal (deine Einordnung, falls klar):** Versio (Verlässlichkeit, v1.0-relevant)
-- **Original (dein Text):** „Das Thema automatisch speichern. Mir ist es im Tagesgeschäft ein paar Mal passiert, dass Geschriebenes weg war, nachdem ich das Fenster kurz runterlegte oder im Meeting zu einem Thema diskutierte und dann weiterschreiben wollte." — Präzisierung: „passiert bei Neuer Eintrag oder, was für mich gleich ist, wenn ich ein Kalenderevent zu einem Eintrag gemacht habe."
-- **In einem Satz (meine Umformulierung):** Ungespeicherter Tipptext in den Compose-Sheets („Neuer Eintrag" und Event→Eintrag-Brücke) geht verloren, wenn Android die App im Hintergrund beendet — ein Entwurfs-Slot soll den Text laufend sichern und beim Zurückkommen wiederherstellen.
-- **Status:** OFFEN
-- **Größe (grob):** halbe Session
-- **Umfang (geklärt):** nur Tipptext-Flächen — „Neuer Eintrag"-Sheet und Event→Eintrag-Brücke (`bridge_sheet`). Nicht das native FreeScript-Feld, nicht die Tintenrolle.
-- **Mechanik (Vorschlag):** Entwurf laufend entprellt schreiben, garantiert beim Lebenszyklus-`paused` flushen; beim Öffnen vorbelegen; beim echten Speichern/Verwerfen leeren. Ablage in `shared_preferences` (ein Slot, reversibel).
-- **Bei OFFEN — zu klärende Fragen:** (1) Wiederherstellung still oder mit Hinweis „Entwurf wiederhergestellt"? (2) `shared_preferences` (ein Slot) vs. SQLite-Tabelle, falls je mehrere parallele Entwürfe gewünscht. (3) Start-Reihenfolge nach Prefs/DB-Init — Berührungspunkt mit N5 (Kaltstart-Race).
-- **Nach Triage → wohin:** Anforderungen (Verlässlichkeit / Compose-Verhalten).
+*— keiner —*
 
 ---
 
@@ -166,6 +155,14 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   & kopieren", Feature-Zeile). Größe: halbe bis ganze Session. Als nächste Session vor E-05.
   **Gebaut in Session 67 (24.09.2026, feat `0ac7dab`); `SelectionArea` je Screen, ⋮-Widget
   `card_menu_button.dart`, auch an der Aufgabenübersicht (vierte Long-Press-Belegung).**
+- **E-05 · Autosave / Entwurf sichern in den Compose-Sheets → VERSIO** (15.09.2026, triagiert
+  24.09.2026). Ungespeicherter Tipptext ging verloren, wenn Android die App im Hintergrund beendete
+  oder das Sheet zuging. Entschieden: Entwurf in `shared_preferences`, **zwei Slots** („Neuer
+  Eintrag“; Termin → Eintrag, an den Termin gebunden), **Wiederherstellung mit Hinweis** und
+  „Verwerfen“, **Wegwischen behält** den Entwurf, gesichert werden Text und Tags; Bearbeiten und
+  Teilen außen vor; kein Berührungspunkt mit N5. → `disponere_anforderungen_v6_19.md`
+  (Änderungsblock „gegenüber v6.18“, Abschnitt „Entwurf sichern“, Feature-Zeile).
+  **Gebaut in Session 68 (24.09.2026, feat `5783e20`); `draft_store.dart`, `draft_hint.dart`.**
 
 ---
 
