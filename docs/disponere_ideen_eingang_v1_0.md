@@ -164,6 +164,8 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   bisherigen Long-Press-Menüs wandern hinter ein ⋮-Symbol an der Karte. Kein Schema. →
   `disponere_anforderungen_v6_17.md` (Änderungsblock „gegenüber v6.16", Abschnitt „Text markieren
   & kopieren", Feature-Zeile). Größe: halbe bis ganze Session. Als nächste Session vor E-05.
+  **Gebaut in Session 67 (24.09.2026, feat `0ac7dab`); `SelectionArea` je Screen, ⋮-Widget
+  `card_menu_button.dart`, auch an der Aufgabenübersicht (vierte Long-Press-Belegung).**
 
 ---
 
