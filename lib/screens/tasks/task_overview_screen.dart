@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../data/journal_repository.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/card_menu_button.dart';
 import '../../models/task.dart';
 import '../../models/journal_entry.dart';
 import '../../utils/tag_registry.dart';
@@ -78,9 +79,9 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
     );
   }
 
-  /// Bruecke Aufgabe -> Eintrag (Session 53): langes Druecken auf eine offene
-  /// Aufgabe merkt sie als datierten Eintrag vor. Der Eintrag erbt die Tags
-  /// (Verbindung = geteilter Tag); die Aufgabe bleibt unveraendert und in der
+  /// Bruecke Aufgabe -> Eintrag (Session 53): das ⋮ an einer offenen Aufgabe
+  /// (bis E-06 langes Druecken) merkt sie als datierten Eintrag vor. Der
+  /// Eintrag erbt die Tags (Verbindung = geteilter Tag); die Aufgabe bleibt unveraendert und in der
   /// Uebersicht. Nichts hier neu zu laden — die Uebersicht zeigt nur Aufgaben.
   Future<void> _taskToEntry(Task task) async {
     await showTaskToEntrySheet(
@@ -154,15 +155,19 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: _kTaskAccent),
             )
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                _buildSortToggle(),
-                const SizedBox(height: 20),
-                ..._buildOpenSection(open, today),
-                const SizedBox(height: 24),
-                _buildDoneSection(done, today),
-              ],
+          // E-06: Aufgabentexte markierbar; der Sortier-Schalter bleibt
+          // Bedienelement und ist von der Auswahl ausgenommen.
+          : SelectionArea(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  SelectionContainer.disabled(child: _buildSortToggle()),
+                  const SizedBox(height: 20),
+                  ..._buildOpenSection(open, today),
+                  const SizedBox(height: 24),
+                  _buildDoneSection(done, today),
+                ],
+              ),
             ),
     );
   }
@@ -219,7 +224,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
               today: today,
               onToggle: () => _toggleDone(t),
               onTap: () => _openSheet(t),
-              onLongPress: () => _taskToEntry(t),
+              onMenu: () => _taskToEntry(t),
             )),
       ];
     }
@@ -258,7 +263,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
             today: today,
             onToggle: () => _toggleDone(t),
             onTap: () => _openSheet(t),
-            onLongPress: () => _taskToEntry(t),
+            onMenu: () => _taskToEntry(t),
           )));
     }
     if (untagged.isNotEmpty) {
@@ -269,7 +274,7 @@ class _TaskOverviewScreenState extends State<TaskOverviewScreen> {
             today: today,
             onToggle: () => _toggleDone(t),
             onTap: () => _openSheet(t),
-            onLongPress: () => _taskToEntry(t),
+            onMenu: () => _taskToEntry(t),
           )));
     }
     return widgets;
@@ -365,15 +370,16 @@ class _OverviewTaskCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onTap;
 
-  /// Langes Druecken: Bruecke „Als Eintrag vormerken" (Session 53). Optional —
-  /// erledigte Aufgaben bekommen ihn nicht.
-  final VoidCallback? onLongPress;
+  /// ⋮-Symbol: Bruecke „Als Eintrag vormerken" (Session 53; bis E-06 am
+  /// langen Druecken, das jetzt Text markiert). Optional — erledigte Aufgaben
+  /// bekommen ihn nicht, dann erscheint kein ⋮.
+  final VoidCallback? onMenu;
   const _OverviewTaskCard({
     required this.task,
     required this.today,
     required this.onToggle,
     required this.onTap,
-    this.onLongPress,
+    this.onMenu,
   });
 
   @override
@@ -388,7 +394,6 @@ class _OverviewTaskCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onTap,
-          onLongPress: onLongPress,
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -459,6 +464,11 @@ class _OverviewTaskCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (onMenu != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: CardMenuButton(onPressed: onMenu!),
+                  ),
               ],
             ),
           ),

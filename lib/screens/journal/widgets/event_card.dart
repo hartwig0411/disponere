@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_colors.dart';
 import '../../../models/calendar_event.dart';
+import '../../../widgets/card_menu_button.dart';
 import 'tag_chip.dart';
 
 /// Eine Terminkarte: blaues Kalender-Icon, Zeit, Titel, optional Ort, Tags.
@@ -8,13 +9,13 @@ class EventCard extends StatelessWidget {
   final CalendarEvent event;
   final String day;
 
-  /// Langes Drücken auf die Terminkarte: öffnet das Aktionsmenü „Zu Eintrag
-  /// machen" (Session 60, drittes Brücken-Bein). Optional — ohne Callback
-  /// bleibt der Termin reine Anzeige wie zuvor.
-  final VoidCallback? onLongPress;
+  /// ⋮-Symbol an der Terminkarte: öffnet das Aktionsmenü „Zu Eintrag machen"
+  /// (Session 60, drittes Brücken-Bein; bis E-06 am langen Drücken, das jetzt
+  /// Text markiert). Optional — ohne Callback erscheint kein ⋮ und der Termin
+  /// bleibt reine Anzeige.
+  final VoidCallback? onMenu;
 
-  const EventCard(
-      {required this.event, required this.day, this.onLongPress});
+  const EventCard({required this.event, required this.day, this.onMenu});
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +27,6 @@ class EventCard extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onLongPress: onLongPress,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -83,6 +83,11 @@ class EventCard extends StatelessWidget {
               ],
             ),
           ),
+          if (onMenu != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: CardMenuButton(onPressed: onMenu!),
+            ),
         ],
       ),
       ),

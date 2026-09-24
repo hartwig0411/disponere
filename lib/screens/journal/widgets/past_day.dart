@@ -259,22 +259,23 @@ class _ClusterAcc {
 class PastDayView extends StatelessWidget {
   final PastDay pastDay;
   final void Function(JournalEntry) onTapEntry;
-  final void Function(JournalEntry) onLongPressEntry;
+  final void Function(JournalEntry) onMenuEntry;
   final void Function(Task) onToggleTask;
   final void Function(DailyInfo) onTapInfo;
 
-  /// Langes Drücken auf einen Termin: Brücke „Zu Eintrag machen" (Session 60).
-  /// Optional — ohne Callback bleibt der Termin reine Anzeige.
-  final void Function(CalendarEvent, String)? onLongPressEvent;
+  /// ⋮ an einem Termin: Brücke „Zu Eintrag machen" (Session 60; seit E-06
+  /// hinter dem ⋮ statt am langen Drücken). Optional — ohne Callback bleibt
+  /// der Termin reine Anzeige.
+  final void Function(CalendarEvent, String)? onMenuEvent;
 
   const PastDayView({
     super.key,
     required this.pastDay,
     required this.onTapEntry,
-    required this.onLongPressEntry,
+    required this.onMenuEntry,
     required this.onToggleTask,
     required this.onTapInfo,
-    this.onLongPressEvent,
+    this.onMenuEvent,
   });
 
   @override
@@ -314,7 +315,7 @@ class PastDayView extends StatelessWidget {
       return EntryCard(
         entry: entry,
         onTap: () => onTapEntry(entry),
-        onLongPress: () => onLongPressEntry(entry),
+        onMenu: () => onMenuEntry(entry),
       );
     }
     final task = item.task;
@@ -331,9 +332,9 @@ class PastDayView extends StatelessWidget {
     return EventCard(
       event: item.event!,
       day: dayKey,
-      onLongPress: onLongPressEvent == null
+      onMenu: onMenuEvent == null
           ? null
-          : () => onLongPressEvent!(item.event!, dayKey),
+          : () => onMenuEvent!(item.event!, dayKey),
     );
   }
 

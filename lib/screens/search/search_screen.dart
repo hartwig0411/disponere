@@ -173,17 +173,21 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
         ),
+        // E-06: Treffertexte markierbar (das Suchfeld oben ist ein eigenes
+        // Eingabefeld und liegt ausserhalb).
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            itemCount: _hits.length,
-            itemBuilder: (context, index) {
-              final hit = _hits[index];
-              return _HitCard(
-                hit: hit,
-                onTap: () => Navigator.pop(context, hit.entryId),
-              );
-            },
+          child: SelectionArea(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              itemCount: _hits.length,
+              itemBuilder: (context, index) {
+                final hit = _hits[index];
+                return _HitCard(
+                  hit: hit,
+                  onTap: () => Navigator.pop(context, hit.entryId),
+                );
+              },
+            ),
           ),
         ),
       ],

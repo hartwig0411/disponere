@@ -1058,11 +1058,11 @@ class _JournalScreenState extends State<JournalScreen>
     if (ok == true) _deleteEntry(entry.id);
   }
 
-  /// Langes Druecken auf einen Eintrag oeffnet ein kleines Aktions-Blatt:
-  /// Teilen oder Loeschen. Frueher fuehrte das lange Druecken direkt zur
-  /// Lösch-Rueckfrage; mit Feature 3 teilen sich beide Aktionen eine Geste
-  /// (eine Geste, ein Menue — kein zusaetzliches Icon auf der Karte). Der
-  /// Lösch-Pfad dahinter (die Rueckfrage) ist unveraendert.
+  /// Das ⋮ an einer Eintragskarte oeffnet ein kleines Aktions-Blatt: Teilen
+  /// oder Loeschen. Frueher fuehrte das lange Druecken direkt zur
+  /// Lösch-Rueckfrage; mit Feature 3 teilten sich beide Aktionen die Geste.
+  /// Seit E-06 (v6.17) markiert langes Druecken Text, das Blatt oeffnet sich
+  /// ueber das ⋮. Der Lösch-Pfad dahinter (die Rueckfrage) ist unveraendert.
   void _showEntryActions(JournalEntry entry) {
     showModalBottomSheet(
       context: context,
@@ -1176,8 +1176,9 @@ class _JournalScreenState extends State<JournalScreen>
   }
 
   /// Aktionsmenü einer Terminkarte (Session 60, drittes Brücken-Bein). Der
-  /// Termin ist read-only und bekommt hier erstmals eine Geste: langes Drücken
-  /// öffnet ein knappes Menü mit der einzigen Aktion „Zu Eintrag machen".
+  /// Termin ist read-only und bekommt hier erstmals eine Aktion: das ⋮ an der
+  /// Karte (bis E-06 langes Drücken) öffnet ein knappes Menü mit der einzigen
+  /// Aktion „Zu Eintrag machen".
   void _showEventActions(CalendarEvent event, String day) {
     showModalBottomSheet(
       context: context,
@@ -1795,7 +1796,7 @@ class _JournalScreenState extends State<JournalScreen>
                 _openEntrySheet(existing: entry);
               }
             },
-            onLongPress: () => _showEntryActions(entry),
+            onMenu: () => _showEntryActions(entry),
           ),
       for (final pd in pastDays)
         PastDayView(
@@ -1807,10 +1808,10 @@ class _JournalScreenState extends State<JournalScreen>
               _openEntrySheet(existing: entry);
             }
           },
-          onLongPressEntry: (entry) => _showEntryActions(entry),
+          onMenuEntry: (entry) => _showEntryActions(entry),
           onToggleTask: _togglePanelTask,
           onTapInfo: (info) => _openDailyInfoSheet(existing: info),
-          onLongPressEvent: (event, day) => _showEventActions(event, day),
+          onMenuEvent: (event, day) => _showEventActions(event, day),
         ),
     ];
     return Scaffold(
@@ -1892,10 +1893,19 @@ class _JournalScreenState extends State<JournalScreen>
       // gruppiert (Design 4b). Termine und Aufgaben von heute stehen bewusst
       // NICHT in der Spalte, sondern im Heute-Panel (endDrawer, Design 4a/5) —
       // der Schreibraum bleibt frei.
-      body: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-        itemCount: rows.length,
-        itemBuilder: (context, index) => rows[index],
+      //
+      // E-06 (v6.17): Eine bildschirmweite SelectionArea macht allen
+      // gespeicherten Text markierbar — langes Drücken markiert, Auswahlgriffe
+      // erweitern (auch über Kartengrenzen), dann Kopieren. Tinte und Bilder
+      // tragen keinen Text und bleiben aussen vor. Antippen einer Karte
+      // (Bearbeiten), des Vorschau-Quadrats (Vollbild) und Abhaken bleiben
+      // unverändert; die früheren Long-Press-Menüs hängen am ⋮ der Karte.
+      body: SelectionArea(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          itemCount: rows.length,
+          itemBuilder: (context, index) => rows[index],
+        ),
       ),
       // Heute-Panel: Overlay von rechts (beide Lagen, ein Layout-Pfad), haelt
       // die Journalspalte frei und zeigt Termine + Aufgaben von heute. Standard
@@ -1908,8 +1918,8 @@ class _JournalScreenState extends State<JournalScreen>
         calendarEnabled: _calendarSources.any((c) => c.enabled),
         onToggleTask: _togglePanelTask,
         onAddTask: () => _openTaskSheet(),
-        onLongPressTask: _taskToEntry,
-        onLongPressEvent: (event, day) => _showEventActions(event, day),
+        onMenuTask: _taskToEntry,
+        onMenuEvent: (event, day) => _showEventActions(event, day),
       ),
       bottomNavigationBar: BottomBar(
         onJournal: () {},

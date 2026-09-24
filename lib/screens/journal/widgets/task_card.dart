@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_colors.dart';
 import '../../../models/task.dart';
+import '../../../widgets/card_menu_button.dart';
 import 'tag_chip.dart';
 
 /// Eine Aufgabe im Heute-Panel: offenes Kaestchen (gedaempftes Blau), erledigt
@@ -14,16 +15,17 @@ class TaskCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback? onTap;
 
-  /// Langes Druecken oeffnet die Bruecke „Als Eintrag vormerken" (Session 53).
-  /// Optional; ist er null, gibt es keine Zusatzgeste (z.B. in vergangenen
-  /// Tagen, wo eine Aufgabe nicht in die Zukunft vorgemerkt wird).
-  final VoidCallback? onLongPress;
+  /// ⋮-Symbol: oeffnet die Bruecke „Als Eintrag vormerken" (Session 53;
+  /// bis E-06 am langen Druecken, das jetzt Text markiert). Optional; ist er
+  /// null, erscheint kein ⋮ (z.B. in vergangenen Tagen, wo eine Aufgabe nicht
+  /// in die Zukunft vorgemerkt wird).
+  final VoidCallback? onMenu;
   const TaskCard({
     required this.task,
     required this.today,
     required this.onToggle,
     this.onTap,
-    this.onLongPress,
+    this.onMenu,
   });
 
   @override
@@ -35,7 +37,6 @@ class TaskCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
-        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
@@ -102,6 +103,11 @@ class TaskCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onMenu != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: CardMenuButton(onPressed: onMenu!),
+                ),
             ],
           ),
         ),

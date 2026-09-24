@@ -141,27 +141,30 @@ class _TagViewScreenState extends State<TagViewScreen> {
             )
           : _groups.isEmpty
               ? _EmptyTag(tag: widget.tag)
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-                  children: [
-                    _TagHeader(tag: widget.tag, countLabel: _countLabel),
-                    for (var i = 0; i < _groups.length; i++) ...[
-                      if (i > 0)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: AppColors.hairline,
+              // E-06: alles in der Tag-Ansicht ist markier- und kopierbar.
+              : SelectionArea(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                    children: [
+                      _TagHeader(tag: widget.tag, countLabel: _countLabel),
+                      for (var i = 0; i < _groups.length; i++) ...[
+                        if (i > 0)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 20),
+                            child: Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: AppColors.hairline,
+                            ),
                           ),
+                        _DaySection(
+                          group: _groups[i],
+                          currentTag: widget.tag,
+                          onTagTap: _openTag,
                         ),
-                      _DaySection(
-                        group: _groups[i],
-                        currentTag: widget.tag,
-                        onTagTap: _openTag,
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
     );
   }

@@ -20,13 +20,14 @@ class TodayPanel extends StatelessWidget {
   final void Function(Task) onToggleTask;
   final VoidCallback onAddTask;
 
-  /// Langes Druecken auf eine Aufgabe im Panel: Bruecke „Als Eintrag vormerken"
-  /// (Session 53). Optional — ohne Callback bleibt das lange Druecken wirkungslos.
-  final void Function(Task)? onLongPressTask;
+  /// ⋮ an einer Aufgabe im Panel: Bruecke „Als Eintrag vormerken"
+  /// (Session 53; seit E-06 hinter dem ⋮, langes Druecken markiert Text).
+  /// Optional — ohne Callback erscheint kein ⋮.
+  final void Function(Task)? onMenuTask;
 
-  /// Langes Druecken auf einen Termin im Panel: Bruecke „Zu Eintrag machen"
-  /// (Session 60). Optional — ohne Callback bleibt der Termin reine Anzeige.
-  final void Function(CalendarEvent, String)? onLongPressEvent;
+  /// ⋮ an einem Termin im Panel: Bruecke „Zu Eintrag machen" (Session 60).
+  /// Optional — ohne Callback bleibt der Termin reine Anzeige.
+  final void Function(CalendarEvent, String)? onMenuEvent;
 
   const TodayPanel({
     required this.events,
@@ -36,8 +37,8 @@ class TodayPanel extends StatelessWidget {
     required this.calendarEnabled,
     required this.onToggleTask,
     required this.onAddTask,
-    this.onLongPressTask,
-    this.onLongPressEvent,
+    this.onMenuTask,
+    this.onMenuEvent,
   });
 
   @override
@@ -114,38 +115,41 @@ class TodayPanel extends StatelessWidget {
                         ),
                       ),
                     )
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 16, 24),
-                      children: [
-                        if (hasEvents) ...[
-                          _sectionLabel(Icons.event_outlined, 'TERMINE'),
-                          const SizedBox(height: 12),
-                          ...events.map(
-                            (e) => EventCard(
-                              event: e,
-                              day: day,
-                              onLongPress: onLongPressEvent == null
-                                  ? null
-                                  : () => onLongPressEvent!(e, day),
+                  // E-06: Termin- und Aufgabentexte im Panel sind markierbar.
+                  : SelectionArea(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 16, 24),
+                        children: [
+                          if (hasEvents) ...[
+                            _sectionLabel(Icons.event_outlined, 'TERMINE'),
+                            const SizedBox(height: 12),
+                            ...events.map(
+                              (e) => EventCard(
+                                event: e,
+                                day: day,
+                                onMenu: onMenuEvent == null
+                                    ? null
+                                    : () => onMenuEvent!(e, day),
+                              ),
                             ),
-                          ),
-                          if (hasTasks) const SizedBox(height: 20),
-                        ],
-                        if (hasTasks) ...[
-                          _sectionLabel(Icons.check_box_outlined, 'AUFGABEN'),
-                          const SizedBox(height: 12),
-                          ...tasks.map(
-                            (t) => TaskCard(
-                              task: t,
-                              today: today,
-                              onToggle: () => onToggleTask(t),
-                              onLongPress: onLongPressTask == null
-                                  ? null
-                                  : () => onLongPressTask!(t),
+                            if (hasTasks) const SizedBox(height: 20),
+                          ],
+                          if (hasTasks) ...[
+                            _sectionLabel(Icons.check_box_outlined, 'AUFGABEN'),
+                            const SizedBox(height: 12),
+                            ...tasks.map(
+                              (t) => TaskCard(
+                                task: t,
+                                today: today,
+                                onToggle: () => onToggleTask(t),
+                                onMenu: onMenuTask == null
+                                    ? null
+                                    : () => onMenuTask!(t),
+                              ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
             ),
           ],
