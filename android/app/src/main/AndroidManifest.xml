@@ -35,7 +35,12 @@
                  ueber den nativen Kanal (MainActivity) und landet im heutigen
                  Journal. Bewusst KEIN ACTION_SEND_MULTIPLE: das Eintrags-Sheet
                  fuehrt genau ein Bild; Mehrbild-Empfang waere ein spaeterer
-                 Nachzug zusammen mit einem Mehrbild-Sheet. -->
+                 Nachzug zusammen mit einem Mehrbild-Sheet.
+                 E-04 (Session 69): Kalendertermine (z.B. aus OneCalendar) kommen
+                 als text/calendar bzw. .ics - je nach App unter einem der drei
+                 gaengigen Typen, meist als Datei in EXTRA_STREAM. Bewusst KEIN
+                 application/octet-stream: sonst stuende Disponere bei jeder
+                 beliebigen Datei im Teilen-Dialog. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -45,6 +50,13 @@
                 <action android:name="android.intent.action.SEND"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="image/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/calendar"/>
+                <data android:mimeType="text/x-vcalendar"/>
+                <data android:mimeType="application/ics"/>
             </intent-filter>
         </activity>
         <meta-data

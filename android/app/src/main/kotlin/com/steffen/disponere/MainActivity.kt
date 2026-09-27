@@ -3,6 +3,7 @@ package com.steffen.disponere
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -29,6 +30,20 @@ class MainActivity : FlutterActivity() {
     // (aufgeloester MIME-Typ) und "caption" (etwaige Bildunterschrift aus
     // EXTRA_TEXT/EXTRA_SUBJECT, sonst null).
     private var initialSharedImage: Map<String, String?>? = null
+
+    // E-04: MIME-Typen, unter denen Apps einen Kalendertermin teilen. Ein
+    // solcher Share kommt meist als Datei (EXTRA_STREAM), manchmal als Text
+    // (EXTRA_TEXT). Beides landet als roher iCalendar-Text im Text-Weg; Flutter
+    // (IcsImport) macht daraus lesbaren Import-Text.
+    private val calendarTypes = setOf(
+        "text/calendar",
+        "text/x-vcalendar",
+        "application/ics",
+    )
+
+    // Obergrenze fuer eingelesene Kalenderdateien. Ein Termin hat wenige KB;
+    // die Grenze schuetzt nur vor versehentlich riesigen Dateien.
+    private val maxCalendarBytes = 512 * 1024
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -69,6 +84,7 @@ class MainActivity : FlutterActivity() {
         // puffern, damit Flutter es beim ersten Frame abholen kann. Ein Intent
         // ist entweder text/* oder image/*, also ist hoechstens einer der beiden
         // Puffer gesetzt.
+        logShareIntent(intent, "Kaltstart")
         initialSharedText = extractSharedText(intent)
         initialSharedImage = extractSharedImage(intent)
     }
@@ -79,6 +95,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        logShareIntent(intent, "Laufzeit")
         val text = extractSharedText(intent)
         if (text != null) {
             shareChannel?.invokeMethod("onSharedText", text)
@@ -93,11 +110,20 @@ class MainActivity : FlutterActivity() {
     // Zieht bei ACTION_SEND mit text/* den geteilten Text aus den Extras.
     // EXTRA_SUBJECT (z.B. Seitentitel beim Teilen einer URL) wird, falls
     // vorhanden, dem Text vorangestellt. Alles andere -> null.
+    // E-04: Bei einem Kalendertyp wird zuerst die Datei aus EXTRA_STREAM als
+    // Text gelesen und unveraendert (roher iCalendar-Text) zurueckgegeben;
+    // fehlt sie, geht es den gewohnten Extras-Weg.
     private fun extractSharedText(intent: Intent?): String? {
         if (intent == null) return null
         if (intent.action != Intent.ACTION_SEND) return null
-        val type = intent.type ?: return null
-        if (!type.startsWith("text/")) return null
+        val type = normalizedType(intent) ?: return null
+        val isCalendar = type in calendarTypes
+        if (!type.startsWith("text/") && !isCalendar) return null
+
+        if (isCalendar) {
+            val fromStream = streamUri(intent)?.let { readTextFromUri(it) }
+            if (!fromStream.isNullOrBlank()) return fromStream
+        }
 
         val body = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
         val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim()
@@ -140,6 +166,58 @@ class MainActivity : FlutterActivity() {
             "mime" to mime,
             "caption" to caption,
         )
+    }
+
+    // MIME-Typ ohne Parameter (z.B. "; charset=utf-8"), klein geschrieben.
+    private fun normalizedType(intent: Intent): String? {
+        val raw = intent.type ?: return null
+        return raw.substringBefore(';').trim().lowercase()
+    }
+
+    // Liest den Inhalt eines content://-URI als UTF-8-Text (iCalendar ist per
+    // RFC 5545 UTF-8). Hoechstens maxCalendarBytes; ein etwaiges BOM faellt
+    // weg. Bei Fehlern oder leerem Inhalt -> null.
+    private fun readTextFromUri(uri: Uri): String? {
+        return try {
+            val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(8192)
+                var total = 0
+                while (total < maxCalendarBytes) {
+                    val n = input.read(chunk, 0, minOf(chunk.size, maxCalendarBytes - total))
+                    if (n < 0) break
+                    buffer.write(chunk, 0, n)
+                    total += n
+                }
+                buffer.toByteArray()
+            } ?: return null
+            val text = String(bytes, Charsets.UTF_8).removePrefix("\uFEFF")
+            text.ifBlank { null }
+        } catch (e: Exception) {
+            Log.w(shareLogTag, "Kalenderdatei nicht lesbar: $uri", e)
+            null
+        }
+    }
+
+    // Diagnose (E-04): protokolliert jeden eingehenden ACTION_SEND - Typ,
+    // Extras-Schluessel, Stream-URI und dessen aufgeloesten Typ. So zeigt
+    // `adb logcat -s DisponereShare` beim Test sofort, wie eine App teilt.
+    // Nur Metadaten, keine Inhalte.
+    private val shareLogTag = "DisponereShare"
+
+    private fun logShareIntent(intent: Intent?, via: String) {
+        if (intent == null || intent.action != Intent.ACTION_SEND) return
+        try {
+            val keys = intent.extras?.keySet()?.joinToString(", ") ?: "-"
+            val uri = streamUri(intent)
+            val resolved = uri?.let { contentResolver.getType(it) } ?: "-"
+            Log.i(
+                shareLogTag,
+                "$via: type=${intent.type} extras=[$keys] stream=${uri ?: "-"} streamType=$resolved",
+            )
+        } catch (e: Exception) {
+            Log.w(shareLogTag, "$via: Intent nicht protokollierbar", e)
+        }
     }
 
     // EXTRA_STREAM als Uri holen — ab API 33 typisiert, davor die (deprecated)

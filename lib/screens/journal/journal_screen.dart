@@ -112,7 +112,10 @@ class _JournalScreenState extends State<JournalScreen>
       if (!mounted) return;
       final sharedText = await _shareReceiver.getInitialSharedText();
       if (sharedText != null && mounted) {
-        _openEntrySheet(initialContent: sharedText);
+        // Wie der Laufzeit-Weg (_handleSharedText): geteilter Text ist
+        // Fremdmaterial -> Import-Feld, das Notizfeld bleibt frei. (Bis
+        // Session 69 landete ein Kaltstart-Share versehentlich im Notizfeld.)
+        _openEntrySheet(initialImportBody: sharedText);
       }
       // Ein Intent ist entweder Text oder Bild; hoechstens einer der beiden
       // Puffer ist gesetzt. Beide zu ziehen leert sie sauber (Consume-once) und

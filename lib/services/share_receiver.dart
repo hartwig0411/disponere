@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 
+import 'ics_import.dart';
+
 /// Ein via Android `ACTION_SEND` mit `image/*` empfangenes Bild. Die native
 /// Seite (MainActivity) hat den `content://`-URI bereits in eine app-private
 /// Temp-Datei kopiert; [path] zeigt dorthin — genau wie ein von image_picker
@@ -19,7 +21,10 @@ class SharedImage {
 /// und AppAuth, robuster auf HMS (Disponere macht Natives ohnehin selbst).
 ///
 /// Zwei Inhaltsarten (Text, Bild), jeweils mit zwei Wegen entsprechend der
-/// beiden nativen Eintrittspunkte:
+/// beiden nativen Eintrittspunkte. Ein geteilter **Kalendertermin** (E-04,
+/// `text/calendar`/`.ics`) kommt nativ als Text an und wird hier über
+/// [IcsImport.toImportText] in lesbaren Import-Text gewandelt — für alle
+/// anderen Texte ist das ein Durchreichen ohne Änderung:
 ///  - **Kaltstart** (App war zu, Start ueber den Teilen-Dialog): der Inhalt
 ///    liegt schon in `getIntent()`, wird nativ gepuffert und hier ueber
 ///    [getInitialSharedText] bzw. [getInitialSharedImage] **genau einmal**
@@ -53,7 +58,7 @@ class ShareReceiver {
       case 'onSharedText':
         final text = call.arguments as String?;
         if (text != null && text.trim().isNotEmpty) {
-          onText?.call(text);
+          onText?.call(IcsImport.toImportText(text));
         }
         break;
       case 'onSharedImage':
@@ -72,7 +77,7 @@ class ShareReceiver {
   Future<String?> getInitialSharedText() async {
     final text = await _channel.invokeMethod<String?>('getInitialSharedText');
     if (text == null || text.trim().isEmpty) return null;
-    return text;
+    return IcsImport.toImportText(text);
   }
 
   /// Holt ein etwaiges **Kaltstart**-Bild ab. Gibt `null` zurueck, wenn die App
