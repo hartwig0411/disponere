@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 24. September 2026*
+*Stand: 27. September 2026*
 
 ---
 
@@ -144,8 +144,10 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   mit Kanonisierung; beim read-only-Termin kein Rückschreiben auf die Quelle. →
   `disponere_anforderungen_v6_13.md`. Größe: halbe Session. **Gebaut in Session 61 (feat `d031935`).**
 - **E-04 · OneCalendar im Teilen-Menü (`text/calendar` / `.ics`)** — direkt in Warteschlange und
-  Anforderungen erfasst, lief nicht über den Eingang. Steht dort als **offener Punkt**; hier nur als
-  Pointer, damit die Nummerierung nachvollziehbar bleibt.
+  Anforderungen erfasst, lief nicht über den Eingang; hier nur als Pointer, damit die Nummerierung
+  nachvollziehbar bleibt. **Gebaut in Session 69 (27.09.2026, feat `4c475b3`); `ics_import.dart`,
+  Stream-Lesepfad in `MainActivity`. OneCalendar teilt als `text/calendar`-Datei.** →
+  `disponere_anforderungen_v6_20.md`.
 - **E-06 · Text überall markier- und kopierbar → VERSIO** (24.09.2026). Gemeldet im Chat mit
   Screenshot der Tag-Ansicht (#Comos); Behelf bisher: Eintrag → Aufgabe → Eintrag, aufwendig und
   verfälschend. Entschieden: **Ausschnitt markieren**, **überall** wo gespeicherter Text steht
