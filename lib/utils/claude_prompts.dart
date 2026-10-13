@@ -31,93 +31,86 @@ Das Bild zeigt eine handschriftliche Notiz, überwiegend auf Deutsch.
   /// Auswertung einer Kalenderwoche.
   ///
   /// Der zusammengestellte Kontext (siehe `week_context.dart`) folgt als
-  /// zweiter Textblock. Die Vorgaben sind weniger streng als bei der
-  /// Transkription — hier ist Verdichtung erwünscht —, aber die Grenze ist
-  /// dieselbe: Was nicht dasteht, wird nicht ergänzt. Eine Wochenauswertung,
-  /// die plausibel klingt und erfunden ist, wäre schlimmer als keine.
+  /// zweiter Textblock. Verdichtung ist erwünscht, die Grenze bleibt: Was
+  /// nicht dasteht, wird nicht ergänzt.
   ///
-  /// **Sechs feste Überschriften, feste Reihenfolge, immer alle vorhanden.**
-  /// Das ist kein Formalismus: Die Auswertung wird in `week_review_screen.dart`
-  /// als reiner Text angezeigt (`SelectableText`) und landet danach als
-  /// gewöhnlicher Journaleintrag — an beiden Stellen gibt es keinen
-  /// Markdown-Renderer. Sternchen und Rauten wären dort sichtbare Zeichen,
-  /// keine Auszeichnung. Zugleich hält der feste Satz an Überschriften die Tür
-  /// für eine spätere Baum- oder Mindmap-Darstellung offen: Sie wäre dann
-  /// reine Anzeige auf vorhandenem Text, kein Umbau.
+  /// **Gliederung nach Tag, jede Information genau einmal** (Session 70).
+  /// Die frühere Fassung mit sechs festen Abschnitten (Überblick, Was
+  /// vorangekommen ist, Woran es hakte, Beobachtungen, Aufgaben, Vorschläge)
+  /// ging jedes Thema in jedem Abschnitt erneut durch: dieselbe Checkliste
+  /// stand vier Mal da, und „Beobachtungen“ und „Vorschläge“ zogen Deutungen
+  /// nach sich, die im Material nicht standen. Jetzt: ein Block pro Tag mit
+  /// Stand / Erledigt / Offen, Aufgaben im Block ihres Tags, keine eigene
+  /// Aufgabenliste, keine Beobachtungen, keine Vorschläge.
   ///
-  /// Zwei Abschnitte sind gegenüber der ersten Fassung neu und stammen aus
-  /// einem Beispieldokument, das Steffen als Vorbild gegeben hat: die
-  /// abhakbare **Aufgabenliste** (statt Prosa über Liegengebliebenes) und die
-  /// **nummerierten Vorschläge** (statt eines Absatzes „Für die kommende
-  /// Woche"). Beides macht den Teil greifbar, den man nach dem Lesen
-  /// tatsächlich anfasst.
+  /// Der Text wird als reiner Text angezeigt (`SelectableText`) und landet
+  /// als gewöhnlicher Journaleintrag — dort gibt es keinen Markdown-Renderer.
+  /// Daher keine Auszeichnung; `#` nur als Teil eines Tag-Namens.
+  ///
+  /// Ein ausdrückliches „Thema erledigt“-Signal gibt es (noch) nicht: Ohne
+  /// erledigte Aufgabe gilt ein Thema als offen und wird nicht kommentiert.
+  /// Reicht das in der Praxis nicht, ist der nächste Schritt eine Markierung
+  /// in der App, nicht ein schärferer Prompt.
   static const String weekReview = '''
 Es folgt die Aufzeichnung einer Kalenderwoche aus einem persönlichen Journal:
 Tagesinfos, Kalendertermine, Aufgaben und Journaleinträge, nach Tagen
-gegliedert. `#`-Wörter sind Tags — sie zeigen, worauf die Woche verteilt war,
-und sind die eigentliche Struktur des Materials.
+gegliedert. Wörter mit # sind Tags. Sie stehen für Projekte und Themen und sind
+die Gliederung der Auswertung. Aufgaben sind mit [erledigt] oder [offen]
+markiert.
 
-Schreibe daraus eine Wochenauswertung auf Deutsch.
+Schreibe daraus eine kurze, sachliche Wochenauswertung auf Deutsch.
 
-Verwende genau diese sechs Überschriften, in genau dieser Reihenfolge, jede
-auf einer eigenen Zeile und ohne jede Auszeichnung:
+Aufbau:
 
-Überblick
-Was vorangekommen ist
-Woran es hakte
-Beobachtungen
-Aufgaben
-Vorschläge
+Erste Zeile: KW <Nummer> · <Montag als TT.MM.>–<letzter ausgewerteter Tag als
+TT.MM.JJJJ>, genau wie im Material angegeben.
 
-Was in die Abschnitte gehört:
+Danach ein Block pro Tag. Reihenfolge: der Tag mit den meisten Nennungen
+zuerst (siehe „Tags dieser Woche“ im Material). Jeder Block beginnt mit dem Tag
+selbst auf einer eigenen Zeile, zum Beispiel #Comos. Darunter höchstens diese
+drei Zeilen, jede nur, wenn das Material sie hergibt:
 
-Überblick — drei bis fünf Sätze: Was hat diese Woche geprägt?
+Eine Zeile Stand: was diese Woche zu dem Tag passiert ist, in einem oder zwei
+kurzen Sätzen, mit Wochentag, wenn er etwas klärt (zum Beispiel „Mi“ oder
+„Neu am Fr“).
+Erledigt: was abgeschlossen ist. Mehr als drei erledigte Aufgaben fasst du mit
+Anzahl zusammen (zum Beispiel „7 von 10 Punkten der Checkliste“) statt sie
+aufzuzählen.
+Offen: jede offene Aufgabe einzeln, im Wortlaut aus dem Material, gekürzt nur
+wenn sie sehr lang ist. Steht im Material, worauf sie wartet oder mit wem sie
+zu klären ist, nenne das in Klammern.
 
-Was vorangekommen ist — was abgeschlossen, entschieden oder spürbar
-weitergebracht wurde. Nenne dabei die betroffenen Tags.
+Was zu keinem Tag gehört, kommt in einen Block „Ohne Tag“ ganz am Ende der
+Tag-Blöcke. Trägt etwas mehrere Tags, steht es nur in einem Block — dort, wo es
+inhaltlich hingehört.
 
-Woran es hakte — wo es klemmte: Angefangenes ohne Fortsetzung, mehrfach
-verschobene Termine, Themen, die auftauchten und wieder verschwanden,
-Aufgaben, die die Woche überdauert haben. Ist im Material erkennbar, woran es
-lag, benenne es; ist es nicht erkennbar, beschreibe nur den Umstand und rate
-nicht nach der Ursache.
+Zum Schluss, nur wenn vorhanden, ein Block „Termine aus dem Material“: Termine
+und Fristen nach dem Ende der Woche, die im Material ausdrücklich mit Datum
+genannt sind, eine pro Zeile.
 
-Beobachtungen — was dir auffällt: Schwerpunkte, Ungleichgewichte,
-wiederkehrende Themen, ein Tag der aus der Reihe fällt. Nur, wenn das Material
-es hergibt.
+Regeln:
 
-Aufgaben — die Aufgaben, die im Material vorkommen: erledigte zuerst, dann die
-offenen. Eine pro Zeile, in genau dieser Form:
+- Jede Information steht genau einmal. Keine Zusammenfassung vorweg, keine
+  Wiederholung am Ende.
+- Nur was dasteht. Keine Deutung, keine Ursachenvermutung, keine Bewertung,
+  keine Ratschläge, keine Vorschläge, keine Aussagen über die Woche als Ganzes
+  (welcher Tag am vollsten war, welches Thema dominierte, dass das Wochenende
+  leer blieb).
+- Hat ein Thema keine erledigte Aufgabe, gilt es als offen. Kommentiere das
+  nicht („ohne dass eine Lösung dokumentiert ist“ und Ähnliches entfällt).
+- Leere Tage werden nicht erwähnt.
+- Kurze, vollständige Sätze oder knappe Aufzählungen mit Komma. Kein
+  Coaching-Ton, keine Füllwörter.
+- Reiner Text: keine Sternchen, keine Unterstriche, keine Rauten außer im
+  Tag-Namen, keine Bindestriche als Aufzählungszeichen.
+- Zwischen den Blöcken eine Leerzeile.
+- Beginne ohne Einleitung und ende ohne Nachbemerkung.
+- Enthält das Material praktisch nichts, schreib genau das in einem Satz.
 
-[x] Eine erledigte Aufgabe
-[ ] Eine offene Aufgabe
-
-Übernimm den Wortlaut aus dem Material und kürze nur, wenn er sehr lang ist.
-Erfinde keine Aufgaben und leite keine aus Fließtext ab, der keine ist.
-
-Vorschläge — höchstens vier, nummeriert mit 1., 2. und so weiter. Jeder
-Vorschlag ist eine benennbare Handlung, die sich aus dem Vorliegenden ergibt,
-kein allgemeiner Ratschlag. Ergibt sich nichts Konkretes, schreib in einem
-Satz, dass sich aus dieser Woche nichts Konkretes ableiten lässt.
-
-Halte dich an diese Regeln:
-
-- Stütze jede Aussage auf das, was dasteht. Ergänze nichts, was nicht im
-  Material steht — auch nichts, was naheliegend wäre.
-- Alle sechs Überschriften kommen immer vor, auch bei dünnem Material. Ist ein
-  Abschnitt nicht zu füllen, schreib einen Satz, dass das Material dafür nichts
-  hergibt, und lass es dabei. Fülle ihn nicht auf.
-- Der Text wird als reiner Text angezeigt. Verwende deshalb keine
-  Markdown-Auszeichnung: keine Sternchen, keine Rauten, keine Unterstriche,
-  keine Bindestriche als Aufzählungszeichen. Ausgenommen sind allein die
-  Kästchen der Aufgabenliste und die Nummern der Vorschläge.
-- Trenne die Abschnitte durch eine Leerzeile.
-- Schreib in ganzen Sätzen, sachlich und direkt. Kein Coaching-Ton, keine
-  Ermutigung, keine Bewertung der Person.
-- Beginne ohne Einleitung wie „Hier ist deine Auswertung" und ende ohne
-  Nachbemerkung.
-- Enthält das Material praktisch nichts, sag genau das in einem Satz — dann
-  entfallen die Überschriften.
+Prüfe vor der Ausgabe jeden Satz gegen das Material: Steht das dort so? Ist es
+schon an anderer Stelle gesagt? Enthält er ein wertendes Wort wie
+„dominierend“, „geprägt“, „erfolgreich“, „leider“, „nur“, „noch immer“?
+Streiche, was diese Prüfung nicht besteht.
 ''';
 
   /// Minimaler Request für „Verbindung testen". Die Antwort interessiert

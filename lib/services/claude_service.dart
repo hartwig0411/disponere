@@ -178,10 +178,13 @@ class ClaudeService {
   /// Schickt den zusammengestellten Wochenkontext zur Auswertung und gibt den
   /// Text zurück (Architektur §8).
   ///
-  /// Anders als bei der Transkription bleibt Thinking auf der Vorgabe: Eine
-  /// Woche zusammenzufassen ist Abwägung — was gehört zusammen, was war
-  /// Nebensache. Sollte sich das Ergebnis als zu lang oder zu brav erweisen,
-  /// sind Prompt (`claude_prompts.dart`) und [maxTokens] die Stellhebel.
+  /// Thinking ist hier seit Session 70 **aus**, wie bei der Transkription.
+  /// Mit dem neuen, strengeren Prompt (Gliederung nach Tag, Selbstprüfung
+  /// jedes Satzes) hat das Nachdenken bei einer vollen Woche (~10.000 Zeichen
+  /// Kontext) das ganze Token-Budget aufgebraucht, bevor Text kam — Ergebnis:
+  /// „Die Antwort enthielt keinen Text“. Die Auswertung ist Verdichtung nach
+  /// festen Regeln, keine offene Abwägung; ohne Thinking ist sie schneller,
+  /// billiger und läuft nicht mehr ins Limit.
   Future<String> reviewWeek(String context) {
     return _send(
       content: [
@@ -190,6 +193,7 @@ class ClaudeService {
       ],
       maxTokens: 8192,
       timeout: weekTimeout,
+      thinking: false,
     );
   }
 
@@ -283,9 +287,15 @@ class ClaudeService {
 
     var text = buffer.toString().trim();
     if (text.isEmpty && !allowEmpty) {
-      throw const ClaudeException(
+      // Den Abbruchgrund nennen, damit eine leere Antwort nicht wieder
+      // geraten werden muss (Session 70).
+      final stop = decoded['stop_reason'];
+      final reason = stop == 'max_tokens'
+          ? ' Das Längenlimit war erreicht, bevor Text kam.'
+          : (stop is String ? ' (Abbruchgrund: $stop)' : '');
+      throw ClaudeException(
         ClaudeErrorKind.response,
-        'Die Antwort enthielt keinen Text. Es wurde nichts gespeichert.',
+        'Die Antwort enthielt keinen Text.$reason',
       );
     }
 
