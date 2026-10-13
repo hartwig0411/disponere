@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 27. September 2026*
+*Stand: 13. Oktober 2026*
 
 ---
 
@@ -165,6 +165,13 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   Teilen außen vor; kein Berührungspunkt mit N5. → `disponere_anforderungen_v6_19.md`
   (Änderungsblock „gegenüber v6.18“, Abschnitt „Entwurf sichern“, Feature-Zeile).
   **Gebaut in Session 68 (24.09.2026, feat `5783e20`); `draft_store.dart`, `draft_hint.dart`.**
+- **E-07 · Wochenauswertung am Montag der Folgewoche → VERSIO** (13.10.2026). Gemeldet im Chat
+  nach dem Test der neu gegliederten Auswertung (Session 70). Entschieden: Die übernommene
+  Auswertung steht **immer am Montag der Folgewoche**, egal ob am Freitag nach 12:00 oder später
+  in der Folgewoche erstellt — sie ist der Start in die neue Woche. Heute landet sie am
+  Erstelltag. Naheliegender Weg: vorhandener Anzeige-Tag (`display_day`); kein Schema-Eingriff
+  erwartet. → `disponere_anforderungen_v6_21.md` (Änderungsblock „gegenüber v6.20“,
+  Kernkonzept 8, Feature-Zeile). Größe: kleine Session.
 
 ---
 
