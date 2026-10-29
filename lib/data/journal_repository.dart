@@ -46,7 +46,11 @@ import '../models/task.dart';
 ///                   (Endtag **inklusiv**), Uhrzeit als `HH:mm` in lokaler
 ///                   Zeit. `event_tags` materialisiert die vom Kalender
 ///                   geerbten Tags, damit Termine in derselben Form nach Tag
-///                   abfragbar sind wie Einträge und Aufgaben.
+///                   abfragbar sind wie Einträge und Aufgaben. Seit Session
+///                   72 ist die **Vergangenheit eingefroren** (Karenz
+///                   [calendarFreezeGraceDays] Tage): Der Sync schreibt nur
+///                   den Live-Bereich neu, ältere Termine bleiben als Journal
+///                   stehen — siehe [replaceCalendarEvents].
 ///
 /// Das Tag-Register bleibt davon unberührt: Es wird weiter zur Laufzeit aus
 /// den Einträgen abgeleitet (keine eigene Persistenz). `entry_tags` und
@@ -1027,8 +1031,14 @@ class JournalRepository {
   /// Gleicht die lokale Kalenderliste mit der frisch abgerufenen ab
   /// ([fetched] = `calendarId` → Anzeigename). Vorhandene Kalender behalten
   /// `enabled`, Tags und `sync_token`; nur der Anzeigename wird aufgefrischt.
-  /// Neue Kalender kommen mit `enabled = 0` und ohne Tags hinzu. Kalender, die
-  /// nicht mehr in [fetched] stehen, fallen samt Mapping raus
+  /// Neue Kalender kommen mit `enabled = 0` und ohne Tags hinzu.
+  ///
+  /// Kalender, die nicht mehr in [fetched] stehen (z. B. abbestellt), werden
+  /// behandelt wie deaktiviert (Session 72): Ihre heutigen und künftigen
+  /// Termine gehen, die Vergangenheit bleibt. Hat der Kalender noch
+  /// vergangene Termine, bleibt er deshalb als **deaktivierte** Quelle stehen —
+  /// sonst nähme ON DELETE CASCADE die ganze Historie mit. Erst ein Kalender
+  /// ohne verbliebene Termine fällt samt Mapping raus
   /// (`calendar_source_tags` via ON DELETE CASCADE).
   Future<void> mergeCalendarList(Map<String, String> fetched) async {
     final db = await _database();
@@ -1061,8 +1071,27 @@ class JournalRepository {
         }
       }
 
+      final todayKey = _dateKey(DateTime.now());
       for (final id in existingIds) {
-        if (!fetched.containsKey(id)) {
+        if (fetched.containsKey(id)) continue;
+        await txn.delete(
+          'calendar_events',
+          where: 'calendar_id = ? AND end_day >= ?',
+          whereArgs: [id, todayKey],
+        );
+        final left = await txn.rawQuery(
+          'SELECT COUNT(*) AS n FROM calendar_events WHERE calendar_id = ?',
+          [id],
+        );
+        final remaining = (left.first['n'] as int?) ?? 0;
+        if (remaining > 0) {
+          await txn.update(
+            'calendar_sources',
+            {'enabled': 0},
+            where: 'calendar_id = ?',
+            whereArgs: [id],
+          );
+        } else {
           await txn.delete(
             'calendar_sources',
             where: 'calendar_id = ?',
@@ -1110,69 +1139,133 @@ class JournalRepository {
     }).toList();
   }
 
-  /// Ersetzt **alle** gespiegelten Termine eines Kalenders durch [events].
+  /// Karenz in Tagen, bevor ein vergangener Termin einfriert (Session 72).
+  /// Ein Termin bleibt bis einschließlich [calendarFreezeGraceDays] Tage nach
+  /// seinem Endtag live — so kommen Korrekturen vom Folgetag (Absage
+  /// nachgetragen, Uhrzeit berichtigt) noch an. Danach ist er Journal.
+  static const calendarFreezeGraceDays = 3;
+
+  /// Erster Kalendertag (`yyyy-MM-dd`), der beim Sync noch **live** ist:
+  /// heute minus [calendarFreezeGraceDays]. Ein Termin, dessen Endtag davor
+  /// liegt, ist eingefroren. DST-sicher über den DateTime-Konstruktor.
+  static String calendarLiveFromKey(DateTime now) => _dateKey(
+        DateTime(now.year, now.month, now.day - calendarFreezeGraceDays),
+      );
+
+  /// Gleicht die gespiegelten Termine eines Kalenders mit [events] ab — mit
+  /// **eingefrorener Vergangenheit** (Session 72).
   ///
-  /// Bewusst „löschen und neu schreiben" statt Einzelabgleich: Der Abruf
-  /// liefert das vollständige Zeitfenster, also sind verschwundene Termine
-  /// genau die abgesagten oder verschobenen. Alles läuft in **einer**
-  /// Transaktion — bei einem Abbruch bleibt der alte Stand stehen, statt dass
-  /// halbe Kalender im Journal auftauchen.
+  /// **Live-Bereich** (Endtag ab [calendarLiveFromKey]): bewusst „löschen und
+  /// neu schreiben" statt Einzelabgleich. Der Abruf liefert das vollständige
+  /// Zeitfenster, also sind verschwundene Termine genau die abgesagten oder
+  /// verschobenen.
+  ///
+  /// **Eingefroren** (Endtag davor): Das ist Journal. Ein eingefrorener Termin
+  /// bleibt so stehen, wie er zuletzt gesehen wurde — spätere Änderungen oder
+  /// Absagen in Google erreichen ihn nicht mehr, und er fällt auch nicht mehr
+  /// aus dem rollenden Abruffenster. **Hinzugefügt ja, umgeschrieben nein:**
+  /// Einen eingefrorenen Termin, den es lokal noch nicht gibt (in Google
+  /// nachgetragen oder per Nachholen abgerufen), legt der Abgleich an.
+  /// Wandert ein eingefrorener Termin in Google in den Live-Bereich
+  /// (verschoben), gewinnt die Zukunft: Er zieht um.
+  ///
+  /// Alles läuft in **einer** Transaktion — bei einem Abbruch bleibt der alte
+  /// Stand stehen, statt dass halbe Kalender im Journal auftauchen.
+  /// [now] ist nur für Tests injizierbar; im Betrieb zählt die aktuelle Zeit.
   Future<void> replaceCalendarEvents(
     String calendarId,
-    List<CalendarEvent> events,
-  ) async {
+    List<CalendarEvent> events, {
+    DateTime? now,
+  }) async {
+    final liveFrom = calendarLiveFromKey(now ?? DateTime.now());
     final db = await _database();
     await db.transaction((txn) async {
-      // event_tags folgen via ON DELETE CASCADE.
+      // Live-Bereich räumen; event_tags folgen via ON DELETE CASCADE.
       await txn.delete(
         'calendar_events',
+        where: 'calendar_id = ? AND end_day >= ?',
+        whereArgs: [calendarId, liveFrom],
+      );
+      // Was jetzt noch steht, ist eingefroren.
+      final frozenRows = await txn.query(
+        'calendar_events',
+        columns: ['event_id'],
         where: 'calendar_id = ?',
         whereArgs: [calendarId],
       );
+      final frozenIds =
+          frozenRows.map((r) => r['event_id'] as String).toSet();
+
       for (final event in events) {
-        await txn.insert(
-          'calendar_events',
-          {
-            'calendar_id': event.calendarId,
-            'event_id': event.eventId,
-            'ical_uid': event.iCalUid,
-            'summary': event.summary,
-            'location': event.location,
-            'description': event.description,
-            'all_day': event.allDay ? 1 : 0,
-            'start_day': event.startDay,
-            'start_time': event.startTime,
-            'end_day': event.endDay,
-            'end_time': event.endTime,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-        for (var i = 0; i < event.tags.length; i++) {
-          final tag = event.tags[i];
-          await txn.insert(
-            'event_tags',
-            {
-              'calendar_id': event.calendarId,
-              'event_id': event.eventId,
-              'tag': tag,
-              'tag_key': tag.toLowerCase(),
-              'ord': i,
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
+        final isFrozen = event.endDay.compareTo(liveFrom) < 0;
+        if (frozenIds.contains(event.eventId)) {
+          if (isFrozen) continue; // eingefroren: nicht umschreiben
+          // In den Live-Bereich verschoben: alten Stand ausdrücklich
+          // entfernen, damit seine Tags über die Kaskade sauber mitgehen.
+          await txn.delete(
+            'calendar_events',
+            where: 'calendar_id = ? AND event_id = ?',
+            whereArgs: [event.calendarId, event.eventId],
           );
         }
+        await _insertCalendarEvent(txn, event);
       }
     });
   }
 
-  /// Wirft die gespiegelten Termine eines Kalenders weg — beim Deaktivieren
-  /// des Kalenders, damit nichts Verwaistes im Journal stehen bleibt.
-  Future<void> deleteCalendarEventsFor(String calendarId) async {
+  /// Schreibt einen Termin samt materialisierten Tags (`event_tags`).
+  Future<void> _insertCalendarEvent(
+    DatabaseExecutor txn,
+    CalendarEvent event,
+  ) async {
+    await txn.insert(
+      'calendar_events',
+      {
+        'calendar_id': event.calendarId,
+        'event_id': event.eventId,
+        'ical_uid': event.iCalUid,
+        'summary': event.summary,
+        'location': event.location,
+        'description': event.description,
+        'all_day': event.allDay ? 1 : 0,
+        'start_day': event.startDay,
+        'start_time': event.startTime,
+        'end_day': event.endDay,
+        'end_time': event.endTime,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    for (var i = 0; i < event.tags.length; i++) {
+      final tag = event.tags[i];
+      await txn.insert(
+        'event_tags',
+        {
+          'calendar_id': event.calendarId,
+          'event_id': event.eventId,
+          'tag': tag,
+          'tag_key': tag.toLowerCase(),
+          'ord': i,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  /// Nimmt die **heutigen und künftigen** Termine eines Kalenders aus dem
+  /// Journal — beim Deaktivieren des Kalenders. Die Vergangenheit bleibt als
+  /// Journal stehen (Session 72): Ein Klick in den Einstellungen löscht keine
+  /// Monate an Historie. Ein mehrtägiger Termin, der bis heute reicht, geht
+  /// dabei ganz. [now] ist nur für Tests injizierbar.
+  Future<void> deleteCalendarEventsFor(
+    String calendarId, {
+    DateTime? now,
+  }) async {
+    final todayKey = _dateKey(now ?? DateTime.now());
     final db = await _database();
     await db.delete(
       'calendar_events',
-      where: 'calendar_id = ?',
-      whereArgs: [calendarId],
+      where: 'calendar_id = ? AND end_day >= ?',
+      whereArgs: [calendarId, todayKey],
     );
   }
 
@@ -1272,8 +1365,18 @@ class JournalRepository {
     }
   }
 
+  /// Sichtbarkeit eines Termins (Session 72): aus einem **aktivierten**
+  /// Kalender immer; ein **vergangener** Termin (Endtag vor heute) auch aus
+  /// einem deaktivierten oder aus Google verschwundenen Kalender — die
+  /// Vergangenheit ist Journal. Erwartet als ersten Parameter den heutigen
+  /// Tag (`yyyy-MM-dd`), siehe [_todayKey].
+  static const _eventVisibleSql = '(s.enabled = 1 OR e.end_day < ?)';
+
+  /// Heutiger Tag als `yyyy-MM-dd` — Parameter für [_eventVisibleSql].
+  static String _todayKey() => _dateKey(DateTime.now());
+
   /// Alle Termine, die einen Kalendertag berühren ([day] als `yyyy-MM-dd`) —
-  /// nur aus **aktivierten** Kalendern. Bereichsabfrage wie bei `daily_info`
+  /// sichtbar nach [_eventVisibleSql]. Bereichsabfrage wie bei `daily_info`
   /// (Endtag ist inklusiv gespeichert). Ganztägige zuerst, danach nach
   /// Uhrzeit. Das ist die Grundlage der „TERMINE"-Sektion im Journal.
   Future<List<CalendarEvent>> calendarEventsForDay(String day) async {
@@ -1281,16 +1384,17 @@ class JournalRepository {
     final rows = await db.rawQuery(
       'SELECT e.* FROM calendar_events e '
       'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
-      'WHERE s.enabled = 1 AND e.start_day <= ? AND e.end_day >= ? '
+      'WHERE $_eventVisibleSql AND e.start_day <= ? AND e.end_day >= ? '
       "ORDER BY e.all_day DESC, COALESCE(e.start_time, '') ASC, "
       'e.summary COLLATE NOCASE ASC',
-      [day, day],
+      [_todayKey(), day, day],
     );
     return _hydrateCalendarEvents(db, rows);
   }
 
   /// Alle Termine zu einem Tag (case-insensitiv), aufsteigend nach Startzeit —
   /// das Gegenstück zu `tasksForTag` für die „alles zu einem Tag"-Ansicht.
+  /// Sichtbar nach [_eventVisibleSql].
   Future<List<CalendarEvent>> calendarEventsForTag(String tag) async {
     final db = await _database();
     final rows = await db.rawQuery(
@@ -1298,9 +1402,9 @@ class JournalRepository {
       'JOIN event_tags t '
       '  ON t.calendar_id = e.calendar_id AND t.event_id = e.event_id '
       'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
-      'WHERE s.enabled = 1 AND t.tag_key = ? '
+      'WHERE $_eventVisibleSql AND t.tag_key = ? '
       "ORDER BY e.start_day ASC, COALESCE(e.start_time, '') ASC",
-      [tag.toLowerCase()],
+      [_todayKey(), tag.toLowerCase()],
     );
     return _hydrateCalendarEvents(db, rows);
   }
@@ -1379,7 +1483,7 @@ class JournalRepository {
     return rows.map(_dailyInfoFromRow).toList();
   }
 
-  /// Termine aus **aktivierten** Kalendern, die den Bereich berühren.
+  /// Termine, die den Bereich berühren — sichtbar nach [_eventVisibleSql].
   /// Bereichslogik wie bei [calendarEventsForDay] (Endtag inklusiv).
   Future<List<CalendarEvent>> calendarEventsInRange(
     DateTime from,
@@ -1389,10 +1493,10 @@ class JournalRepository {
     final rows = await db.rawQuery(
       'SELECT e.* FROM calendar_events e '
       'JOIN calendar_sources s ON s.calendar_id = e.calendar_id '
-      'WHERE s.enabled = 1 AND e.start_day <= ? AND e.end_day >= ? '
+      'WHERE $_eventVisibleSql AND e.start_day <= ? AND e.end_day >= ? '
       "ORDER BY e.start_day ASC, e.all_day DESC, "
       "COALESCE(e.start_time, '') ASC, e.summary COLLATE NOCASE ASC",
-      [_dateKey(toInclusive), _dateKey(from)],
+      [_todayKey(), _dateKey(toInclusive), _dateKey(from)],
     );
     return _hydrateCalendarEvents(db, rows);
   }

@@ -22,6 +22,9 @@ const Color _kBg = AppColors.paper;
 /// **Session B, Teil 1 (hier):** „Sync jetzt" — die Termine der aktivierten
 /// Kalender ins lokale Schema v5 spiegeln. Die Einblendung im Journal folgt
 /// in Teil 2.
+/// **Session 72:** Vergangenheit eingefroren (siehe
+/// [JournalRepository.replaceCalendarEvents]); „Vergangenheit nachholen" ruft
+/// einmalig ab [GoogleCalendarService.backfillFrom] ab.
 class CalendarSettingsScreen extends StatefulWidget {
   const CalendarSettingsScreen({super.key, required this.tagRegistry});
 
@@ -148,9 +151,9 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
   Future<void> _toggleEnabled(CalendarSource source, bool value) async {
     final updated = source.copyWith(enabled: value);
     await _repo.upsertCalendarSource(updated);
-    // Ausgeschaltet heißt: raus aus dem Journal. Die gespiegelten Termine
-    // dieses Kalenders fliegen sofort weg, statt bis zum nächsten Sync
-    // stehen zu bleiben.
+    // Ausgeschaltet heißt: raus aus dem Journal — aber nur ab heute. Die
+    // heutigen und künftigen Termine fliegen sofort weg, statt bis zum
+    // nächsten Sync stehen zu bleiben; die Vergangenheit bleibt (Session 72).
     if (!value) await _repo.deleteCalendarEventsFor(source.calendarId);
     final count = await _repo.countCalendarEvents();
     _replaceSource(updated);
@@ -158,13 +161,20 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     setState(() => _eventCount = count);
   }
 
-  /// Spiegelt die Termine aller aktivierten Kalender ins lokale Schema v5.
-  ///
+  /// Spiegelt die Termine aller aktivierten Kalender ins lokale Schema.
+  void _syncNow() => _runSync();
+
+  /// Holt einmalig die Vergangenheit ab [GoogleCalendarService.backfillFrom]
+  /// nach — derselbe Abgleich mit größerem Fenster. Eingefrorene Termine, die
+  /// lokal schon stehen, bleiben unberührt; nur fehlende kommen dazu.
+  void _backfill() => _runSync(since: GoogleCalendarService.backfillFrom);
+
   /// Läuft Kalender für Kalender und schreibt jeden einzeln weg — bricht einer
   /// ab (Netz, Rechte), bleibt das bereits Gespiegelte erhalten und der Fehler
   /// wird benannt, statt den ganzen Durchlauf zu verwerfen. Ein Kalender, der
-  /// gerade deaktiviert wurde, verliert hier seine Termine.
-  Future<void> _syncNow() async {
+  /// gerade deaktiviert wurde, verliert hier seine heutigen und künftigen
+  /// Termine. [since] ersetzt den Fensteranfang (Nachholen).
+  Future<void> _runSync({DateTime? since}) async {
     final enabled = _sources.where((s) => s.enabled).toList();
     if (enabled.isEmpty) {
       setState(() {
@@ -196,6 +206,7 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
           final events = await _calendarService.fetchEvents(
             source.calendarId,
             source.tags,
+            since: since,
           );
           await _repo.replaceCalendarEvents(source.calendarId, events);
           total += events.length;
@@ -211,12 +222,16 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
       setState(() {
         _eventCount = count;
         _messageIsError = failures.isNotEmpty;
-        _message = failures.isEmpty
-            ? '$total Termine aus ${enabled.length} Kalender'
-                '${enabled.length == 1 ? '' : 'n'} gespiegelt '
-                '(${GoogleCalendarService.windowDaysBack} Tage zurück, '
-                '${GoogleCalendarService.windowDaysAhead} Tage voraus).'
-            : 'Teilweise fehlgeschlagen:\n${failures.join('\n')}';
+        final calendars = '${enabled.length} Kalender'
+            '${enabled.length == 1 ? '' : 'n'}';
+        _message = failures.isNotEmpty
+            ? 'Teilweise fehlgeschlagen:\n${failures.join('\n')}'
+            : since != null
+                ? '$total Termine aus $calendars abgeglichen, '
+                    'Vergangenheit ab ${_formatDate(since)} nachgeholt.'
+                : '$total Termine aus $calendars gespiegelt '
+                    '(${GoogleCalendarService.windowDaysBack} Tage zurück, '
+                    '${GoogleCalendarService.windowDaysAhead} Tage voraus).';
       });
     } finally {
       if (mounted) {
@@ -296,6 +311,11 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
     await _repo.reapplyCalendarSourceTags(source.calendarId, saved);
     _replaceSource(updated);
   }
+
+  /// `dd.MM.yyyy` für Meldungen.
+  static String _formatDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}.'
+      '${d.month.toString().padLeft(2, '0')}.${d.year}';
 
   void _replaceSource(CalendarSource updated) {
     if (!mounted) return;
@@ -420,6 +440,26 @@ class _CalendarSettingsScreenState extends State<CalendarSettingsScreen> {
                   ? 'Noch keine Termine gespiegelt.'
                   : '$_eventCount Termine lokal gespeichert.',
               style: const TextStyle(color: AppColors.weekday, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Vergangene Termine sind eingefroren: '
+              '${JournalRepository.calendarFreezeGraceDays} Tage nach dem '
+              'Termin erreichen Änderungen aus Google das Journal nicht mehr.',
+              style: const TextStyle(color: AppColors.weekday, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: _kAccent),
+              onPressed:
+                  (_syncing || _loadingCalendars || _sources.isEmpty)
+                      ? null
+                      : _backfill,
+              icon: const Icon(Icons.history),
+              label: Text(
+                'Vergangenheit nachholen (ab '
+                '${_formatDate(GoogleCalendarService.backfillFrom)})',
+              ),
             ),
             const SizedBox(height: 12),
             TextButton.icon(

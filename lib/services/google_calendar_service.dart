@@ -50,6 +50,10 @@ class GoogleCalendarService {
   /// … und so viele Tage voraus wird gespiegelt.
   static const windowDaysAhead = 365;
 
+  /// Startdatum für das einmalige „Vergangenheit nachholen" (Session 72):
+  /// Beginn der Alltagsnutzung. Termine davor holt Disponere nicht.
+  static final backfillFrom = DateTime(2026, 6, 1);
+
   /// Seitengröße des Termin-Abrufs (API-Maximum ist 2500).
   static const _pageSize = 250;
 
@@ -84,14 +88,19 @@ class GoogleCalendarService {
   /// werden übersprungen. [tags] werden an jeden Termin vererbt (die
   /// Kalender→Tag-Zuordnung aus den Einstellungen).
   ///
+  /// [since] ersetzt den Fensteranfang (Nachholen, z. B. [backfillFrom]);
+  /// ohne [since] gilt das rollende Fenster [windowDaysBack].
+  ///
   /// [now] ist nur für Tests injizierbar; im Betrieb zählt die aktuelle Zeit.
   Future<List<CalendarEvent>> fetchEvents(
     String calendarId,
     List<String> tags, {
     DateTime? now,
+    DateTime? since,
   }) async {
     final anchor = now ?? DateTime.now();
-    final timeMin = anchor.subtract(const Duration(days: windowDaysBack));
+    final timeMin =
+        since ?? anchor.subtract(const Duration(days: windowDaysBack));
     final timeMax = anchor.add(const Duration(days: windowDaysAhead));
 
     final events = <CalendarEvent>[];
