@@ -99,6 +99,19 @@ class WeekWindow {
   /// Ist eine Verschiebung nach vorn noch möglich?
   bool canGoForward(WeekWindow suggested) => monday.isBefore(suggested.monday);
 
+  /// E-07: Der Tag, an dem die Auswertung dieses Fensters im Journal steht —
+  /// **immer der Montag der Folgewoche**, egal wann sie erstellt wurde.
+  ///
+  /// - Freitag ab 12:00 bis Sonntag erstellt (laufende Woche): Der Montag
+  ///   liegt in der Zukunft, der Eintrag wartet still bis dahin.
+  /// - Montag erstellt (Vorwoche): Der Montag ist heute.
+  /// - Dienstag bis Freitag 11:59 erstellt (Vorwoche) oder zurückgeblättert:
+  ///   Der Montag liegt schon zurück, der Eintrag steht unter diesem
+  ///   vergangenen Tag. Bewusst streng — die Auswertung gehört an die
+  ///   Wochengrenze, nicht an den Tag, an dem zufällig auf den Knopf gedrückt
+  ///   wurde.
+  DateTime get followingMonday => addDays(monday, 7);
+
   // ---------------------------------------------------------------------------
   // Datums-Werkzeug
   // ---------------------------------------------------------------------------
@@ -169,6 +182,12 @@ class WeekWindow {
 class WeekContext {
   const WeekContext._();
 
+  /// Der Tag, unter dem eine übernommene Auswertung im Journal steht. Fest
+  /// aus jeder Auswertung ausgeschlossen: Mit E-07 liegt jede Auswertung am
+  /// Montag der Folgewoche — also im Fenster der nächsten Auswertung — und
+  /// würde dort sonst jedes Mal mit ausgewertet.
+  static const String reviewTag = 'Wochenauswertung';
+
   /// Baut den Kontexttext für [window].
   ///
   /// Aufbau: eine Kopfzeile mit dem Fenster, danach ein Abschnitt je Tag mit
@@ -187,13 +206,25 @@ class WeekContext {
         await repo.calendarEventsInRange(window.monday, window.lastDay);
 
     // E-02 „Nicht Auswerten": ausgeschlossene Tags, case-insensitiv verglichen.
-    final excluded = excludedTags.map((t) => t.toLowerCase()).toSet();
+    // Der Auswertungs-Tag steht immer mit drin, damit er auch nicht als
+    // Zeilen-Suffix oder in der Tag-Übersicht auftaucht.
+    final reviewKey = reviewTag.toLowerCase();
+    final excluded = {
+      ...excludedTags.map((t) => t.toLowerCase()),
+      reviewKey,
+    };
 
     // Ein Objekt bleibt in der Auswertung, solange es mindestens einen
     // nicht-ausgeschlossenen Tag trägt. Tag-lose Objekte sind nie betroffen;
     // erst wenn *alle* Tags ausgeschlossen sind, fällt es ganz heraus.
-    bool keepByTags(List<String> tags) =>
-        tags.isEmpty || tags.any((t) => !excluded.contains(t.toLowerCase()));
+    // Ausnahme: Wer den Auswertungs-Tag trägt, fällt immer heraus — auch wenn
+    // nachträglich weitere Tags dazugekommen sind. Eine Auswertung ist nie
+    // Material für die nächste.
+    bool keepByTags(List<String> tags) {
+      if (tags.any((t) => t.toLowerCase() == reviewKey)) return false;
+      return tags.isEmpty ||
+          tags.any((t) => !excluded.contains(t.toLowerCase()));
+    }
 
     // Die sichtbaren Tags eines Objekts: die ausgeschlossenen fallen weg — so
     // erreicht ein „nicht ausgewerteter" Tag Claude weder über ein Zeilen-

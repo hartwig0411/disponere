@@ -16,13 +16,23 @@ const Color _kCard = AppColors.fieldFill;
 const Color _kAccent = AppColors.accent;
 const Color _kError = AppColors.danger;
 
+/// Was der Screen bei „Ins Journal übernehmen" zurückgibt: der Text und der
+/// Tag, an dem er im Journal stehen soll (E-07: Montag der Folgewoche der
+/// ausgewerteten Woche — siehe [WeekWindow.followingMonday]).
+class WeekReviewResult {
+  final String text;
+  final DateTime landingDay;
+
+  const WeekReviewResult({required this.text, required this.landingDay});
+}
+
 /// Wochenauswertung durch Claude (Architektur §8).
 ///
 /// Der Screen wählt das Fenster, stellt den Kontext zusammen, schickt ihn und
 /// zeigt das Ergebnis. Geschrieben wird hier **nichts**: Bei „Ins Journal
-/// übernehmen" gibt er den Text via `Navigator.pop` zurück, und das Journal
-/// legt den Eintrag an — derselbe Schnitt wie beim Such-Screen und beim
-/// Aufgaben-Sheet. Persistenz bleibt an einer Stelle.
+/// übernehmen" gibt er ein [WeekReviewResult] via `Navigator.pop` zurück, und
+/// das Journal legt den Eintrag an — derselbe Schnitt wie beim Such-Screen und
+/// beim Aufgaben-Sheet. Persistenz bleibt an einer Stelle.
 class WeekReviewScreen extends StatefulWidget {
   const WeekReviewScreen({super.key});
 
@@ -379,7 +389,8 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
         const SizedBox(height: 2),
         const Text(
           'Diese Tags fließen nicht in die Auswertung. Ein Eintrag, Termin oder '
-          'eine Aufgabe fällt nur heraus, wenn alle seine Tags hier stehen.',
+          'eine Aufgabe fällt nur heraus, wenn alle seine Tags hier stehen. '
+          'Frühere Wochenauswertungen sind immer ausgeschlossen.',
           style: TextStyle(
             color: AppColors.weekday,
             fontSize: 11,
@@ -531,7 +542,13 @@ class _WeekReviewScreenState extends State<WeekReviewScreen> {
               backgroundColor: _kAccent,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             ),
-            onPressed: () => Navigator.pop(context, _result),
+            onPressed: () => Navigator.pop(
+              context,
+              WeekReviewResult(
+                text: _result!,
+                landingDay: _window.followingMonday,
+              ),
+            ),
             child: const Text('Ins Journal übernehmen'),
           ),
         ],

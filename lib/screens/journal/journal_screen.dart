@@ -15,6 +15,7 @@ import '../../services/attachment_store.dart';
 import '../../services/draft_store.dart';
 import '../../services/share_receiver.dart';
 import '../../services/share_service.dart';
+import '../../services/week_context.dart';
 import '../../screens/text/native_text_entry_screen.dart';
 import '../../screens/drawing/drawing_screen.dart';
 import '../../utils/tag_parser.dart';
@@ -1743,17 +1744,41 @@ class _JournalScreenState extends State<JournalScreen>
 
   /// Öffnet die Wochenauswertung und legt bei „Übernehmen" den Eintrag an.
   ///
-  /// Der Screen gibt nur den Text zurück; geschrieben wird hier — über
+  /// Der Screen gibt Text und Zieltag zurück; geschrieben wird hier — über
   /// denselben [_addEntry], den auch das Eintrags-Sheet nimmt. Damit bleibt
-  /// die Persistenz an einer Stelle (wie beim Such-Screen), und die
-  /// Auswertung landet als ganz gewöhnlicher Eintrag von heute im Journal.
+  /// die Persistenz an einer Stelle (wie beim Such-Screen).
+  ///
+  /// E-07: Die Auswertung steht am Montag der Folgewoche der ausgewerteten
+  /// Woche. Ist das heute, wird sie ein gewöhnlicher Eintrag (kein
+  /// Datiert-Marker); sonst ein datierter Eintrag auf diesen Montag. Liegt er
+  /// in der Zukunft, ist der Eintrag bis dahin unsichtbar — deshalb die
+  /// Meldung, sonst sähe es aus, als wäre nichts gespeichert.
   Future<void> _openWeekReview() async {
-    final text = await Navigator.push<String>(
+    final result = await Navigator.push<WeekReviewResult>(
       context,
       MaterialPageRoute(builder: (_) => const WeekReviewScreen()),
     );
-    if (text == null || text.trim().isEmpty || !mounted) return;
-    _addEntry(text, const ['Wochenauswertung']);
+    if (result == null || result.text.trim().isEmpty || !mounted) return;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final landing = DateTime(
+      result.landingDay.year,
+      result.landingDay.month,
+      result.landingDay.day,
+    );
+    _addEntry(
+      result.text,
+      const [WeekContext.reviewTag],
+      displayDay: landing == today ? null : landing,
+    );
+    if (landing == today) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Wochenauswertung steht am ${_dateWithWeekday(landing)} im Journal',
+        ),
+      ),
+    );
   }
 
   @override
