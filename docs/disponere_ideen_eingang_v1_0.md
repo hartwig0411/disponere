@@ -1,7 +1,7 @@
 # Disponere — Ideen-Eingang
 ### Landezone für neue Ideen vor der Triage
 *Version 1.0*
-*Stand: 13. Oktober 2026*
+*Stand: 29. Oktober 2026*
 
 ---
 
@@ -172,6 +172,8 @@ Die ausführliche Fassung lebt im Anforderungsdokument.*
   Erstelltag. Naheliegender Weg: vorhandener Anzeige-Tag (`display_day`); kein Schema-Eingriff
   erwartet. → `disponere_anforderungen_v6_21.md` (Änderungsblock „gegenüber v6.20“,
   Kernkonzept 8, Feature-Zeile). Größe: kleine Session.
+  **Gebaut in Session 71 (29.10.2026, feat `d557619`)** — Zieltag streng (auch ein vergangener
+  Montag), `#Wochenauswertung` fest ausgeschlossen. → `disponere_anforderungen_v6_22.md`.
 
 ---
 
