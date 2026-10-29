@@ -111,7 +111,41 @@ nur als Muster.
 
 ## Offene Eingänge
 
-*— keiner —*
+### E-08 · Termine thematisch taggen + Dublette bei übernommenen Terminen
+- **Eingegangen:** 29.10.2026
+- **Quelle:** Chat (Session 72), mit Screenshot des Journals vom 28.10.2026
+- **Kanal (deine Einordnung, falls klar):** Versio
+- **Original (dein Text):** „was ist mit der Möglichkeit, dass ich Termine vorher schon den #Tag
+  ändern kann. Hintergrund ist, wenn ich den Termin nicht als Eintrag übernehme, stehen sie dann
+  alle mit #BEW im Journal. Das ist nicht gut“
+- **In einem Satz (meine Umformulierung):** Termine sollen unter ihrem Thema (Comos, eSales …)
+  stehen statt unter dem Kunden-Tag des Kalenders, und ein als Eintrag übernommener Termin soll
+  nicht doppelt im Journal stehen.
+- **Status:** OFFEN
+- **Größe (grob):** volle Session (Schema v11)
+- **Stand der Diskussion:** Ersetzen statt ergänzen (ein Element erscheint unter *jedem* seiner
+  Tags — `#BEW` + `#eSales` zeigte den Termin doppelt). Vorschlag **Weg B: Regeln pro Kalender**
+  (Titel enthält „Comos“ → `#Comos`, sonst Kalender-Tag), greift beim Sync; Weg A (von Hand pro
+  Termin) erst, wenn zu viel durchrutscht. Dublette: Eintrag merkt sich beim Übernehmen seinen
+  Termin, der Termin wird ausgeblendet. Seit Session 72 ist die Vergangenheit eingefroren — die
+  Grundlage dafür steht. Markierung „nicht mehr in Google“ mitnehmen.
+- **Bei OFFEN — zu klärende Frage:** (1) Wie verlässlich steht das Thema im Titel — eine feste
+  Handvoll Themen oder sehr gemischt? (2) Übernommenen Termin ausblenden, oder soll er (z. B.
+  wegen der Uhrzeit) sichtbar bleiben?
+- **Nach Triage → wohin:** Anforderungsdok, Abschnitt Google Calendar (löst „Kein
+  Per-Termin-Override in v1.0“ ab), Feature-Zeile.
+
+### E-09 · Zu einem bestimmten Tag springen
+- **Eingegangen:** 29.10.2026
+- **Quelle:** Chat (Session 72)
+- **Kanal (deine Einordnung, falls klar):** Versio
+- **Original (dein Text):** „Irgendwie müssen wir was einbauen das ich zu einem bestimmten tag
+  gehen kann. Das ist jetzt etwa müßig aber nicht oberwichtig“
+- **In einem Satz (meine Umformulierung):** Im Journal direkt zu einem gewählten Datum springen,
+  statt zu scrollen — mit dem Nachholen ab Juni ist das Journal deutlich länger geworden.
+- **Status:** NEU
+- **Größe (grob):** halbe Session (Vermutung, vor Triage)
+- **Nach Triage → wohin:** offen — Priorität niedrig (Steffen: „nicht oberwichtig“).
 
 ---
 
